@@ -15,7 +15,7 @@ The Friedrich-Alexander-Universität (FAU) provides access to various GPU cluste
 
 ## Candidate Models
 
-### 1. Qwen Class (e.g., Qwen 3.5, ~32B MoE Variant)
+### 1. Qwen Class (e.g., qwen3.5:35b-a3b)
 
 Alibaba's Qwen family represents the state-of-the-art among non-American model providers.
 
