@@ -9,7 +9,7 @@ from app.config import get_settings
 
 @lru_cache
 def _get_engine():
-    settings = get_settings()
+    settings = get_settings() # Get the settings using the cached function to avoid reloading the configuration multiple times
     return create_async_engine(
         settings.DATABASE_URL,
         pool_pre_ping=True,
@@ -26,7 +26,7 @@ def _get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    factory = _get_session_factory()
+    factory = _get_session_factory() # Get the session factory using the cached function to avoid creating multiple factories
     async with factory() as session:
         try:
             yield session
@@ -46,6 +46,6 @@ async def check_db_connection() -> bool:
 
 
 async def dispose_engine() -> None:
-    engine = _get_engine()
+    engine = _get_engine() # Get the engine using the cached function to avoid creating multiple engines
     await engine.dispose()
     _get_engine.cache_clear()

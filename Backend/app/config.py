@@ -21,12 +21,12 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"
 
-    CORS_ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
-    API_V1_PREFIX: str = "/api/v1"
+    CORS_ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"] # Default allowed origin for development
+    API_V1_PREFIX: str = "/api/v1"  # Default API prefix
 
     @property
     def is_production(self) -> bool:
-        return self.APP_ENV == "production"
+        return self.APP_ENV == "production" # Helper property to check if the app is running in production mode
 
     @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
     @classmethod
