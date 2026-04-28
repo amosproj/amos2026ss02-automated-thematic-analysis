@@ -11,6 +11,10 @@ The Friedrich-Alexander-Universität (FAU) provides access to various GPU cluste
 | **Alex** (Workhorse) | NVIDIA A40 | 48 GB (DDR6) | 352 | Slightly slower memory than A100; excellent for standard inference and JSON generation |
 | **TinyGPU** (Test/Dev) | Various (Tesla V100, RTX 3080, RTX 2080 Ti) | 10-32 GB | ~35 | Ideal for testing, prototyping, text embeddings for BERTopic |
 
+More info and documentation here: 
+https://doc.nhr.fau.de/clusters/overview/
+https://hpc.fau.de/
+
 ---
 
 ## Candidate Models
