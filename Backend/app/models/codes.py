@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from enum import StrEnum
-
 from sqlalchemy import (
     CheckConstraint,
     Enum,
@@ -14,22 +12,14 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.domain.enums import (
+    ActorType,
+    CodeRelationshipType,
+    CodebookCodeRelationshipType,
+    NodeStatus,
+    RelationshipStatus,
+)
 from app.models.base import Base, TimestampMixin
-from app.models.codebook import ActorType, NodeStatus, RelationshipStatus
-
-
-class CodeRelationshipType(StrEnum):
-    """Semantic relation labels used for code normalization/graph induction."""
-
-    SUBORDINATE_TO = "subordinate_to"
-    EQUIVALENT_TO = "equivalent_to"
-    ORTHOGONAL_TO = "orthogonal_to"
-
-
-class CodebookCodeRelationshipType(StrEnum):
-    """Membership relation labels between a codebook and a code."""
-
-    CONTAINS = "contains"
 
 
 class Code(Base, TimestampMixin):

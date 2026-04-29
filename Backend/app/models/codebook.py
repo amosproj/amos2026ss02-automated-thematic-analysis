@@ -1,45 +1,10 @@
 from __future__ import annotations
 
-from enum import StrEnum
-
 from sqlalchemy import Enum, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.domain.enums import ActorType, CodebookStatus
 from app.models.base import Base, TimestampMixin
-
-
-class ActorType(StrEnum):
-    """Actor that generated or edited an artifact/link."""
-
-    LLM = "llm"
-    HUMAN = "human"
-    SYSTEM = "system"
-
-
-class CodebookStatus(StrEnum):
-    """Lifecycle state of a versioned codebook snapshot."""
-
-    DRAFT = "draft"
-    ACTIVE = "active"
-    FROZEN = "frozen"
-    ARCHIVED = "archived"
-
-
-class NodeStatus(StrEnum):
-    """Lifecycle state for code/theme artifacts during refinement."""
-
-    CANDIDATE = "candidate"
-    ACTIVE = "active"
-    MERGED = "merged"
-    DEPRECATED = "deprecated"
-    DELETED = "deleted"
-
-
-class RelationshipStatus(StrEnum):
-    """Lifecycle state for typed relationship edges."""
-
-    ACTIVE = "active"
-    REMOVED = "removed"
 
 
 class Codebook(Base, TimestampMixin):

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from enum import StrEnum
-
 from sqlalchemy import (
     CheckConstraint,
     Enum,
@@ -14,36 +12,16 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.domain.enums import (
+    ActorType,
+    CodeThemeRelationshipType,
+    CodebookThemeRelationshipType,
+    NodeStatus,
+    RelationshipStatus,
+    ThemeLevel,
+    ThemeRelationshipType,
+)
 from app.models.base import Base, TimestampMixin
-from app.models.codebook import ActorType, NodeStatus, RelationshipStatus
-
-
-class ThemeLevel(StrEnum):
-    """Hierarchy level for thematic artifacts."""
-
-    THEME = "theme"
-    SUBTHEME = "subtheme"
-
-
-class ThemeRelationshipType(StrEnum):
-    """Allowed structural/semantic relations between themes/subthemes."""
-
-    CHILD_OF = "child_of"
-    EQUIVALENT_TO = "equivalent_to"
-    RELATED_TO = "related_to"
-
-
-class CodeThemeRelationshipType(StrEnum):
-    """Cross-level relation labels from codes to (sub)themes."""
-
-    MEMBER_OF = "member_of"
-    SUPPORTS = "supports"
-
-
-class CodebookThemeRelationshipType(StrEnum):
-    """Membership relation labels between a codebook and a theme."""
-
-    CONTAINS = "contains"
 
 
 class Theme(Base, TimestampMixin):

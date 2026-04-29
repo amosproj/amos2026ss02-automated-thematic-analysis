@@ -1,21 +1,27 @@
 from app.models.base import Base, IdMixin, TimestampMixin
-from app.models.codebook import ActorType, Codebook, CodebookStatus, NodeStatus, RelationshipStatus
+from app.domain.enums import (
+    ActorType,
+    CodeRelationshipType,
+    CodeThemeRelationshipType,
+    CodebookCodeRelationshipType,
+    CodebookStatus,
+    CodebookThemeRelationshipType,
+    NodeStatus,
+    RelationshipStatus,
+    ThemeLevel,
+    ThemeRelationshipType,
+)
+from app.models.codebook import Codebook
 from app.models.codes import (
     Code,
     CodebookCodeRelationship,
-    CodebookCodeRelationshipType,
     CodeRelationship,
-    CodeRelationshipType,
 )
 from app.models.themes import (
     CodebookThemeRelationship,
-    CodebookThemeRelationshipType,
     CodeThemeRelationship,
-    CodeThemeRelationshipType,
     Theme,
-    ThemeLevel,
     ThemeRelationship,
-    ThemeRelationshipType,
 )
 
 __all__ = [
