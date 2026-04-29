@@ -1,10 +1,12 @@
 from collections.abc import AsyncGenerator
 from functools import lru_cache
 
+from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_settings
+from app.models import Base
 
 
 @lru_cache
@@ -43,6 +45,18 @@ async def check_db_connection() -> bool:
         return True
     except Exception:
         return False
+
+
+async def init_db() -> None:
+    logger.info("Initializing database schema")
+    engine = _get_engine()
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database schema initialization completed")
+    except Exception:
+        logger.exception("Database schema initialization failed")
+        raise
 
 
 async def dispose_engine() -> None:

@@ -1,6 +1,43 @@
 from app.models.base import Base, IdMixin, TimestampMixin
+from app.models.codebook import ActorType, Codebook, CodebookStatus, NodeStatus, RelationshipStatus
+from app.models.codes import (
+    Code,
+    CodebookCodeRelationship,
+    CodebookCodeRelationshipType,
+    CodeRelationship,
+    CodeRelationshipType,
+)
+from app.models.themes import (
+    CodebookThemeRelationship,
+    CodebookThemeRelationshipType,
+    CodeThemeRelationship,
+    CodeThemeRelationshipType,
+    Theme,
+    ThemeLevel,
+    ThemeRelationship,
+    ThemeRelationshipType,
+)
 
-# Import all ORM models here so Alembic autogenerate can detect them.
-# Example: from app.models.corpus import Corpus
-
-__all__ = ["Base", "IdMixin", "TimestampMixin"]
+__all__ = [
+    "Base",
+    "IdMixin",
+    "TimestampMixin",
+    "ActorType",
+    "Codebook",
+    "CodebookStatus",
+    "NodeStatus",
+    "RelationshipStatus",
+    "Code",
+    "CodebookCodeRelationship",
+    "CodebookCodeRelationshipType",
+    "CodeRelationship",
+    "CodeRelationshipType",
+    "CodebookThemeRelationship",
+    "CodebookThemeRelationshipType",
+    "CodeThemeRelationship",
+    "CodeThemeRelationshipType",
+    "Theme",
+    "ThemeLevel",
+    "ThemeRelationship",
+    "ThemeRelationshipType",
+]
