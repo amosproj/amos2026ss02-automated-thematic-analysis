@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.config import Settings
-from app.routers import codebooks, health, themes, ingestion
+from app.routers import codebooks, health, themes, ingestion, demo
 
 
 def register_routers(app: FastAPI, settings: Settings) -> None:
@@ -10,3 +10,4 @@ def register_routers(app: FastAPI, settings: Settings) -> None:
     app.include_router(ingestion.router, prefix=prefix)
     app.include_router(codebooks.router, prefix=prefix)
     app.include_router(themes.router, prefix=prefix)
+    app.include_router(demo.router)
