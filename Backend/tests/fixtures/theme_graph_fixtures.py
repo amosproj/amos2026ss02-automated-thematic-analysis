@@ -437,7 +437,6 @@ async def _ensure_codebook(
             previous_version_id=None,
             name=name,
             description="Dummy codebook for theme graph tests and local iteration.",
-            research_question="How do teams describe recurring operational friction?",
             version=version,
             status=CodebookStatus.DRAFT,
             created_by=created_by,

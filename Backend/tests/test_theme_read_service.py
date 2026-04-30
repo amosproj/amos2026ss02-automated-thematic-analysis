@@ -19,7 +19,7 @@ from app.domain.enums import (
 )
 from app.models import Base
 from app.models import Codebook, CodebookThemeRelationship
-from app.services.theme_read import ThemeReadService
+from app.services.theme_read import CodebookResolutionError, ThemeReadService
 from app.services import ThemeGraphService
 from tests.fixtures.theme_graph_fixtures import seed_dummy_theme_tree
 
@@ -138,7 +138,6 @@ class ThemeReadServiceTests(unittest.IsolatedAsyncioTestCase):
                     previous_version_id=ids_v1.codebook_id,
                     name="Project Restore v2",
                     description="Follow-up version with reused themes.",
-                    research_question="How do themes evolve across codebook versions?",
                     version=2,
                     status=CodebookStatus.DRAFT,
                     created_by=ActorType.SYSTEM,
@@ -219,3 +218,55 @@ class ThemeReadServiceTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("Version 2 Root", v2_roots)
             v2_root_children = sorted(child.theme.label for child in v2_roots["Version 2 Root"].children)
             self.assertEqual(v2_root_children, ["Tooling Drift", "Version 2 New Theme"])
+
+    async def test_resolve_codebook_raises_for_unknown_project_or_version(self) -> None:
+        async with self.session_factory() as session:
+            await seed_dummy_theme_tree(
+                session,
+                codebook_id=uuid4(),
+                project_id="project_exists",
+                codebook_version=1,
+                codebook_name="Project Exists Codebook v1",
+            )
+            service = ThemeReadService(session)
+
+            with self.assertRaises(CodebookResolutionError):
+                await service.resolve_codebook(project_id="does_not_exist")
+
+            with self.assertRaises(CodebookResolutionError):
+                await service.resolve_codebook(project_id="project_exists", version=99)
+
+    async def test_get_theme_frequency_can_exclude_candidate_nodes(self) -> None:
+        async with self.session_factory() as session:
+            ids = await seed_dummy_theme_tree(
+                session,
+                codebook_id=uuid4(),
+                project_id="project_frequency_filter",
+                codebook_version=1,
+            )
+            graph_service = ThemeGraphService(session)
+            await graph_service.create_theme(
+                codebook_id=ids.codebook_id,
+                label="Candidate Frequency Theme",
+                description="candidate",
+                level=ThemeLevel.SUBTHEME,
+                created_by=ActorType.SYSTEM,
+                status=NodeStatus.CANDIDATE,
+                parent_theme_id=ids.root_experience,
+                provenance="unit-test",
+            )
+
+            service = ThemeReadService(session)
+            with_candidates = await service.get_theme_frequency_for_project(
+                project_id="project_frequency_filter",
+                include_candidate_nodes=True,
+            )
+            without_candidates = await service.get_theme_frequency_for_project(
+                project_id="project_frequency_filter",
+                include_candidate_nodes=False,
+            )
+
+            labels_with = {item.theme_name for item in with_candidates.themes}
+            labels_without = {item.theme_name for item in without_candidates.themes}
+            self.assertIn("Candidate Frequency Theme", labels_with)
+            self.assertNotIn("Candidate Frequency Theme", labels_without)

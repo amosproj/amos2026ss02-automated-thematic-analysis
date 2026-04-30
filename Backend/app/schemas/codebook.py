@@ -10,7 +10,6 @@ class CodebookSchema(BaseSchema):
     previous_version_id: UUID | None = None
     name: str
     description: str | None = None
-    research_question: str
     version: int
     status: CodebookStatus
     created_by: ActorType

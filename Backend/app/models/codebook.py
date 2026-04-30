@@ -26,7 +26,6 @@ class Codebook(Base, TimestampMixin):
 
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    research_question: Mapped[str] = mapped_column(Text())
     version: Mapped[int] = mapped_column(Integer())
     status: Mapped[CodebookStatus] = mapped_column(Enum(CodebookStatus, native_enum=False))
 
