@@ -17,7 +17,7 @@ AIOSQLITE_AVAILABLE = importlib.util.find_spec("aiosqlite") is not None
 
 @unittest.skipUnless(
     AIOSQLITE_AVAILABLE,
-    "These tests require aiosqlite (install via: pip install aiosqlite).",
+    "These tests require aiosqlite.",
 )
 class ThemeReadServiceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
