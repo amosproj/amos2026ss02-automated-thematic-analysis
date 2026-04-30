@@ -635,7 +635,7 @@ class ThemeGraphService:
         Checks:
         - No cycles in the hierarchy.
         - Optional single-parent policy.
-        - Optional Theme/Subtheme level constraints.
+        - Optional level constraints (top-level themes cannot be children).
         """
         graph = await self.build_theme_dag(
             codebook_id=codebook_id,
@@ -665,15 +665,10 @@ class ThemeGraphService:
         if enforce_levels:
             for edge in child_edges:
                 child = graph.nodes.get(edge.source_theme_id)
-                parent = graph.nodes.get(edge.target_theme_id)
-                if child is None or parent is None:
+                if child is None:
                     continue
                 if child.level == ThemeLevel.THEME:
                     violations.append(f"Top-level theme {child.id} cannot be child_of another theme.")
-                if child.level == ThemeLevel.SUBTHEME and parent.level != ThemeLevel.THEME:
-                    violations.append(
-                        f"Subtheme {child.id} must have a Theme parent, got {parent.level.value}."
-                    )
 
         if self._contains_cycle(nodes=set(graph.nodes), parent_to_children=parent_to_children):
             violations.append("Hierarchy contains a cycle in active CHILD_OF relationships.")

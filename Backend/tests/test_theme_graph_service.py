@@ -166,3 +166,29 @@ class ThemeGraphServiceTests(unittest.IsolatedAsyncioTestCase):
                 coord_children,
                 ["Handover Documentation", "Handover Timing", "Role Clarity"],
             )
+
+    async def test_subtheme_can_have_subtheme_child(self) -> None:
+        """Nested subthemes should be valid and materialize in tree projection."""
+        async with self.session_factory() as session:
+            ids = await seed_dummy_theme_tree(session)
+            service = ThemeGraphService(session)
+
+            nested = await service.create_theme(
+                codebook_id=ids.codebook_id,
+                label="Nested Subtheme",
+                description="Child subtheme under an existing subtheme.",
+                level=ThemeLevel.SUBTHEME,
+                created_by=ActorType.SYSTEM,
+                status=NodeStatus.ACTIVE,
+                parent_theme_id=ids.sub_data_access,
+                provenance="unit-test",
+            )
+            self.assertIsNotNone(nested.id)
+
+            tree = await service.get_theme_tree(codebook_id=ids.codebook_id)
+            by_root = {node.theme.label: node for node in tree}
+            exp_root = by_root["Developer Experience"]
+            by_child = {node.theme.label: node for node in exp_root.children}
+            self.assertIn("Data Access Friction", by_child)
+            nested_labels = [node.theme.label for node in by_child["Data Access Friction"].children]
+            self.assertIn("Nested Subtheme", nested_labels)
