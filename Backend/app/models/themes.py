@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID, uuid4
+
 from sqlalchemy import (
     CheckConstraint,
     Enum,
@@ -10,6 +12,7 @@ from sqlalchemy import (
     Text,
     text,
 )
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.enums import (
@@ -29,7 +32,7 @@ class Theme(Base, TimestampMixin):
 
     __tablename__ = "themes"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     label: Mapped[str] = mapped_column(String(255), index=True)
     description: Mapped[str] = mapped_column(Text())
     level: Mapped[ThemeLevel] = mapped_column(Enum(ThemeLevel, native_enum=False), index=True)
@@ -57,12 +60,12 @@ class CodebookThemeRelationship(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    codebook_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    codebook_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
     )
-    theme_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("themes.id", ondelete="CASCADE"), index=True
+    theme_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("themes.id", ondelete="CASCADE"), index=True
     )
     relationship_type: Mapped[CodebookThemeRelationshipType] = mapped_column(
         Enum(CodebookThemeRelationshipType, native_enum=False),
@@ -97,15 +100,15 @@ class ThemeRelationship(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    codebook_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    codebook_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
     )
-    source_theme_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("themes.id", ondelete="CASCADE"), index=True
+    source_theme_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("themes.id", ondelete="CASCADE"), index=True
     )
-    target_theme_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("themes.id", ondelete="CASCADE"), index=True
+    target_theme_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("themes.id", ondelete="CASCADE"), index=True
     )
     relationship_type: Mapped[ThemeRelationshipType] = mapped_column(
         Enum(ThemeRelationshipType, native_enum=False), index=True
@@ -138,15 +141,15 @@ class CodeThemeRelationship(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    codebook_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    codebook_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
     )
-    code_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codes.id", ondelete="CASCADE"), index=True
+    code_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("codes.id", ondelete="CASCADE"), index=True
     )
-    theme_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("themes.id", ondelete="CASCADE"), index=True
+    theme_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("themes.id", ondelete="CASCADE"), index=True
     )
     relationship_type: Mapped[CodeThemeRelationshipType] = mapped_column(
         Enum(CodeThemeRelationshipType, native_enum=False),

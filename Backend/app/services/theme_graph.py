@@ -17,7 +17,7 @@ add, move, merge, split, replace, and retire nodes while keeping provenance.
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Iterable
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -88,13 +88,13 @@ class ThemeGraphService:
     async def create_theme(
         self,
         *,
-        codebook_id: str,
+        codebook_id: UUID,
         label: str,
         description: str,
         level: ThemeLevel,
         created_by: ActorType,
         status: NodeStatus = NodeStatus.CANDIDATE,
-        parent_theme_id: str | None = None,
+        parent_theme_id: UUID | None = None,
         provenance: str | None = None,
     ) -> Theme:
         """
@@ -114,7 +114,7 @@ class ThemeGraphService:
         self._session.add(theme)
         self._session.add(
             CodebookThemeRelationship(
-                id=self._new_id("cbth"),
+                id=self._new_id(),
                 codebook_id=codebook_id,
                 theme_id=theme.id,
                 relationship_type=CodebookThemeRelationshipType.CONTAINS,
@@ -344,8 +344,8 @@ class ThemeGraphService:
 
         source_themes = await self._get_themes_in_codebook(codebook_id=codebook_id, theme_ids=source_ids)
         if len(source_themes) != len(source_ids):
-            missing = sorted(set(source_ids) - {theme.id for theme in source_themes})
-            raise ThemeNotFoundError(f"Theme(s) not found in codebook: {', '.join(missing)}")
+            missing = sorted((set(source_ids) - {theme.id for theme in source_themes}), key=str)
+            raise ThemeNotFoundError(f"Theme(s) not found in codebook: {', '.join(map(str, missing))}")
 
         if merged_level is None:
             merged_level = source_themes[0].level
@@ -359,7 +359,7 @@ class ThemeGraphService:
         self._session.add(merged_theme)
         self._session.add(
             CodebookThemeRelationship(
-                id=self._new_id("cbth"),
+                id=self._new_id(),
                 codebook_id=codebook_id,
                 theme_id=merged_theme.id,
                 relationship_type=CodebookThemeRelationshipType.CONTAINS,
@@ -378,7 +378,7 @@ class ThemeGraphService:
         for edge in touched_edges:
             edge.status = RelationshipStatus.REMOVED
 
-        parent_candidates: set[str] = set()
+        parent_candidates: set[UUID] = set()
         for edge in touched_edges:
             if edge.relationship_type != ThemeRelationshipType.CHILD_OF:
                 continue
@@ -389,7 +389,7 @@ class ThemeGraphService:
             await self._ensure_theme_in_codebook(codebook_id, parent_theme_id)
             parent_candidates = {parent_theme_id}
         if len(parent_candidates) > 1:
-            options = ", ".join(sorted(parent_candidates))
+            options = ", ".join(map(str, sorted(parent_candidates, key=str)))
             raise ThemeValidationError(
                 "merge_themes resolved multiple parent candidates for merged node. "
                 f"Provide parent_theme_id explicitly. Candidates: {options}"
@@ -461,7 +461,7 @@ class ThemeGraphService:
         )
         parent_ids = [edge.target_theme_id for edge in parent_edges]
         if inherit_parent and len(set(parent_ids)) > 1:
-            options = ", ".join(sorted(set(parent_ids)))
+            options = ", ".join(map(str, sorted(set(parent_ids), key=str)))
             raise ThemeValidationError(
                 "Cannot split with inherit_parent when source has multiple parents. "
                 f"Parents: {options}"
@@ -481,7 +481,7 @@ class ThemeGraphService:
             self._session.add(theme)
             self._session.add(
                 CodebookThemeRelationship(
-                    id=self._new_id("cbth"),
+                    id=self._new_id(),
                     codebook_id=codebook_id,
                     theme_id=theme.id,
                     relationship_type=CodebookThemeRelationshipType.CONTAINS,
@@ -539,7 +539,7 @@ class ThemeGraphService:
         self._session.add(new_theme)
         self._session.add(
             CodebookThemeRelationship(
-                id=self._new_id("cbth"),
+                id=self._new_id(),
                 codebook_id=codebook_id,
                 theme_id=new_theme.id,
                 relationship_type=CodebookThemeRelationshipType.CONTAINS,
@@ -598,7 +598,7 @@ class ThemeGraphService:
             ]
             parent_ids = {edge.target_theme_id for edge in old_parent_edges}
             if len(parent_ids) > 1:
-                options = ", ".join(sorted(parent_ids))
+                options = ", ".join(map(str, sorted(parent_ids, key=str)))
                 raise ThemeValidationError(
                     "replace_theme detected multiple parent candidates on old theme. "
                     f"Provide new_parent_theme_id explicitly. Candidates: {options}"
@@ -646,16 +646,16 @@ class ThemeGraphService:
                 if edge.relationship_type == ThemeRelationshipType.CHILD_OF:
                     child_edges.append(edge)
 
-        parent_count: defaultdict[str, int] = defaultdict(int)
-        parent_to_children: defaultdict[str, set[str]] = defaultdict(set)
+        parent_count: defaultdict[UUID, int] = defaultdict(int)
+        parent_to_children: defaultdict[UUID, set[UUID]] = defaultdict(set)
         for edge in child_edges:
             parent_count[edge.source_theme_id] += 1
             parent_to_children[edge.target_theme_id].add(edge.source_theme_id)
 
         if enforce_single_parent:
-            duplicates = sorted(theme_id for theme_id, count in parent_count.items() if count > 1)
+            duplicates = sorted((theme_id for theme_id, count in parent_count.items() if count > 1), key=str)
             if duplicates:
-                joined = ", ".join(duplicates)
+                joined = ", ".join(map(str, duplicates))
                 violations.append(f"Themes with multiple active parents: {joined}")
 
         if enforce_levels:
@@ -722,7 +722,7 @@ class ThemeGraphService:
             if edge.relationship_type == ThemeRelationshipType.CHILD_OF
         }
         # Any node without an incoming CHILD_OF edge is a root in the hierarchy view.
-        root_theme_ids = sorted(node_ids - child_nodes)
+        root_theme_ids = sorted(node_ids - child_nodes, key=str)
         return ThemeDagView(
             codebook_id=codebook_id,
             nodes=nodes,
@@ -917,7 +917,7 @@ class ThemeGraphService:
                 if rel.target_theme_id != target_theme_id
             }
             if conflicting_parents:
-                parents = ", ".join(sorted(conflicting_parents))
+                parents = ", ".join(map(str, sorted(conflicting_parents, key=str)))
                 raise ThemeValidationError(
                     f"Theme '{source_theme_id}' already has an active parent: {parents}"
                 )
@@ -939,7 +939,7 @@ class ThemeGraphService:
             return existing
 
         relationship = ThemeRelationship(
-            id=self._new_id("threl"),
+            id=self._new_id(),
             codebook_id=codebook_id,
             source_theme_id=source_theme_id,
             target_theme_id=target_theme_id,
@@ -952,7 +952,7 @@ class ThemeGraphService:
         return relationship
 
     async def _assert_no_cycle_on_child_of(
-        self, *, codebook_id: str, child_id: str, parent_id: str
+        self, *, codebook_id: UUID, child_id: UUID, parent_id: UUID
     ) -> None:
         """
         Reject a new `CHILD_OF` edge if it creates a cycle.
@@ -963,7 +963,7 @@ class ThemeGraphService:
         if child_id == parent_id:
             raise ThemeValidationError("A theme cannot be parent/child of itself.")
 
-        children_by_parent: defaultdict[str, set[str]] = defaultdict(set)
+        children_by_parent: defaultdict[UUID, set[UUID]] = defaultdict(set)
         stmt = select(ThemeRelationship.source_theme_id, ThemeRelationship.target_theme_id).where(
             ThemeRelationship.codebook_id == codebook_id,
             ThemeRelationship.relationship_type == ThemeRelationshipType.CHILD_OF,
@@ -971,11 +971,11 @@ class ThemeGraphService:
         )
         rows = (await self._session.execute(stmt)).all()
         for source_theme_id, target_theme_id in rows:
-            children_by_parent[str(target_theme_id)].add(str(source_theme_id))
+            children_by_parent[target_theme_id].add(source_theme_id)
 
         children_by_parent[parent_id].add(child_id)
-        queue: deque[str] = deque([child_id])
-        visited: set[str] = set()
+        queue: deque[UUID] = deque([child_id])
+        visited: set[UUID] = set()
         while queue:
             current = queue.popleft()
             if current == parent_id:
@@ -1026,7 +1026,7 @@ class ThemeGraphService:
         if len(active_codebook_ids) > 1 or (
             len(active_codebook_ids) == 1 and codebook_id not in active_codebook_ids
         ):
-            joined = ", ".join(sorted(active_codebook_ids))
+            joined = ", ".join(map(str, sorted(active_codebook_ids, key=str)))
             raise ThemeConflictError(
                 f"Cannot hard-delete theme '{theme.id}', still active in multiple codebooks: {joined}"
             )
@@ -1158,7 +1158,7 @@ class ThemeGraphService:
     ) -> Theme:
         """Create a new in-memory `Theme` ORM row with a generated ID."""
         return Theme(
-            id=self._new_id("th"),
+            id=self._new_id(),
             label=label,
             description=description,
             level=level,
@@ -1167,11 +1167,10 @@ class ThemeGraphService:
         )
 
     @staticmethod
-    def _new_id(prefix: str) -> str:
-        """Generate short prefixed IDs for deterministic object class hints in tests/logs."""
-        return f"{prefix}_{uuid4().hex}"
+    def _new_id() -> UUID:
+        return uuid4()
 
     @staticmethod
-    def _unique_ids(values: Iterable[str]) -> list[str]:
+    def _unique_ids(values: Iterable[UUID]) -> list[UUID]:
         """Deduplicate while preserving caller-provided order."""
         return list(dict.fromkeys(values))

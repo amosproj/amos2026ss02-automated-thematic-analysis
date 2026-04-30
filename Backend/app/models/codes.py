@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID, uuid4
+
 from sqlalchemy import (
     CheckConstraint,
     Enum,
@@ -10,6 +12,7 @@ from sqlalchemy import (
     Text,
     text,
 )
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.enums import (
@@ -27,7 +30,7 @@ class Code(Base, TimestampMixin):
 
     __tablename__ = "codes"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     label: Mapped[str] = mapped_column(String(255), index=True)
     description: Mapped[str] = mapped_column(Text())
     status: Mapped[NodeStatus] = mapped_column(Enum(NodeStatus, native_enum=False), index=True)
@@ -54,12 +57,12 @@ class CodebookCodeRelationship(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    codebook_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    codebook_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
     )
-    code_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codes.id", ondelete="CASCADE"), index=True
+    code_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("codes.id", ondelete="CASCADE"), index=True
     )
     relationship_type: Mapped[CodebookCodeRelationshipType] = mapped_column(
         Enum(CodebookCodeRelationshipType, native_enum=False),
@@ -94,15 +97,15 @@ class CodeRelationship(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    codebook_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    codebook_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
     )
-    source_code_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codes.id", ondelete="CASCADE"), index=True
+    source_code_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("codes.id", ondelete="CASCADE"), index=True
     )
-    target_code_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codes.id", ondelete="CASCADE"), index=True
+    target_code_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("codes.id", ondelete="CASCADE"), index=True
     )
     relationship_type: Mapped[CodeRelationshipType] = mapped_column(
         Enum(CodeRelationshipType, native_enum=False), index=True

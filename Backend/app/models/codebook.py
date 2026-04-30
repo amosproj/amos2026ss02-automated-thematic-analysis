@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from uuid import UUID, uuid4
+
 from sqlalchemy import Enum, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.enums import ActorType, CodebookStatus
@@ -15,10 +18,10 @@ class Codebook(Base, TimestampMixin):
         UniqueConstraint("project_id", "version", name="uq_codebook_project_version"),
     )
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     project_id: Mapped[str] = mapped_column(String(64), index=True)
-    previous_version_id: Mapped[str | None] = mapped_column(
-        String(64), ForeignKey("codebooks.id", ondelete="SET NULL"), nullable=True, index=True
+    previous_version_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("codebooks.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     name: Mapped[str] = mapped_column(String(255))
