@@ -1,0 +1,65 @@
+import hashlib
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class ChunkSpan:
+    chunk_index: int
+    text: str
+    start_word: int
+    end_word: int  # exclusive
+
+
+def count_words(text: str) -> int:
+    return len(text.split())
+
+
+def normalize_text_for_hash(text: str) -> str:
+    return " ".join(text.split())
+
+
+def sha256_text(text: str) -> str:
+    normalized = normalize_text_for_hash(text)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def chunk_text_by_words(
+    text: str,
+    chunk_size_words: int = 2048,
+    overlap_words: int = 200,
+) -> list[ChunkSpan]:
+    # start_word inclusive, end_word exclusive, chunk_index zero-based
+    if chunk_size_words <= 0:
+        raise ValueError(f"chunk_size_words must be > 0, got {chunk_size_words}")
+    if overlap_words < 0:
+        raise ValueError(f"overlap_words must be >= 0, got {overlap_words}")
+    if overlap_words >= chunk_size_words:
+        raise ValueError(
+            f"overlap_words ({overlap_words}) must be < chunk_size_words ({chunk_size_words})"
+        )
+
+    words = text.split()
+    if not words:
+        return []
+
+    stride = chunk_size_words - overlap_words
+    chunks: list[ChunkSpan] = []
+    chunk_index = 0
+    start = 0
+
+    while start < len(words):
+        end = min(start + chunk_size_words, len(words))
+        chunks.append(
+            ChunkSpan(
+                chunk_index=chunk_index,
+                text=" ".join(words[start:end]),
+                start_word=start,
+                end_word=end,
+            )
+        )
+        if end == len(words):
+            break
+        start += stride
+        chunk_index += 1
+
+    return chunks
