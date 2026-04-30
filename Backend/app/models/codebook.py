@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import Enum, ForeignKey, Integer, String, Text, UniqueConstraint
+import uuid
+
+from sqlalchemy import Enum, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.enums import ActorType, CodebookStatus
@@ -15,10 +17,10 @@ class Codebook(Base, TimestampMixin):
         UniqueConstraint("project_id", "version", name="uq_codebook_project_version"),
     )
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    project_id: Mapped[str] = mapped_column(String(64), index=True)
-    previous_version_id: Mapped[str | None] = mapped_column(
-        String(64), ForeignKey("codebooks.id", ondelete="SET NULL"), nullable=True, index=True
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    project_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    previous_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("codebooks.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     name: Mapped[str] = mapped_column(String(255))

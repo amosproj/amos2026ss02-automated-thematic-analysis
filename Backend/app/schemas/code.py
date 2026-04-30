@@ -1,9 +1,11 @@
+import uuid
+
 from app.domain.enums import ActorType, NodeStatus
 from app.schemas.common import BaseSchema
 
 
 class CodeSchema(BaseSchema):
-    id: str
+    id: uuid.UUID
     label: str
     description: str
     status: NodeStatus

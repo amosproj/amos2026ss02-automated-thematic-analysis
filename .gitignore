@@ -40,6 +40,9 @@ bin/
 .env.*
 *.env
 
+# alembic
+alembic.ini
+
 # Python virtual environments
 venv/
 

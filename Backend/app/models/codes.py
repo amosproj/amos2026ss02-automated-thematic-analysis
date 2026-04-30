@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import (
     CheckConstraint,
     Enum,
@@ -8,6 +10,7 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    Uuid,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -27,7 +30,7 @@ class Code(Base, TimestampMixin):
 
     __tablename__ = "codes"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     label: Mapped[str] = mapped_column(String(255), index=True)
     description: Mapped[str] = mapped_column(Text())
     status: Mapped[NodeStatus] = mapped_column(Enum(NodeStatus, native_enum=False), index=True)
@@ -54,12 +57,12 @@ class CodebookCodeRelationship(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    codebook_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    codebook_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
     )
-    code_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codes.id", ondelete="CASCADE"), index=True
+    code_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("codes.id", ondelete="CASCADE"), index=True
     )
     relationship_type: Mapped[CodebookCodeRelationshipType] = mapped_column(
         Enum(CodebookCodeRelationshipType, native_enum=False),
@@ -94,15 +97,15 @@ class CodeRelationship(Base, TimestampMixin):
         ),
     )
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    codebook_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    codebook_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
     )
-    source_code_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codes.id", ondelete="CASCADE"), index=True
+    source_code_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("codes.id", ondelete="CASCADE"), index=True
     )
-    target_code_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("codes.id", ondelete="CASCADE"), index=True
+    target_code_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("codes.id", ondelete="CASCADE"), index=True
     )
     relationship_type: Mapped[CodeRelationshipType] = mapped_column(
         Enum(CodeRelationshipType, native_enum=False), index=True

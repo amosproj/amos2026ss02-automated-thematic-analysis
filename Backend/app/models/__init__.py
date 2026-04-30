@@ -6,8 +6,11 @@ from app.domain.enums import (
     CodebookCodeRelationshipType,
     CodebookStatus,
     CodebookThemeRelationshipType,
+    DocumentStatus,
+    IngestionRunStatus,
     NodeStatus,
     RelationshipStatus,
+    SourceType,
     ThemeLevel,
     ThemeRelationshipType,
 )
@@ -16,6 +19,12 @@ from app.models.codes import (
     Code,
     CodebookCodeRelationship,
     CodeRelationship,
+)
+from app.models.ingestion import (
+    Corpus,
+    CorpusChunk,
+    CorpusDocument,
+    IngestionRun,
 )
 from app.models.themes import (
     CodebookThemeRelationship,
@@ -31,8 +40,15 @@ __all__ = [
     "ActorType",
     "Codebook",
     "CodebookStatus",
+    "Corpus",
+    "CorpusChunk",
+    "CorpusDocument",
+    "DocumentStatus",
+    "IngestionRun",
+    "IngestionRunStatus",
     "NodeStatus",
     "RelationshipStatus",
+    "SourceType",
     "Code",
     "CodebookCodeRelationship",
     "CodebookCodeRelationshipType",

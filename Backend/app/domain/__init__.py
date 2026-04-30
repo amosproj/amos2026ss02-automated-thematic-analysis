@@ -5,8 +5,11 @@ from app.domain.enums import (
     CodebookCodeRelationshipType,
     CodebookStatus,
     CodebookThemeRelationshipType,
+    DocumentStatus,
+    IngestionRunStatus,
     NodeStatus,
     RelationshipStatus,
+    SourceType,
     ThemeLevel,
     ThemeRelationshipType,
 )
@@ -18,8 +21,11 @@ __all__ = [
     "CodebookCodeRelationshipType",
     "CodebookStatus",
     "CodebookThemeRelationshipType",
+    "DocumentStatus",
+    "IngestionRunStatus",
     "NodeStatus",
     "RelationshipStatus",
+    "SourceType",
     "ThemeLevel",
     "ThemeRelationshipType",
 ]
