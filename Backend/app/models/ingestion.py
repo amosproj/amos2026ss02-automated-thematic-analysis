@@ -49,7 +49,7 @@ class CorpusDocument(Base, TimestampMixin):
 
 
 class CorpusChunk(Base, TimestampMixin):
-__tablename__ = "corpus_chunks"
+    __tablename__ = "corpus_chunks"
     __table_args__ = (
         UniqueConstraint("document_id", "chunk_index", name="uq_corpus_chunk_document_index"),
         CheckConstraint("start_word >= 0", name="ck_corpus_chunk_start_word"),

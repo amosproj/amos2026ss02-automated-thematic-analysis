@@ -96,6 +96,59 @@ def parse_csv_upload(filename: str, content: bytes) -> list[DocumentInput]:
     return docs
 
 
+def parse_jsonl_upload(filename: str, content: bytes) -> list[DocumentInput]:
+    try:
+        text_content = content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise UnprocessableError(f"Could not decode '{filename}' as UTF-8") from exc
+
+    # Collect messages per participant, preserving order
+    participants: dict[str, list[dict]] = {}
+    for line_no, raw in enumerate(text_content.splitlines(), start=1):
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            record = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise UnprocessableError(f"'{filename}': invalid JSON on line {line_no}: {exc}") from exc
+
+        username = record.get("username")
+        if not username:
+            raise UnprocessableError(f"'{filename}': line {line_no} is missing 'username'")
+
+        participants.setdefault(username, []).append(record)
+
+    if not participants:
+        raise UnprocessableError(f"'{filename}': file contains no records")
+
+    docs: list[DocumentInput] = []
+    for username, messages in participants.items():
+        messages.sort(key=lambda m: m.get("message_index", 0))
+
+        human_turns = [
+            m for m in messages
+            if m.get("event_type") == "human_response"
+            and str(m.get("message_content", "")).strip()
+        ]
+        if not human_turns:
+            continue
+
+        text = "\n\n".join(str(m["message_content"]) for m in human_turns)
+        docs.append(
+            DocumentInput(
+                external_id=username,
+                title=username,
+                text=text,
+                metadata={
+                    "total_turns": len(messages),
+                    "human_turns": len(human_turns),
+                },
+            )
+        )
+    return docs
+
+
 # ---------------------------------------------------------------------------
 # Ingestion service
 # ---------------------------------------------------------------------------

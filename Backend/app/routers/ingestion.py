@@ -21,12 +21,13 @@ from app.services.ingestion import (
     IngestionService,
     parse_csv_upload,
     parse_json_upload,
+    parse_jsonl_upload,
     parse_text_upload,
 )
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 
-_SUPPORTED_EXTENSIONS = {".txt", ".json", ".csv"}
+_SUPPORTED_EXTENSIONS = {".txt", ".json", ".jsonl", ".csv"}
 
 
 def _pages(total: int, page_size: int) -> int:
@@ -145,6 +146,9 @@ async def upload_documents(
     elif ext == ".json":
         docs = parse_json_upload(filename, content)
         source_type = SourceType.JSON
+    elif ext == ".jsonl":
+        docs = parse_jsonl_upload(filename, content)
+        source_type = SourceType.JSONL
     else:  # .csv
         docs = parse_csv_upload(filename, content)
         source_type = SourceType.CSV

@@ -74,6 +74,7 @@ class DocumentStatus(StrEnum):
 class SourceType(StrEnum):
     MANUAL = "manual"
     JSON = "json"
+    JSONL = "jsonl"
     CSV = "csv"
     TEXT = "text"
     UPLOAD = "upload"
