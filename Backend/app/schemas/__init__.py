@@ -17,6 +17,19 @@ from app.schemas.ingestion import (
     IngestResultSchema,
 )
 from app.schemas.theme import ThemeSchema
+from app.schemas.theme_graph import (
+    ThemeDagValidation,
+    ThemeDagView,
+    ThemeEdgeView,
+    ThemeNodeView,
+    ThemeTreeNode,
+)
+from app.schemas.theme_views import (
+    ResolvedCodebookContext,
+    ThemeFrequencyItem,
+    ThemeFrequencyResponse,
+    ThemeTreeResponse,
+)
 
 __all__ = [
     "BaseSchema",
@@ -34,4 +47,13 @@ __all__ = [
     "PaginationParams",
     "ResponseEnvelope",
     "ThemeSchema",
+    "ThemeDagValidation",
+    "ThemeDagView",
+    "ThemeEdgeView",
+    "ThemeNodeView",
+    "ThemeTreeNode",
+    "ResolvedCodebookContext",
+    "ThemeFrequencyItem",
+    "ThemeFrequencyResponse",
+    "ThemeTreeResponse",
 ]
