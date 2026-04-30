@@ -112,6 +112,7 @@ class ThemeGraphService:
             created_by=created_by,
         )
         self._session.add(theme)
+        await self._session.flush([theme])
         self._session.add(
             CodebookThemeRelationship(
                 id=self._new_id(),
@@ -139,8 +140,8 @@ class ThemeGraphService:
     async def update_theme(
         self,
         *,
-        codebook_id: str,
-        theme_id: str,
+        codebook_id: UUID,
+        theme_id: UUID,
         label: str | None = None,
         description: str | None = None,
         level: ThemeLevel | None = None,
@@ -160,7 +161,7 @@ class ThemeGraphService:
         return theme
 
     async def deprecate_theme(
-        self, *, codebook_id: str, theme_id: str, _reason: str | None = None
+        self, *, codebook_id: UUID, theme_id: UUID, _reason: str | None = None
     ) -> Theme:
         """Mark a theme as deprecated without removing its historic links."""
         theme = await self._ensure_theme_in_codebook(codebook_id, theme_id)
@@ -168,7 +169,7 @@ class ThemeGraphService:
         await self._finalize()
         return theme
 
-    async def delete_theme(self, *, codebook_id: str, theme_id: str, hard: bool = False) -> None:
+    async def delete_theme(self, *, codebook_id: UUID, theme_id: UUID, hard: bool = False) -> None:
         """
         Remove a theme from active use.
 
@@ -190,9 +191,9 @@ class ThemeGraphService:
     async def add_child_theme(
         self,
         *,
-        codebook_id: str,
-        parent_theme_id: str,
-        child_theme_id: str,
+        codebook_id: UUID,
+        parent_theme_id: UUID,
+        child_theme_id: UUID,
         created_by: ActorType,
         provenance: str | None = None,
     ) -> ThemeRelationship:
@@ -213,9 +214,9 @@ class ThemeGraphService:
     async def remove_child_theme(
         self,
         *,
-        codebook_id: str,
-        parent_theme_id: str,
-        child_theme_id: str,
+        codebook_id: UUID,
+        parent_theme_id: UUID,
+        child_theme_id: UUID,
     ) -> int:
         """Deactivate matching active `CHILD_OF` edges and return how many changed."""
         relationships = await self._get_active_relationships(
@@ -232,9 +233,9 @@ class ThemeGraphService:
     async def move_theme(
         self,
         *,
-        codebook_id: str,
-        theme_id: str,
-        new_parent_theme_id: str,
+        codebook_id: UUID,
+        theme_id: UUID,
+        new_parent_theme_id: UUID,
         created_by: ActorType,
         provenance: str | None = None,
     ) -> ThemeRelationship:
@@ -271,9 +272,9 @@ class ThemeGraphService:
     async def add_theme_relation(
         self,
         *,
-        codebook_id: str,
-        source_theme_id: str,
-        target_theme_id: str,
+        codebook_id: UUID,
+        source_theme_id: UUID,
+        target_theme_id: UUID,
         relationship_type: ThemeRelationshipType,
         created_by: ActorType,
         provenance: str | None = None,
@@ -298,9 +299,9 @@ class ThemeGraphService:
     async def remove_theme_relation(
         self,
         *,
-        codebook_id: str,
-        source_theme_id: str,
-        target_theme_id: str,
+        codebook_id: UUID,
+        source_theme_id: UUID,
+        target_theme_id: UUID,
         relationship_type: ThemeRelationshipType,
     ) -> int:
         """Deactivate active non-hierarchical relations matching the selector."""
@@ -318,13 +319,13 @@ class ThemeGraphService:
     async def merge_themes(
         self,
         *,
-        codebook_id: str,
-        source_theme_ids: Iterable[str],
+        codebook_id: UUID,
+        source_theme_ids: Iterable[UUID],
         merged_label: str,
         merged_description: str,
         created_by: ActorType,
         merged_level: ThemeLevel | None = None,
-        parent_theme_id: str | None = None,
+        parent_theme_id: UUID | None = None,
         provenance: str | None = None,
     ) -> Theme:
         """
@@ -357,6 +358,7 @@ class ThemeGraphService:
             created_by=created_by,
         )
         self._session.add(merged_theme)
+        await self._session.flush([merged_theme])
         self._session.add(
             CodebookThemeRelationship(
                 id=self._new_id(),
@@ -405,7 +407,7 @@ class ThemeGraphService:
                 provenance=provenance,
             )
 
-        emitted: set[tuple[str, str, ThemeRelationshipType]] = set()
+        emitted: set[tuple[UUID, UUID, ThemeRelationshipType]] = set()
         for edge in touched_edges:
             new_source = merged_theme.id if edge.source_theme_id in source_ids else edge.source_theme_id
             new_target = merged_theme.id if edge.target_theme_id in source_ids else edge.target_theme_id
@@ -436,8 +438,8 @@ class ThemeGraphService:
     async def split_theme(
         self,
         *,
-        codebook_id: str,
-        source_theme_id: str,
+        codebook_id: UUID,
+        source_theme_id: UUID,
         split_specs: Iterable[NewThemeSpec],
         created_by: ActorType,
         inherit_parent: bool = True,
@@ -479,6 +481,7 @@ class ThemeGraphService:
             )
             created_themes.append(theme)
             self._session.add(theme)
+            await self._session.flush([theme])
             self._session.add(
                 CodebookThemeRelationship(
                     id=self._new_id(),
@@ -513,11 +516,11 @@ class ThemeGraphService:
     async def replace_theme(
         self,
         *,
-        codebook_id: str,
-        old_theme_id: str,
+        codebook_id: UUID,
+        old_theme_id: UUID,
         new_theme_spec: NewThemeSpec,
         created_by: ActorType,
-        new_parent_theme_id: str | None = None,
+        new_parent_theme_id: UUID | None = None,
         provenance: str | None = None,
     ) -> Theme:
         """
@@ -537,6 +540,7 @@ class ThemeGraphService:
             created_by=created_by,
         )
         self._session.add(new_theme)
+        await self._session.flush([new_theme])
         self._session.add(
             CodebookThemeRelationship(
                 id=self._new_id(),
@@ -557,7 +561,7 @@ class ThemeGraphService:
         for edge in touched_edges:
             edge.status = RelationshipStatus.REMOVED
 
-        emitted: set[tuple[str, str, ThemeRelationshipType]] = set()
+        emitted: set[tuple[UUID, UUID, ThemeRelationshipType]] = set()
         for edge in touched_edges:
             new_source = new_theme.id if edge.source_theme_id == old_theme_id else edge.source_theme_id
             new_target = new_theme.id if edge.target_theme_id == old_theme_id else edge.target_theme_id
@@ -620,7 +624,7 @@ class ThemeGraphService:
     async def validate_theme_dag(
         self,
         *,
-        codebook_id: str,
+        codebook_id: UUID,
         theme_statuses: set[NodeStatus] | None = None,
         enforce_single_parent: bool = True,
         enforce_levels: bool = True,
@@ -679,7 +683,7 @@ class ThemeGraphService:
     async def build_theme_dag(
         self,
         *,
-        codebook_id: str,
+        codebook_id: UUID,
         theme_statuses: set[NodeStatus] | None = None,
         include_non_hierarchical: bool = True,
     ) -> ThemeDagView:
@@ -699,7 +703,7 @@ class ThemeGraphService:
             include_non_hierarchical=include_non_hierarchical,
         )
 
-        adjacency: dict[str, list[ThemeEdgeView]] = {theme_id: [] for theme_id in node_ids}
+        adjacency: dict[UUID, list[ThemeEdgeView]] = {theme_id: [] for theme_id in node_ids}
         for relationship in relationships:
             if relationship.source_theme_id not in adjacency:
                 continue
@@ -733,8 +737,8 @@ class ThemeGraphService:
     async def get_theme_tree(
         self,
         *,
-        codebook_id: str,
-        root_theme_id: str | None = None,
+        codebook_id: UUID,
+        root_theme_id: UUID | None = None,
         theme_statuses: set[NodeStatus] | None = None,
     ) -> list[ThemeTreeNode]:
         """
@@ -756,7 +760,7 @@ class ThemeGraphService:
             theme_statuses=theme_statuses,
             include_non_hierarchical=False,
         )
-        parent_to_children: defaultdict[str, list[str]] = defaultdict(list)
+        parent_to_children: defaultdict[UUID, list[UUID]] = defaultdict(list)
         for edge_list in graph.adjacency.values():
             for edge in edge_list:
                 if edge.relationship_type == ThemeRelationshipType.CHILD_OF:
@@ -777,8 +781,8 @@ class ThemeGraphService:
     async def auto_generate_theme_tree_for_codebook(
         self,
         *,
-        codebook_id: str,
-        root_theme_id: str | None = None,
+        codebook_id: UUID,
+        root_theme_id: UUID | None = None,
         include_candidate_nodes: bool = True,
     ) -> list[ThemeTreeNode]:
         """
@@ -799,14 +803,14 @@ class ThemeGraphService:
             theme_statuses=statuses,
         )
 
-    async def _ensure_codebook_exists(self, codebook_id: str) -> None:
+    async def _ensure_codebook_exists(self, codebook_id: UUID) -> None:
         """Fail fast when the caller references a missing codebook."""
         stmt = select(Codebook.id).where(Codebook.id == codebook_id)
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         if row is None:
             raise ThemeNotFoundError(f"Codebook '{codebook_id}' not found.")
 
-    async def _ensure_theme_in_codebook(self, codebook_id: str, theme_id: str) -> Theme:
+    async def _ensure_theme_in_codebook(self, codebook_id: UUID, theme_id: UUID) -> Theme:
         """Resolve a theme only if it is an active member of the given codebook."""
         stmt = (
             select(Theme)
@@ -827,7 +831,9 @@ class ThemeGraphService:
             raise ThemeNotFoundError(f"Theme '{theme_id}' not found in codebook '{codebook_id}'.")
         return theme
 
-    async def _get_themes_in_codebook(self, *, codebook_id: str, theme_ids: list[str]) -> list[Theme]:
+    async def _get_themes_in_codebook(
+        self, *, codebook_id: UUID, theme_ids: list[UUID]
+    ) -> list[Theme]:
         """Load a list of themes constrained to one codebook membership scope."""
         if not theme_ids:
             return []
@@ -850,10 +856,10 @@ class ThemeGraphService:
     async def _get_active_relationships(
         self,
         *,
-        codebook_id: str,
+        codebook_id: UUID,
         relationship_type: ThemeRelationshipType,
-        source_theme_id: str | None = None,
-        target_theme_id: str | None = None,
+        source_theme_id: UUID | None = None,
+        target_theme_id: UUID | None = None,
     ) -> list[ThemeRelationship]:
         """Load active relationships by type, with optional source/target filters."""
         stmt = select(ThemeRelationship).where(
@@ -868,7 +874,7 @@ class ThemeGraphService:
         return list((await self._session.scalars(stmt)).all())
 
     async def _get_relationships_touching_themes(
-        self, *, codebook_id: str, theme_ids: Iterable[str]
+        self, *, codebook_id: UUID, theme_ids: Iterable[UUID]
     ) -> list[ThemeRelationship]:
         """Load all active edges where any source or target is in the provided set."""
         ids = self._unique_ids(theme_ids)
@@ -887,9 +893,9 @@ class ThemeGraphService:
     async def _add_relationship_row(
         self,
         *,
-        codebook_id: str,
-        source_theme_id: str,
-        target_theme_id: str,
+        codebook_id: UUID,
+        source_theme_id: UUID,
+        target_theme_id: UUID,
         relationship_type: ThemeRelationshipType,
         created_by: ActorType,
         provenance: str | None = None,
@@ -989,7 +995,7 @@ class ThemeGraphService:
                 if descendant not in visited:
                     queue.append(descendant)
 
-    async def _remove_codebook_theme_membership(self, *, codebook_id: str, theme_id: str) -> None:
+    async def _remove_codebook_theme_membership(self, *, codebook_id: UUID, theme_id: UUID) -> None:
         """Mark active codebook-membership edges as removed for one theme."""
         stmt = select(CodebookThemeRelationship).where(
             CodebookThemeRelationship.codebook_id == codebook_id,
@@ -1001,7 +1007,7 @@ class ThemeGraphService:
         for relationship in relationships:
             relationship.status = RelationshipStatus.REMOVED
 
-    async def _deactivate_theme_relationships(self, *, codebook_id: str, theme_id: str) -> None:
+    async def _deactivate_theme_relationships(self, *, codebook_id: UUID, theme_id: UUID) -> None:
         """Mark all active inbound/outbound theme edges as removed."""
         stmt = select(ThemeRelationship).where(
             ThemeRelationship.codebook_id == codebook_id,
@@ -1015,7 +1021,7 @@ class ThemeGraphService:
         for relationship in relationships:
             relationship.status = RelationshipStatus.REMOVED
 
-    async def _hard_delete_theme(self, *, codebook_id: str, theme: Theme) -> None:
+    async def _hard_delete_theme(self, *, codebook_id: UUID, theme: Theme) -> None:
         """Physically remove a theme row only when it is safe across codebooks."""
         stmt = select(CodebookThemeRelationship).where(
             CodebookThemeRelationship.theme_id == theme.id,
@@ -1036,8 +1042,8 @@ class ThemeGraphService:
         await self._session.delete(theme)
 
     async def _load_theme_nodes(
-        self, *, codebook_id: str, theme_statuses: set[NodeStatus]
-    ) -> dict[str, ThemeNodeView]:
+        self, *, codebook_id: UUID, theme_statuses: set[NodeStatus]
+    ) -> dict[UUID, ThemeNodeView]:
         """Load active node view models for graph projection."""
         if not theme_statuses:
             return {}
@@ -1071,8 +1077,8 @@ class ThemeGraphService:
     async def _load_active_relationships_for_nodes(
         self,
         *,
-        codebook_id: str,
-        theme_ids: set[str],
+        codebook_id: UUID,
+        theme_ids: set[UUID],
         include_non_hierarchical: bool,
     ) -> list[ThemeRelationship]:
         """Load active edges where both endpoints are part of the selected node set."""
@@ -1089,7 +1095,7 @@ class ThemeGraphService:
         return list((await self._session.scalars(stmt)).all())
 
     def _contains_cycle(
-        self, *, nodes: set[str], parent_to_children: dict[str, set[str] | list[str]]
+        self, *, nodes: set[UUID], parent_to_children: dict[UUID, set[UUID] | list[UUID]]
     ) -> bool:
         """
         Detect cycles using Kahn's topological-sort algorithm.
@@ -1097,7 +1103,7 @@ class ThemeGraphService:
         If not all nodes can be visited with indegree-zero elimination, the
         hierarchy contains at least one cycle.
         """
-        indegree: dict[str, int] = {node_id: 0 for node_id in nodes}
+        indegree: dict[UUID, int] = {node_id: 0 for node_id in nodes}
         for parent_id, children in parent_to_children.items():
             if parent_id not in indegree:
                 continue
@@ -1105,7 +1111,7 @@ class ThemeGraphService:
                 if child_id in indegree:
                     indegree[child_id] += 1
 
-        queue: deque[str] = deque(node for node, degree in indegree.items() if degree == 0)
+        queue: deque[UUID] = deque(node for node, degree in indegree.items() if degree == 0)
         visited = 0
         while queue:
             parent = queue.popleft()
@@ -1120,10 +1126,10 @@ class ThemeGraphService:
 
     def _build_tree_node(
         self,
-        theme_id: str,
-        nodes: dict[str, ThemeNodeView],
-        parent_to_children: dict[str, list[str]],
-        path: set[str],
+        theme_id: UUID,
+        nodes: dict[UUID, ThemeNodeView],
+        parent_to_children: dict[UUID, list[UUID]],
+        path: set[UUID],
     ) -> ThemeTreeNode:
         """Recursively materialize one tree node and its descendants."""
         if theme_id in path:

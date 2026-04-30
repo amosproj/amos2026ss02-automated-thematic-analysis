@@ -52,7 +52,7 @@ async def get_theme_tree(
     except ValueError as exc:
         raise UnprocessableError(str(exc)) from exc
 
-    return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump())
+    return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))
 
 
 @router.get("/", response_model=ResponseEnvelope[ThemeFrequencyResponse])
@@ -85,4 +85,4 @@ async def get_theme_frequency_overview(
     except ValueError as exc:
         raise UnprocessableError(str(exc)) from exc
 
-    return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump())
+    return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))
