@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     CORS_ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"] # Default allowed origin for development
     API_V1_PREFIX: str = "/api/v1"  # Default API prefix
 
+    INGESTION_CHUNK_SIZE_WORDS: int = 2048
+    INGESTION_CHUNK_OVERLAP_WORDS: int = 200
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV == "production" # Helper property to check if the app is running in production mode

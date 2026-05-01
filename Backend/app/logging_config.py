@@ -25,7 +25,7 @@ def configure_logging(settings: Settings) -> None:
     logger.remove()
 
     if settings.LOG_FORMAT == "json":
-        logger.add(sys.stdout, level=settings.LOG_LEVEL, serialize=True, enqueue=True)
+        logger.add(sys.stdout, level=settings.LOG_LEVEL, serialize=settings.is_production, enqueue=True)
     else:
         logger.add(
             sys.stdout,
