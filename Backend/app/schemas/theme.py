@@ -1,11 +1,9 @@
-from app.domain.enums import ActorType, NodeStatus, ThemeLevel
+from uuid import UUID
+
 from app.schemas.common import BaseSchema
 
 
 class ThemeSchema(BaseSchema):
-    id: str
+    id: UUID
     label: str
-    description: str
-    level: ThemeLevel
-    status: NodeStatus
-    created_by: ActorType
+    is_active: bool

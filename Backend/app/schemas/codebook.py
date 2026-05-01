@@ -1,14 +1,14 @@
-from app.domain.enums import ActorType, CodebookStatus
+from uuid import UUID
+
 from app.schemas.common import BaseSchema
 
 
 class CodebookSchema(BaseSchema):
-    id: str
+    """TODO: Unfinished placeholder schema."""
+
+    id: UUID
     project_id: str
-    previous_version_id: str | None = None
     name: str
     description: str | None = None
-    research_question: str
     version: int
-    status: CodebookStatus
-    created_by: ActorType
+    created_by: str
