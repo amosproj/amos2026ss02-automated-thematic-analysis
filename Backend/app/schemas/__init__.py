@@ -15,8 +15,7 @@ from app.schemas.ingestion import (
     CorpusDocumentSchema,
     CorpusSchema,
     DocumentInput,
-    IngestionResultSchema,
-    IngestionRunSchema,
+    IngestResultSchema,
 )
 from app.schemas.theme import ThemeSchema
 
@@ -31,8 +30,7 @@ __all__ = [
     "CorpusSchema",
     "DocumentInput",
     "HealthResponse",
-    "IngestionResultSchema",
-    "IngestionRunSchema",
+    "IngestResultSchema",
     "Page",
     "PageMeta",
     "PaginationParams",

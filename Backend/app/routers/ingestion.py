@@ -4,7 +4,6 @@ import uuid
 from fastapi import APIRouter, UploadFile
 
 from app.dependencies import AppSettings, DbSession
-from app.domain.enums import SourceType
 from app.exceptions import UnprocessableError
 from app.schemas.common import Page, PageMeta, ResponseEnvelope
 from app.schemas.ingestion import (
@@ -13,11 +12,10 @@ from app.schemas.ingestion import (
     CorpusCreate,
     CorpusDocumentSchema,
     CorpusSchema,
-    IngestionResultSchema,
-    IngestionRunSchema,
+    IngestResultSchema,
 )
 from app.services.ingestion import (
-    IngestionResult,
+    IngestResult,
     IngestionService,
     parse_csv_upload,
     parse_json_upload,
@@ -34,20 +32,12 @@ def _pages(total: int, page_size: int) -> int:
     return math.ceil(total / page_size) if total > 0 else 0
 
 
-async def _result_schema(
-    session: DbSession,
-    result: IngestionResult,
-) -> IngestionResultSchema:
-    await session.refresh(result.run)
-
-    for document in result.documents:
-        await session.refresh(document)
-
-    return IngestionResultSchema(
-        run=IngestionRunSchema.model_validate(result.run),
-        documents=[CorpusDocumentSchema.model_validate(d) for d in result.documents],
+def _to_result_schema(result: IngestResult) -> IngestResultSchema:
+    return IngestResultSchema(
+        documents_created=len(result.documents),
         chunks_created=result.chunks_created,
     )
+
 
 # ---------------------------------------------------------------------------
 # Corpus endpoints
@@ -94,13 +84,14 @@ async def get_corpus(
     return ResponseEnvelope.ok(CorpusSchema.model_validate(corpus))
 
 
-# -------------------------------------
+# ---------------------------------------------------------------------------
 # Document ingestion endpoints
+# ---------------------------------------------------------------------------
 
 
 @router.post(
     "/corpora/{corpus_id}/documents/bulk",
-    response_model=ResponseEnvelope[IngestionResultSchema],
+    response_model=ResponseEnvelope[IngestResultSchema],
     status_code=201,
 )
 async def bulk_ingest_documents(
@@ -108,19 +99,18 @@ async def bulk_ingest_documents(
     payload: BulkDocumentIngestRequest,
     session: DbSession,
     settings: AppSettings,
-) -> ResponseEnvelope[IngestionResultSchema]:
+) -> ResponseEnvelope[IngestResultSchema]:
     service = IngestionService(session, settings)
     result = await service.ingest_documents(
         corpus_id=corpus_id,
         documents=payload.documents,
-        source_type=payload.source_type,
     )
-    return ResponseEnvelope.ok(await _result_schema(session, result))
+    return ResponseEnvelope.ok(_to_result_schema(result))
 
 
 @router.post(
     "/corpora/{corpus_id}/upload",
-    response_model=ResponseEnvelope[IngestionResultSchema],
+    response_model=ResponseEnvelope[IngestResultSchema],
     status_code=201,
 )
 async def upload_documents(
@@ -128,7 +118,7 @@ async def upload_documents(
     file: UploadFile,
     session: DbSession,
     settings: AppSettings,
-) -> ResponseEnvelope[IngestionResultSchema]:
+) -> ResponseEnvelope[IngestResultSchema]:
     filename = file.filename or ""
     dot_pos = filename.rfind(".")
     ext = filename[dot_pos:].lower() if dot_pos != -1 else ""
@@ -142,25 +132,20 @@ async def upload_documents(
 
     if ext == ".txt":
         docs = parse_text_upload(filename, content)
-        source_type = SourceType.TEXT
     elif ext == ".json":
         docs = parse_json_upload(filename, content)
-        source_type = SourceType.JSON
     elif ext == ".jsonl":
         docs = parse_jsonl_upload(filename, content)
-        source_type = SourceType.JSONL
     else:  # .csv
         docs = parse_csv_upload(filename, content)
-        source_type = SourceType.CSV
 
     service = IngestionService(session, settings)
     result = await service.ingest_documents(
         corpus_id=corpus_id,
         documents=docs,
-        source_type=source_type,
         filename=filename,
     )
-    return ResponseEnvelope.ok(await _result_schema(session, result))
+    return ResponseEnvelope.ok(_to_result_schema(result))
 
 
 # ---------------------------------------------------------------------------
@@ -211,14 +196,3 @@ async def list_chunks(
             meta=PageMeta(total=total, page=page, page_size=page_size, pages=_pages(total, page_size)),
         )
     )
-
-
-@router.get("/runs/{run_id}", response_model=ResponseEnvelope[IngestionRunSchema])
-async def get_ingestion_run(
-    run_id: uuid.UUID,
-    session: DbSession,
-    settings: AppSettings,
-) -> ResponseEnvelope[IngestionRunSchema]:
-    service = IngestionService(session, settings)
-    run = await service.get_ingestion_run(run_id)
-    return ResponseEnvelope.ok(IngestionRunSchema.model_validate(run))

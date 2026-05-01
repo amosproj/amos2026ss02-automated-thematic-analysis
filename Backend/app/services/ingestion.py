@@ -4,21 +4,18 @@ import json
 import uuid
 from dataclasses import dataclass, field
 
-from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
-from app.domain.enums import DocumentStatus, IngestionRunStatus, SourceType
 from app.exceptions import NotFoundError, UnprocessableError
-from app.models.ingestion import Corpus, CorpusChunk, CorpusDocument, IngestionRun
+from app.models.ingestion import Corpus, CorpusChunk, CorpusDocument
 from app.schemas.ingestion import CorpusCreate, DocumentInput
-from app.services.text_chunking import chunk_text_by_words, count_words, sha256_text
+from app.services.text_chunking import chunk_text_by_words
 
 
 @dataclass
-class IngestionResult:
-    run: IngestionRun
+class IngestResult:
     documents: list[CorpusDocument] = field(default_factory=list)
     chunks_created: int = 0
 
@@ -33,7 +30,7 @@ def parse_text_upload(filename: str, content: bytes) -> list[DocumentInput]:
         text = content.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise UnprocessableError(f"Could not decode '{filename}' as UTF-8") from exc
-    return [DocumentInput(external_id=filename, title=filename, text=text)]
+    return [DocumentInput(title=filename, text=text)]
 
 
 def parse_json_upload(filename: str, content: bytes) -> list[DocumentInput]:
@@ -59,10 +56,8 @@ def parse_json_upload(filename: str, content: bytes) -> list[DocumentInput]:
             raise UnprocessableError(f"'{filename}': document at index {i} is missing 'text'")
         docs.append(
             DocumentInput(
-                external_id=item.get("external_id") or None,
-                title=item.get("title") or None,
+                title=item.get("title") or filename,
                 text=item["text"],
-                metadata=item.get("metadata") or {},
             )
         )
     return docs
@@ -78,19 +73,15 @@ def parse_csv_upload(filename: str, content: bytes) -> list[DocumentInput]:
     if not reader.fieldnames or "text" not in reader.fieldnames:
         raise UnprocessableError(f"'{filename}': CSV must contain a 'text' column")
 
-    known_columns = {"text", "external_id", "title"}
     docs: list[DocumentInput] = []
-    for row in reader:
+    for i, row in enumerate(reader):
         text = row.get("text", "").strip()
         if not text:
             continue
-        extra = {k: v for k, v in row.items() if k not in known_columns and v is not None}
         docs.append(
             DocumentInput(
-                external_id=row.get("external_id") or None,
-                title=row.get("title") or None,
+                title=row.get("title") or f"{filename}:{i + 1}",
                 text=text,
-                metadata=extra,
             )
         )
     return docs
@@ -102,7 +93,6 @@ def parse_jsonl_upload(filename: str, content: bytes) -> list[DocumentInput]:
     except UnicodeDecodeError as exc:
         raise UnprocessableError(f"Could not decode '{filename}' as UTF-8") from exc
 
-    # Collect messages per participant, preserving order
     participants: dict[str, list[dict]] = {}
     for line_no, raw in enumerate(text_content.splitlines(), start=1):
         raw = raw.strip()
@@ -135,17 +125,7 @@ def parse_jsonl_upload(filename: str, content: bytes) -> list[DocumentInput]:
             continue
 
         text = "\n\n".join(str(m["message_content"]) for m in human_turns)
-        docs.append(
-            DocumentInput(
-                external_id=username,
-                title=username,
-                text=text,
-                metadata={
-                    "total_turns": len(messages),
-                    "human_turns": len(human_turns),
-                },
-            )
-        )
+        docs.append(DocumentInput(title=username, text=text))
     return docs
 
 
@@ -161,12 +141,8 @@ class IngestionService:
 
     async def create_corpus(self, payload: CorpusCreate) -> Corpus:
         corpus = Corpus(
-            id=uuid.uuid4(),
             project_id=payload.project_id,
             name=payload.name,
-            description=payload.description,
-            research_question=payload.research_question,
-            extra_metadata=payload.metadata,
         )
         self._session.add(corpus)
         await self._session.commit()
@@ -206,83 +182,23 @@ class IngestionService:
         self,
         corpus_id: uuid.UUID,
         documents: list[DocumentInput],
-        source_type: SourceType,
         filename: str | None = None,
-    ) -> IngestionResult:
-        await self.get_corpus(corpus_id)  # raises NotFoundError early if missing
+    ) -> IngestResult:
+        await self.get_corpus(corpus_id)
 
-        run_id = uuid.uuid4()
-        run = IngestionRun(
-            id=run_id,
-            corpus_id=corpus_id,
-            source_type=source_type,
-            status=IngestionRunStatus.RUNNING,
-            filename=filename,
-            total_documents=0,
-            accepted_documents=0,
-            rejected_documents=0,
-            duplicate_documents=0,
-            empty_documents=0,
-            parameters={
-                "chunk_size_words": self._settings.INGESTION_CHUNK_SIZE_WORDS,
-                "chunk_overlap_words": self._settings.INGESTION_CHUNK_OVERLAP_WORDS,
-                "deduplicate_by_hash": self._settings.INGESTION_DEDUPLICATE_BY_HASH,
-            },
-        )
-        self._session.add(run)
-
-        accepted_docs: list[CorpusDocument] = []
-        chunks_created = 0
-
+        result = IngestResult()
         try:
-            await self._session.flush()
-
             for doc_input in documents:
                 text = (doc_input.text or "").strip()
-                word_count = count_words(text)
-
-                if not text or word_count == 0:
-                    run.empty_documents += 1
-                    run.rejected_documents += 1
+                if not text:
                     continue
-
-                if word_count > self._settings.INGESTION_MAX_DOCUMENT_WORDS:
-                    run.rejected_documents += 1
-                    logger.debug(
-                        "Document rejected: {} words > max {}",
-                        word_count,
-                        self._settings.INGESTION_MAX_DOCUMENT_WORDS,
-                    )
-                    continue
-
-                text_hash = sha256_text(text)
-
-                if self._settings.INGESTION_DEDUPLICATE_BY_HASH:
-                    dup = await self._session.execute(
-                        select(CorpusDocument)
-                        .where(CorpusDocument.corpus_id == corpus_id)
-                        .where(CorpusDocument.text_hash == text_hash)
-                        .where(CorpusDocument.status == DocumentStatus.ACTIVE)
-                        .limit(1)
-                    )
-                    if dup.scalar_one_or_none() is not None:
-                        run.duplicate_documents += 1
-                        continue
 
                 doc = CorpusDocument(
-                    id=uuid.uuid4(),
                     corpus_id=corpus_id,
-                    external_id=doc_input.external_id,
-                    title=doc_input.title,
-                    text=text,
-                    text_hash=text_hash,
-                    word_count=word_count,
-                    source_type=source_type,
-                    status=DocumentStatus.ACTIVE,
-                    extra_metadata=doc_input.metadata,
+                    title=doc_input.title or filename or "Untitled",
                 )
                 self._session.add(doc)
-                await self._session.flush()  # guarantees FK is satisfied before chunks
+                await self._session.flush()
 
                 spans = chunk_text_by_words(
                     text,
@@ -292,54 +208,21 @@ class IngestionService:
                 for span in spans:
                     self._session.add(
                         CorpusChunk(
-                            id=uuid.uuid4(),
                             document_id=doc.id,
                             chunk_index=span.chunk_index,
-                            start_word=span.start_word,
-                            end_word=span.end_word,
                             text=span.text,
-                            text_hash=sha256_text(span.text),
-                            word_count=span.end_word - span.start_word,
                         )
                     )
 
-                accepted_docs.append(doc)
-                chunks_created += len(spans)
-                run.accepted_documents += 1
+                result.documents.append(doc)
+                result.chunks_created += len(spans)
 
-            run.total_documents = (
-                run.accepted_documents + run.rejected_documents + run.duplicate_documents
-            )
-            run.status = IngestionRunStatus.COMPLETED
             await self._session.commit()
-
         except Exception as exc:
             await self._session.rollback()
-            logger.exception("Ingestion failed for corpus {}", corpus_id)
-            # Best-effort: persist a FAILED run so the caller can inspect it
-            try:
-                self._session.add(
-                    IngestionRun(
-                        id=run_id,
-                        corpus_id=corpus_id,
-                        source_type=source_type,
-                        status=IngestionRunStatus.FAILED,
-                        filename=filename,
-                        total_documents=0,
-                        accepted_documents=0,
-                        rejected_documents=0,
-                        duplicate_documents=0,
-                        empty_documents=0,
-                        parameters={},
-                        error_message=str(exc)[:2000],
-                    )
-                )
-                await self._session.commit()
-            except Exception:
-                logger.exception("Could not persist failed ingestion run {}", run_id)
             raise UnprocessableError(f"Ingestion failed: {exc}") from exc
 
-        return IngestionResult(run=run, documents=accepted_docs, chunks_created=chunks_created)
+        return result
 
     async def list_documents(
         self,
@@ -395,12 +278,3 @@ class IngestionService:
             .limit(page_size)
         )
         return list(rows.scalars().all()), total
-
-    async def get_ingestion_run(self, run_id: uuid.UUID) -> IngestionRun:
-        result = await self._session.execute(
-            select(IngestionRun).where(IngestionRun.id == run_id)
-        )
-        run = result.scalar_one_or_none()
-        if run is None:
-            raise NotFoundError(f"Ingestion run '{run_id}' not found")
-        return run

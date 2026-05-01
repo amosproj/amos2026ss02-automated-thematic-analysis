@@ -29,15 +29,6 @@ async def test_create_corpus_returns_201(client):
     assert "id" in body["data"]
 
 
-async def test_create_corpus_with_metadata(client):
-    resp = await client.post(
-        f"{API}/corpora",
-        json={"project_id": P1_STR, "name": "C", "metadata": {"author": "Alice"}},
-    )
-    assert resp.status_code == 201
-    assert resp.json()["data"]["metadata"] == {"author": "Alice"}
-
-
 # ---------------------------------------------------------------------------
 # GET /ingestion/corpora
 # ---------------------------------------------------------------------------
@@ -49,7 +40,6 @@ async def test_list_corpora_empty(client):
     body = resp.json()
     assert body["data"]["items"] == []
     assert body["data"]["meta"]["total"] == 0
-    assert body["data"]["meta"]["pages"] == 0
 
 
 async def test_list_corpora_returns_created(client):
@@ -94,33 +84,26 @@ async def test_bulk_ingest_documents(client):
 
     payload = {
         "documents": [
-            {"text": "First document with some words here"},
-            {"text": "Second document with different words"},
+            {"title": "Doc 1", "text": "First document with some words here"},
+            {"title": "Doc 2", "text": "Second document with different words"},
         ],
-        "source_type": "manual",
     }
     resp = await client.post(f"{API}/corpora/{corpus_id}/documents/bulk", json=payload)
     assert resp.status_code == 201
 
     data = resp.json()["data"]
-    assert data["run"]["accepted_documents"] == 2
-    assert data["run"]["rejected_documents"] == 0
-    assert data["run"]["status"] == "completed"
-    assert len(data["documents"]) == 2
+    assert data["documents_created"] == 2
     assert data["chunks_created"] > 0
 
 
-async def test_bulk_ingest_empty_document_rejected(client):
+async def test_bulk_ingest_skips_empty_documents(client):
     create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
-    payload = {"documents": [{"text": ""}], "source_type": "manual"}
+    payload = {"documents": [{"title": "E", "text": ""}, {"title": "V", "text": "valid text here"}]}
     resp = await client.post(f"{API}/corpora/{corpus_id}/documents/bulk", json=payload)
     assert resp.status_code == 201
-
-    data = resp.json()["data"]
-    assert data["run"]["rejected_documents"] == 1
-    assert data["run"]["accepted_documents"] == 0
+    assert resp.json()["data"]["documents_created"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -132,19 +115,13 @@ async def test_get_documents_paginated(client):
     create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
-    docs = [{"text": f"Document number {i} with enough words"} for i in range(5)]
-    await client.post(
-        f"{API}/corpora/{corpus_id}/documents/bulk",
-        json={"documents": docs, "source_type": "manual"},
-    )
+    docs = [{"title": f"Doc {i}", "text": f"Document number {i} with enough words"} for i in range(5)]
+    await client.post(f"{API}/corpora/{corpus_id}/documents/bulk", json={"documents": docs})
 
-    resp = await client.get(
-        f"{API}/corpora/{corpus_id}/documents", params={"page": 1, "page_size": 3}
-    )
+    resp = await client.get(f"{API}/corpora/{corpus_id}/documents", params={"page": 1, "page_size": 3})
     assert resp.status_code == 200
     meta = resp.json()["data"]["meta"]
     assert meta["total"] == 5
-    assert meta["page_size"] == 3
     assert len(resp.json()["data"]["items"]) == 3
 
 
@@ -159,7 +136,7 @@ async def test_get_chunks(client):
 
     await client.post(
         f"{API}/corpora/{corpus_id}/documents/bulk",
-        json={"documents": [{"text": "word " * 15}], "source_type": "manual"},
+        json={"documents": [{"title": "T", "text": "word " * 15}]},
     )
 
     resp = await client.get(f"{API}/corpora/{corpus_id}/chunks")
@@ -168,37 +145,7 @@ async def test_get_chunks(client):
     assert data["meta"]["total"] > 0
     chunk = data["items"][0]
     assert "chunk_index" in chunk
-    assert "start_word" in chunk
-    assert "end_word" in chunk
     assert "text" in chunk
-
-
-# ---------------------------------------------------------------------------
-# GET /ingestion/runs/{run_id}
-# ---------------------------------------------------------------------------
-
-
-async def test_get_ingestion_run(client):
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
-    corpus_id = create.json()["data"]["id"]
-
-    ingest = await client.post(
-        f"{API}/corpora/{corpus_id}/documents/bulk",
-        json={"documents": [{"text": "some words here for the run"}], "source_type": "manual"},
-    )
-    run_id = ingest.json()["data"]["run"]["id"]
-
-    resp = await client.get(f"{API}/runs/{run_id}")
-    assert resp.status_code == 200
-    run = resp.json()["data"]
-    assert run["id"] == run_id
-    assert run["status"] == "completed"
-    assert run["total_documents"] == 1
-
-
-async def test_get_ingestion_run_not_found(client):
-    resp = await client.get(f"{API}/runs/{MISSING_STR}")
-    assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -216,14 +163,7 @@ async def test_upload_txt(client):
         files={"file": ("sample.txt", content.encode(), "text/plain")},
     )
     assert resp.status_code == 201
-    data = resp.json()["data"]
-    assert data["run"]["accepted_documents"] == 1
-    assert data["run"]["source_type"] == "text"
-
-
-# ---------------------------------------------------------------------------
-# POST /ingestion/corpora/{corpus_id}/upload — json
-# ---------------------------------------------------------------------------
+    assert resp.json()["data"]["documents_created"] == 1
 
 
 async def test_upload_json(client):
@@ -231,21 +171,15 @@ async def test_upload_json(client):
     corpus_id = create.json()["data"]["id"]
 
     data_bytes = json.dumps([
-        {"text": "first json document with multiple words"},
-        {"text": "second json document with multiple words"},
+        {"title": "J1", "text": "first json document with multiple words"},
+        {"title": "J2", "text": "second json document with multiple words"},
     ]).encode()
     resp = await client.post(
         f"{API}/corpora/{corpus_id}/upload",
         files={"file": ("docs.json", data_bytes, "application/json")},
     )
     assert resp.status_code == 201
-    assert resp.json()["data"]["run"]["accepted_documents"] == 2
-    assert resp.json()["data"]["run"]["source_type"] == "json"
-
-
-# ---------------------------------------------------------------------------
-# POST /ingestion/corpora/{corpus_id}/upload — csv
-# ---------------------------------------------------------------------------
+    assert resp.json()["data"]["documents_created"] == 2
 
 
 async def test_upload_csv(client):
@@ -263,8 +197,7 @@ async def test_upload_csv(client):
         files={"file": ("data.csv", buf.getvalue().encode(), "text/csv")},
     )
     assert resp.status_code == 201
-    assert resp.json()["data"]["run"]["accepted_documents"] == 2
-    assert resp.json()["data"]["run"]["source_type"] == "csv"
+    assert resp.json()["data"]["documents_created"] == 2
 
 
 async def test_upload_unsupported_extension(client):

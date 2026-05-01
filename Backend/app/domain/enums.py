@@ -55,26 +55,3 @@ class CodeThemeRelationshipType(StrEnum):
 
 class CodebookThemeRelationshipType(StrEnum):
     CONTAINS = "contains"
-
-
-class IngestionRunStatus(StrEnum):
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
-class DocumentStatus(StrEnum):
-    ACTIVE = "active"
-    DUPLICATE = "duplicate"
-    EMPTY = "empty"
-    REJECTED = "rejected"
-
-
-class SourceType(StrEnum):
-    MANUAL = "manual"
-    JSON = "json"
-    JSONL = "jsonl"
-    CSV = "csv"
-    TEXT = "text"
-    UPLOAD = "upload"

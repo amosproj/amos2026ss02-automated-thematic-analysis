@@ -40,8 +40,6 @@ def test_settings() -> Settings:
         DATABASE_URL=TEST_DB_URL,
         INGESTION_CHUNK_SIZE_WORDS=10,
         INGESTION_CHUNK_OVERLAP_WORDS=2,
-        INGESTION_MAX_DOCUMENT_WORDS=50,
-        INGESTION_DEDUPLICATE_BY_HASH=True,
     )
 
 

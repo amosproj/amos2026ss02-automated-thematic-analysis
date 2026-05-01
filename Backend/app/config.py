@@ -26,8 +26,6 @@ class Settings(BaseSettings):
 
     INGESTION_CHUNK_SIZE_WORDS: int = 2048
     INGESTION_CHUNK_OVERLAP_WORDS: int = 200
-    INGESTION_MAX_DOCUMENT_WORDS: int = 100_000
-    INGESTION_DEDUPLICATE_BY_HASH: bool = True
 
     @property
     def is_production(self) -> bool:
