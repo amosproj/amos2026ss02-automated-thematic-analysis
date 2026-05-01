@@ -18,7 +18,8 @@ class Corpus(Base, TimestampMixin):
         primary_key=True,
         default=uuid.uuid4,
     )
-    # Which project this corpus belongs to — not a FK because projects live in a separate service.
+    # Which project this corpus belongs to. 
+    # TODO: Only placeholder for now. add Project Data Structure and wire correctly into Corpus
     project_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         index=True,

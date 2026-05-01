@@ -58,7 +58,7 @@ async def create_corpus(
 async def list_corpora(
     session: DbSession,
     settings: AppSettings,
-    project_id: uuid.UUID | None = None,  # optional filter
+    project_id: uuid.UUID | None = None,  # TODO: Only placeholder for now. add Project Data Structure and wire correctly into Corpus. optional filter
     page: int = 1,
     page_size: int = 20,
 ) -> ResponseEnvelope[Page[CorpusSchema]]:

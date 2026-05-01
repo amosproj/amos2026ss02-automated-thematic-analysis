@@ -88,7 +88,7 @@ class IngestionService:
     async def create_corpus(self, payload: CorpusCreate) -> Corpus:
         """Insert a new corpus and return the refreshed ORM object."""
         corpus = Corpus(
-            project_id=payload.project_id,
+            project_id=payload.project_id, # TODO: Only placeholder for now. add Project Data Structure and wire correctly into Corpus
             name=payload.name,
         )
         self._session.add(corpus)
