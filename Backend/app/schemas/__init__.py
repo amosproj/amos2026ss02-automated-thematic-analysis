@@ -6,7 +6,6 @@ from app.schemas.common import (
     PaginationParams,
     ResponseEnvelope,
 )
-from app.schemas.code import CodeSchema
 from app.schemas.codebook import CodebookSchema
 from app.schemas.ingestion import (
     BulkDocumentIngestRequest,
@@ -22,7 +21,6 @@ from app.schemas.theme import ThemeSchema
 __all__ = [
     "BaseSchema",
     "BulkDocumentIngestRequest",
-    "CodeSchema",
     "CodebookSchema",
     "CorpusChunkSchema",
     "CorpusCreate",
