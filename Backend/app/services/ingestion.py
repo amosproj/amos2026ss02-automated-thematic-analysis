@@ -1,5 +1,3 @@
-import csv
-import io
 import json
 import uuid
 from dataclasses import dataclass, field
@@ -16,6 +14,8 @@ from app.services.text_chunking import chunk_text_by_words
 
 @dataclass
 class IngestResult:
+    """Internal result of an ingestion call. Converted to IngestResultSchema before returning to the client."""
+
     documents: list[CorpusDocument] = field(default_factory=list)
     chunks_created: int = 0
 
@@ -25,74 +25,18 @@ class IngestResult:
 # ---------------------------------------------------------------------------
 
 
-def parse_text_upload(filename: str, content: bytes) -> list[DocumentInput]:
-    try:
-        text = content.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise UnprocessableError(f"Could not decode '{filename}' as UTF-8") from exc
-    return [DocumentInput(title=filename, text=text)]
-
-
-def parse_json_upload(filename: str, content: bytes) -> list[DocumentInput]:
-    try:
-        data = json.loads(content.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise UnprocessableError(f"Invalid JSON in '{filename}': {exc}") from exc
-
-    if isinstance(data, list):
-        items = data
-    elif isinstance(data, dict) and "documents" in data:
-        items = data["documents"]
-    else:
-        raise UnprocessableError(
-            f"'{filename}': JSON must be a list of documents or an object with a 'documents' key"
-        )
-
-    docs: list[DocumentInput] = []
-    for i, item in enumerate(items):
-        if not isinstance(item, dict):
-            raise UnprocessableError(f"'{filename}': document at index {i} must be an object")
-        if "text" not in item:
-            raise UnprocessableError(f"'{filename}': document at index {i} is missing 'text'")
-        docs.append(
-            DocumentInput(
-                title=item.get("title") or filename,
-                text=item["text"],
-            )
-        )
-    return docs
-
-
-def parse_csv_upload(filename: str, content: bytes) -> list[DocumentInput]:
-    try:
-        text_content = content.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise UnprocessableError(f"Could not decode '{filename}' as UTF-8") from exc
-
-    reader = csv.DictReader(io.StringIO(text_content))
-    if not reader.fieldnames or "text" not in reader.fieldnames:
-        raise UnprocessableError(f"'{filename}': CSV must contain a 'text' column")
-
-    docs: list[DocumentInput] = []
-    for i, row in enumerate(reader):
-        text = row.get("text", "").strip()
-        if not text:
-            continue
-        docs.append(
-            DocumentInput(
-                title=row.get("title") or f"{filename}:{i + 1}",
-                text=text,
-            )
-        )
-    return docs
-
-
 def parse_jsonl_upload(filename: str, content: bytes) -> list[DocumentInput]:
+    """Parse a .jsonl chatbot interview log. One DocumentInput per unique username.
+    Only 'human_response' events are included; chatbot turns are excluded.
+    Messages are sorted by message_index before joining.
+    Participants with no non-blank human responses are skipped.
+    """
     try:
         text_content = content.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise UnprocessableError(f"Could not decode '{filename}' as UTF-8") from exc
 
+    # Collect all messages per participant.
     participants: dict[str, list[dict]] = {}
     for line_no, raw in enumerate(text_content.splitlines(), start=1):
         raw = raw.strip()
@@ -135,11 +79,14 @@ def parse_jsonl_upload(filename: str, content: bytes) -> list[DocumentInput]:
 
 
 class IngestionService:
+    """Handles all database operations for corpora, documents, and chunks."""
+
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
         self._session = session
         self._settings = settings
 
     async def create_corpus(self, payload: CorpusCreate) -> Corpus:
+        """Insert a new corpus and return the refreshed ORM object."""
         corpus = Corpus(
             project_id=payload.project_id,
             name=payload.name,
@@ -150,6 +97,7 @@ class IngestionService:
         return corpus
 
     async def get_corpus(self, corpus_id: uuid.UUID) -> Corpus:
+        """Fetch a corpus by ID. Raises NotFoundError if it doesn't exist."""
         result = await self._session.execute(
             select(Corpus).where(Corpus.id == corpus_id)
         )
@@ -164,6 +112,7 @@ class IngestionService:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[Corpus], int]:
+        """Return a paginated list of corpora, optionally filtered by project_id."""
         base = select(Corpus)
         count_q = select(func.count()).select_from(Corpus)
         if project_id is not None:
@@ -184,6 +133,10 @@ class IngestionService:
         documents: list[DocumentInput],
         filename: str | None = None,
     ) -> IngestResult:
+        """Core ingestion loop. For each non-empty document: creates a CorpusDocument,
+        chunks the text, and inserts CorpusChunk rows. Commits once at the end.
+        Rolls back and raises UnprocessableError on any failure.
+        """
         await self.get_corpus(corpus_id)
 
         result = IngestResult()
@@ -198,6 +151,7 @@ class IngestionService:
                     title=doc_input.title or filename or "Untitled",
                 )
                 self._session.add(doc)
+                # Flush to get doc.id before inserting chunks that reference it.
                 await self._session.flush()
 
                 spans = chunk_text_by_words(
@@ -230,6 +184,7 @@ class IngestionService:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[CorpusDocument], int]:
+        """Return a paginated list of documents for a corpus."""
         count_q = (
             select(func.count())
             .select_from(CorpusDocument)
@@ -254,6 +209,7 @@ class IngestionService:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[CorpusChunk], int]:
+        """Return a paginated list of chunks for a corpus, optionally filtered to one document."""
         base = (
             select(CorpusChunk)
             .join(CorpusDocument, CorpusChunk.document_id == CorpusDocument.id)

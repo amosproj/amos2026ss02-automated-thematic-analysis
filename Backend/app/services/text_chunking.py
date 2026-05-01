@@ -1,9 +1,10 @@
-import hashlib
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class ChunkSpan:
+    """One output chunk from the splitter. start_word/end_word are word-level indices into the original text (end exclusive)."""
+
     chunk_index: int
     text: str
     start_word: int
@@ -14,7 +15,11 @@ def chunk_text_by_words(
     chunk_size_words: int = 2048,
     overlap_words: int = 200,
 ) -> list[ChunkSpan]:
-    # start_word inclusive, end_word exclusive, chunk_index zero-based
+    """Split text into overlapping word-window chunks.
+
+    Consecutive chunks share overlap_words words of context. stride = chunk_size_words - overlap_words.
+    Returns an empty list for empty input.
+    """
     if chunk_size_words <= 0:
         raise ValueError(f"chunk_size_words must be > 0, got {chunk_size_words}")
     if overlap_words < 0:

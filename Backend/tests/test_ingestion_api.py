@@ -1,5 +1,3 @@
-import csv
-import io
 import json
 
 import pytest
@@ -149,55 +147,24 @@ async def test_get_chunks(client):
 
 
 # ---------------------------------------------------------------------------
-# POST /ingestion/corpora/{corpus_id}/upload — txt
+# POST /ingestion/corpora/{corpus_id}/upload — jsonl
 # ---------------------------------------------------------------------------
 
 
-async def test_upload_txt(client):
+async def test_upload_jsonl(client):
     create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
-    content = "word " * 20
+    records = [
+        {"event_type": "human_response", "message_index": 1, "message_content": "word " * 20, "username": "p001"},
+    ]
+    content = "\n".join(json.dumps(r) for r in records).encode()
     resp = await client.post(
         f"{API}/corpora/{corpus_id}/upload",
-        files={"file": ("sample.txt", content.encode(), "text/plain")},
+        files={"file": ("interview.jsonl", content, "application/jsonl")},
     )
     assert resp.status_code == 201
     assert resp.json()["data"]["documents_created"] == 1
-
-
-async def test_upload_json(client):
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
-    corpus_id = create.json()["data"]["id"]
-
-    data_bytes = json.dumps([
-        {"title": "J1", "text": "first json document with multiple words"},
-        {"title": "J2", "text": "second json document with multiple words"},
-    ]).encode()
-    resp = await client.post(
-        f"{API}/corpora/{corpus_id}/upload",
-        files={"file": ("docs.json", data_bytes, "application/json")},
-    )
-    assert resp.status_code == 201
-    assert resp.json()["data"]["documents_created"] == 2
-
-
-async def test_upload_csv(client):
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
-    corpus_id = create.json()["data"]["id"]
-
-    buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=["text", "title"])
-    writer.writeheader()
-    writer.writerow({"text": "csv document one with many words here now", "title": "T1"})
-    writer.writerow({"text": "csv document two with many words here now", "title": "T2"})
-
-    resp = await client.post(
-        f"{API}/corpora/{corpus_id}/upload",
-        files={"file": ("data.csv", buf.getvalue().encode(), "text/csv")},
-    )
-    assert resp.status_code == 201
-    assert resp.json()["data"]["documents_created"] == 2
 
 
 async def test_upload_unsupported_extension(client):
@@ -206,6 +173,6 @@ async def test_upload_unsupported_extension(client):
 
     resp = await client.post(
         f"{API}/corpora/{corpus_id}/upload",
-        files={"file": ("data.xml", b"<xml/>", "application/xml")},
+        files={"file": ("data.csv", b"text\nhello", "text/csv")},
     )
     assert resp.status_code == 422

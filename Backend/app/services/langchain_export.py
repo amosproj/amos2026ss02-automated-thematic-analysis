@@ -11,6 +11,12 @@ async def load_corpus_chunks_as_langchain_documents(
     session: AsyncSession,
     corpus_id: uuid.UUID,
 ) -> list[Document]:
+    """Load all chunks for a corpus as LangChain Documents for downstream consumption.
+
+    Each Document carries the chunk text as page_content and a metadata dict with
+    corpus_id, document_id, chunk_id, and chunk_index (all stringified for JSON serializability).
+    Results are ordered by document then by chunk_index.
+    """
     result = await session.execute(
         select(CorpusChunk, CorpusDocument)
         .join(CorpusDocument, CorpusChunk.document_id == CorpusDocument.id)
