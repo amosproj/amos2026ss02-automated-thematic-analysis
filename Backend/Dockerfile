@@ -18,8 +18,8 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin/uvicorn /usr/local/bin/uvicorn
 COPY app/ app/
-COPY migrations/ migrations/
-COPY alembic.ini .
+# COPY migrations/ migrations/
+# COPY alembic.ini .
 
 RUN chown -R appuser:appgroup /app
 

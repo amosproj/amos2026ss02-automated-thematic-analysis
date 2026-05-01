@@ -9,20 +9,6 @@ class ChunkSpan:
     start_word: int
     end_word: int  # exclusive
 
-
-def count_words(text: str) -> int:
-    return len(text.split())
-
-
-def normalize_text_for_hash(text: str) -> str:
-    return " ".join(text.split())
-
-
-def sha256_text(text: str) -> str:
-    normalized = normalize_text_for_hash(text)
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
-
-
 def chunk_text_by_words(
     text: str,
     chunk_size_words: int = 2048,
