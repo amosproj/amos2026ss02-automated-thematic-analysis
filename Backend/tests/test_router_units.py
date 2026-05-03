@@ -183,8 +183,38 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
                         session=session,
                         project_id="project_demo",
                         version=99,
-                    )
+                )
                 self.assertEqual(missing_version.exception.status_code, 404)
+
+    async def test_demo_selection_serializes_without_status_field(self) -> None:
+        async with self.session_factory() as session:
+            request = self._build_request("/demo/")
+            session.add(
+                Codebook(
+                    id=uuid4(),
+                    project_id="project_demo_selection",
+                    name="Demo Selection v1",
+                    description="desc",
+                    version=1,
+                    created_by="system",
+                )
+            )
+            await session.commit()
+
+            with patch.object(
+                demo_router,
+                "get_settings",
+                return_value=SimpleNamespace(API_V1_PREFIX="/api/v1"),
+            ):
+                response = await demo_router.codebook_selection_screen(
+                    request=request,
+                    session=session,
+                )
+
+            serialized = response.context["codebooks"]
+            self.assertEqual(len(serialized), 1)
+            self.assertEqual(serialized[0]["project_id"], "project_demo_selection")
+            self.assertNotIn("status", serialized[0])
 
     async def test_demo_overview_defaults_to_latest_version(self) -> None:
         async with self.session_factory() as session:

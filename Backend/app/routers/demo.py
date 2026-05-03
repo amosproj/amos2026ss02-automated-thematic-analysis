@@ -24,7 +24,6 @@ def _serialize_codebook(codebook: Codebook) -> dict[str, Any]:
         "project_id": codebook.project_id,
         "name": codebook.name,
         "version": codebook.version,
-        "status": codebook.status.value,
     }
 
 

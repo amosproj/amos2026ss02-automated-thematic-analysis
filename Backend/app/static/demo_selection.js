@@ -50,10 +50,7 @@
             const versionCell = document.createElement("td");
             versionCell.textContent = String(codebook.version);
 
-            const statusCell = document.createElement("td");
-            statusCell.textContent = codebook.status;
-
-            row.append(selectCell, projectCell, nameCell, versionCell, statusCell);
+            row.append(selectCell, projectCell, nameCell, versionCell);
             tableBody.appendChild(row);
         }
     }
