@@ -40,6 +40,19 @@ docker compose up --build
 # Docs at http://localhost:8000/docs
 ```
 
+### Docker: Dev vs Prod
+
+- `api` service uses the `runtime` target (production-style image, no test tooling).
+- `api-test` service uses the `test` target (includes dev/test dependencies like `pytest` and `pytest-cov`).
+
+## Tests
+Run tests inside Docker:
+
+```bash
+docker compose --profile test run --rm api-test
+docker compose --profile test run --rm api-test pytest --cov=app --cov-report=term-missing --cov-report=html
+```
+
 ## Project Structure
 
 ```

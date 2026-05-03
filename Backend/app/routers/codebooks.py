@@ -17,12 +17,9 @@ router = APIRouter(prefix="/codebooks", tags=["codebooks"])
 async def get_codebooks(
     session: DbSession,
 ) -> JSONResponse:
-    # TODO: Add explicit version-aware filtering/selection semantics and pagination.
-    # TODO: Move the SQl Query into a Service
-    # TODO: Add tests
-    # This is just a quick implementation to get something working.
+    # TODO: Completely refactor / replace this endpoint. This is just a quick implementation to get some working data
+    #  for the frontend.
     # The user needs to be able to select a project_id in the frontend in order to load a themes tree
-    # (e.g. project_id + optional version/latest) instead of returning all rows.
     stmt = select(Codebook).order_by(Codebook.project_id.asc(), desc(Codebook.version))
     codebooks = list((await session.scalars(stmt)).all())
     payload = [CodebookSchema.model_validate(codebook) for codebook in codebooks]

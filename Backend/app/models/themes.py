@@ -36,3 +36,21 @@ class CodebookThemeRelationship(Base, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("themes.id", ondelete="CASCADE"), index=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean(), default=True)
+
+
+class ThemeHierarchyRelationship(Base, TimestampMixin):
+    """Parent/child hierarchy edge scoped to one codebook."""
+
+    __tablename__ = "theme_hierarchy_relationships"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    codebook_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
+    )
+    parent_theme_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("themes.id", ondelete="CASCADE"), index=True
+    )
+    child_theme_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("themes.id", ondelete="CASCADE"), index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean(), default=True)

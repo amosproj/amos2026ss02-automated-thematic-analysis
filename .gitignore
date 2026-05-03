@@ -49,6 +49,9 @@ uv.lock
 # Python virtual environments
 venv/
 
+# pytest coverage
+.coverage
+
 # Package Files
 *.jar
 *.war

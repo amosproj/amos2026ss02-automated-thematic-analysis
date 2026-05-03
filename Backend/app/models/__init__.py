@@ -8,6 +8,7 @@ from app.models.ingestion import (
 from app.models.themes import (
     CodebookThemeRelationship,
     Theme,
+    ThemeHierarchyRelationship,
 )
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     "Codebook",
     "CodebookThemeRelationship",
     "Theme",
+    "ThemeHierarchyRelationship",
     "Corpus",
     "CorpusChunk",
     "CorpusDocument",

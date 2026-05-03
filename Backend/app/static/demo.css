@@ -1,0 +1,22 @@
+.tree-container {
+    min-height: 420px;
+    max-height: 420px;
+    overflow: auto;
+}
+
+.theme-zero {
+    color: #6c757d;
+}
+
+.table td,
+.table th {
+    vertical-align: middle;
+}
+
+.theme-row-selectable {
+    cursor: pointer;
+}
+
+.theme-row-selected {
+    background-color: #e9f2ff;
+}

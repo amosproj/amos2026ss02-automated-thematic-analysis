@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from app.models.codebook import Codebook
-from app.models.themes import CodebookThemeRelationship, Theme
+from app.models.themes import CodebookThemeRelationship, Theme, ThemeHierarchyRelationship
 from app.schemas.codebook import CodebookSchema
 from app.schemas.theme import ThemeSchema
 
@@ -21,6 +21,10 @@ def test_postgres_uuid_columns_configured() -> None:
     assert isinstance(CodebookThemeRelationship.__table__.c.id.type, PG_UUID)
     assert isinstance(CodebookThemeRelationship.__table__.c.codebook_id.type, PG_UUID)
     assert isinstance(CodebookThemeRelationship.__table__.c.theme_id.type, PG_UUID)
+    assert isinstance(ThemeHierarchyRelationship.__table__.c.id.type, PG_UUID)
+    assert isinstance(ThemeHierarchyRelationship.__table__.c.codebook_id.type, PG_UUID)
+    assert isinstance(ThemeHierarchyRelationship.__table__.c.parent_theme_id.type, PG_UUID)
+    assert isinstance(ThemeHierarchyRelationship.__table__.c.child_theme_id.type, PG_UUID)
 
 
 def test_codebook_theme_relationship_foreign_keys() -> None:
@@ -36,6 +40,26 @@ def test_codebook_theme_relationship_foreign_keys() -> None:
     assert theme_fk.column.table.name == "themes"
     assert theme_fk.column.name == "id"
     assert theme_fk.ondelete == "CASCADE"
+
+
+def test_theme_hierarchy_relationship_foreign_keys() -> None:
+    foreign_keys = {fk.parent.name: fk for fk in ThemeHierarchyRelationship.__table__.foreign_keys}
+
+    codebook_fk = foreign_keys["codebook_id"]
+    parent_fk = foreign_keys["parent_theme_id"]
+    child_fk = foreign_keys["child_theme_id"]
+
+    assert codebook_fk.column.table.name == "codebooks"
+    assert codebook_fk.column.name == "id"
+    assert codebook_fk.ondelete == "CASCADE"
+
+    assert parent_fk.column.table.name == "themes"
+    assert parent_fk.column.name == "id"
+    assert parent_fk.ondelete == "CASCADE"
+
+    assert child_fk.column.table.name == "themes"
+    assert child_fk.column.name == "id"
+    assert child_fk.ondelete == "CASCADE"
 
 
 def test_schema_fields_match_sqlalchemy_models() -> None:
