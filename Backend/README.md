@@ -49,9 +49,11 @@ docker compose up --build
 Run tests inside Docker:
 
 ```bash
-docker compose --profile test run --rm api-test
 docker compose --profile test run --rm api-test pytest --cov=app --cov-report=term-missing --cov-report=html
 ```
+
+The coverage HTML report is written to `Backend/htmlcov/` on your host via the `api-test` volume mount.
+Open `Backend/htmlcov/index.html` in your browser after the test run.
 
 ## Project Structure
 
