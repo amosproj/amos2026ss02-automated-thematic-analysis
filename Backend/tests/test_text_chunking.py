@@ -1,10 +1,13 @@
 import pytest
 
-from app.services.text_chunking import chunk_text_by_words
+from app.services.text_chunking import (
+    ChunkSpan,
+    chunk_text_by_words
+)
 
 
 # ---------------------------------------------------------------------------
-# chunk_text_by_words - validation
+# chunk_text_by_words — validation
 # ---------------------------------------------------------------------------
 
 
@@ -34,7 +37,7 @@ def test_chunk_raises_when_overlap_exceeds_size():
 
 
 # ---------------------------------------------------------------------------
-# chunk_text_by_words - empty / short text
+# chunk_text_by_words — empty / short text
 # ---------------------------------------------------------------------------
 
 
@@ -64,12 +67,12 @@ def test_chunk_exactly_chunk_size_returns_one_chunk():
 
 
 # ---------------------------------------------------------------------------
-# chunk_text_by_words - overlapping windows
+# chunk_text_by_words — overlapping windows
 # ---------------------------------------------------------------------------
 
 
 def test_chunk_produces_correct_windows():
-    # 10 words, chunk_size=5, overlap=2 -> stride=3
+    # 10 words, chunk_size=5, overlap=2 → stride=3
     # chunk 0: [0..5), chunk 1: [3..8), chunk 2: [6..10)
     text = " ".join(str(i) for i in range(10))
     chunks = chunk_text_by_words(text, chunk_size_words=5, overlap_words=2)
@@ -102,16 +105,16 @@ def test_chunk_text_content_matches_words():
     text = "alpha beta gamma delta epsilon"
     chunks = chunk_text_by_words(text, chunk_size_words=3, overlap_words=1)
     words = text.split()
-    for chunk in chunks:
-        expected = " ".join(words[chunk.start_word : chunk.end_word])
-        assert chunk.text == expected
+    for c in chunks:
+        expected = " ".join(words[c.start_word : c.end_word])
+        assert c.text == expected
 
 
 def test_chunk_index_is_sequential():
     text = " ".join(str(i) for i in range(15))
     chunks = chunk_text_by_words(text, chunk_size_words=5, overlap_words=1)
-    for i, chunk in enumerate(chunks):
-        assert chunk.chunk_index == i
+    for i, c in enumerate(chunks):
+        assert c.chunk_index == i
 
 
 def test_no_overlap_chunks_are_contiguous():
@@ -123,7 +126,7 @@ def test_no_overlap_chunks_are_contiguous():
 
 
 def test_last_chunk_covers_remainder():
-    # 11 words, chunk_size=5, overlap=1 -> stride=4
+    # 11 words, chunk_size=5, overlap=1 → stride=4
     # [0..5), [4..9), [8..11)
     text = " ".join(str(i) for i in range(11))
     chunks = chunk_text_by_words(text, chunk_size_words=5, overlap_words=1)
