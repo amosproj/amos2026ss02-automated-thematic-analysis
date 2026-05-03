@@ -51,6 +51,8 @@ venv/
 
 # pytest coverage
 .coverage
+.pytest_cache/
+htmlcov/
 
 # Package Files
 *.jar

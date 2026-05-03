@@ -14,15 +14,12 @@ from starlette.requests import Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.domain.enums import ActorType, CodebookStatus
 from app.exceptions import NotFoundError, UnprocessableError
 from app.models import Base, Codebook
 from app.routers import codebooks as codebooks_router
 from app.routers import demo as demo_router
 from app.routers import themes as themes_router
-from app.services.theme_graph import ThemeValidationError
-from app.services.theme_read import CodebookResolutionError
-from tests.fixtures.theme_graph_fixtures import seed_dummy_theme_tree
+from app.services.theme_graph import ThemeGraphService, ThemeNotFoundError, ThemeValidationError
 
 
 AIOSQLITE_AVAILABLE = importlib.util.find_spec("aiosqlite") is not None
@@ -74,32 +71,26 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
                     Codebook(
                         id=uuid4(),
                         project_id="project_b",
-                        previous_version_id=None,
                         name="B v1",
                         description="desc",
                         version=1,
-                        status=CodebookStatus.DRAFT,
-                        created_by=ActorType.SYSTEM,
+                        created_by="system",
                     ),
                     Codebook(
                         id=uuid4(),
                         project_id="project_a",
-                        previous_version_id=None,
                         name="A v1",
                         description="desc",
                         version=1,
-                        status=CodebookStatus.DRAFT,
-                        created_by=ActorType.SYSTEM,
+                        created_by="system",
                     ),
                     Codebook(
                         id=uuid4(),
                         project_id="project_a",
-                        previous_version_id=None,
                         name="A v2",
                         description="desc",
                         version=2,
-                        status=CodebookStatus.ACTIVE,
-                        created_by=ActorType.SYSTEM,
+                        created_by="system",
                     ),
                 ]
             )
@@ -113,56 +104,50 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
                 [("project_a", 2), ("project_a", 1), ("project_b", 1)],
             )
 
-    async def test_themes_route_maps_resolution_error_to_not_found(self) -> None:
+    async def test_themes_route_maps_not_found_error(self) -> None:
         async with self.session_factory() as session:
             with patch.object(
-                themes_router.ThemeReadService,
-                "get_theme_frequency_for_project",
-                new=AsyncMock(side_effect=CodebookResolutionError("missing")),
+                ThemeGraphService,
+                "get_theme_tree",
+                new=AsyncMock(side_effect=ThemeNotFoundError("missing")),
             ):
                 with self.assertRaises(NotFoundError):
-                    await themes_router.get_theme_frequency_overview(
-                        project_id="missing_project",
+                    await themes_router.get_theme_tree(
+                        codebook_id=uuid4(),
                         session=session,
-                        version=None,
-                        include_candidate_nodes=True,
+                        root_theme_id=None,
                     )
 
-    async def test_themes_route_maps_validation_error_to_unprocessable(self) -> None:
+    async def test_themes_route_maps_validation_error(self) -> None:
         async with self.session_factory() as session:
             with patch.object(
-                themes_router.ThemeReadService,
-                "get_theme_tree_for_project",
+                ThemeGraphService,
+                "get_theme_tree",
                 new=AsyncMock(side_effect=ThemeValidationError("invalid hierarchy")),
             ):
                 with self.assertRaises(UnprocessableError):
                     await themes_router.get_theme_tree(
-                        project_id="project",
+                        codebook_id=uuid4(),
                         session=session,
-                        version=None,
                         root_theme_id=None,
-                        include_candidate_nodes=True,
                     )
 
     async def test_themes_route_success_response_shape(self) -> None:
         async with self.session_factory() as session:
-            await seed_dummy_theme_tree(
-                session,
-                codebook_id=uuid4(),
-                project_id="project_router_success",
-                codebook_version=1,
-                codebook_name="Router Success",
-            )
-            response = await themes_router.get_theme_frequency_overview(
-                project_id="project_router_success",
-                session=session,
-                version=1,
-                include_candidate_nodes=True,
-            )
+            with patch.object(
+                ThemeGraphService,
+                "get_theme_tree",
+                new=AsyncMock(return_value=[]),
+            ):
+                response = await themes_router.get_theme_tree(
+                    codebook_id=uuid4(),
+                    session=session,
+                    root_theme_id=None,
+                )
             payload = json.loads(response.body)
             self.assertTrue(payload["success"])
             self.assertIn("data", payload)
-            self.assertIn("themes", payload["data"])
+            self.assertEqual(payload["data"], [])
 
     async def test_demo_overview_404s_when_project_or_version_missing(self) -> None:
         async with self.session_factory() as session:
@@ -181,13 +166,17 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
                     )
                 self.assertEqual(missing_project.exception.status_code, 404)
 
-                await seed_dummy_theme_tree(
-                    session,
-                    codebook_id=uuid4(),
-                    project_id="project_demo",
-                    codebook_version=1,
-                    codebook_name="Demo v1",
+                session.add(
+                    Codebook(
+                        id=uuid4(),
+                        project_id="project_demo",
+                        name="Demo v1",
+                        description="desc",
+                        version=1,
+                        created_by="system",
+                    )
                 )
+                await session.commit()
                 with self.assertRaises(HTTPException) as missing_version:
                     await demo_router.theme_overview_screen(
                         request=request,
@@ -200,20 +189,27 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
     async def test_demo_overview_defaults_to_latest_version(self) -> None:
         async with self.session_factory() as session:
             request = self._build_request("/demo/overview")
-            await seed_dummy_theme_tree(
-                session,
-                codebook_id=uuid4(),
-                project_id="project_demo_latest",
-                codebook_version=1,
-                codebook_name="Demo Latest v1",
+            session.add_all(
+                [
+                    Codebook(
+                        id=uuid4(),
+                        project_id="project_demo_latest",
+                        name="Demo Latest v1",
+                        description="desc",
+                        version=1,
+                        created_by="system",
+                    ),
+                    Codebook(
+                        id=uuid4(),
+                        project_id="project_demo_latest",
+                        name="Demo Latest v2",
+                        description="desc",
+                        version=2,
+                        created_by="system",
+                    ),
+                ]
             )
-            await seed_dummy_theme_tree(
-                session,
-                codebook_id=uuid4(),
-                project_id="project_demo_latest",
-                codebook_version=2,
-                codebook_name="Demo Latest v2",
-            )
+            await session.commit()
             with patch.object(
                 demo_router,
                 "get_settings",
