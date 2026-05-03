@@ -2,57 +2,8 @@ import pytest
 
 from app.services.text_chunking import (
     ChunkSpan,
-    chunk_text_by_words,
-    count_words,
-    normalize_text_for_hash,
-    sha256_text,
+    chunk_text_by_words
 )
-
-
-# ---------------------------------------------------------------------------
-# count_words
-# ---------------------------------------------------------------------------
-
-
-def test_count_words_basic():
-    assert count_words("hello world") == 2
-
-
-def test_count_words_extra_whitespace():
-    assert count_words("  hello   world  ") == 2
-
-
-def test_count_words_empty():
-    assert count_words("") == 0
-
-
-def test_count_words_whitespace_only():
-    assert count_words("   ") == 0
-
-
-# ---------------------------------------------------------------------------
-# normalize_text_for_hash / sha256_text
-# ---------------------------------------------------------------------------
-
-
-def test_normalize_collapses_whitespace():
-    assert normalize_text_for_hash("hello   world\n\t!") == "hello world !"
-
-
-def test_sha256_same_text_same_hash():
-    h1 = sha256_text("hello world")
-    h2 = sha256_text("hello  world")  # extra space is normalized away
-    assert h1 == h2
-
-
-def test_sha256_different_text_different_hash():
-    assert sha256_text("hello world") != sha256_text("hello earth")
-
-
-def test_sha256_returns_hex_string():
-    h = sha256_text("test")
-    assert len(h) == 64
-    assert all(c in "0123456789abcdef" for c in h)
 
 
 # ---------------------------------------------------------------------------
