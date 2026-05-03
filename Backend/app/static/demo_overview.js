@@ -5,10 +5,10 @@
     }
 
     const apiPrefix = appRoot.dataset.apiPrefix;
-    const projectId = appRoot.dataset.projectId;
-    const initialVersion = appRoot.dataset.selectedVersion;
+    const initialCodebookId = appRoot.dataset.selectedCodebookId;
+    let currentCodebookId = initialCodebookId;
 
-    const runSelect = document.getElementById("analysis-run-select");
+    const refreshOverviewButton = document.getElementById("refresh-overview-btn");
     const totalInterviewsValue = document.getElementById("total-interviews-value");
     const totalThemesValue = document.getElementById("total-themes-value");
     const themesTableBody = document.getElementById("themes-table-body");
@@ -17,10 +17,8 @@
     const themeDetailsContent = document.getElementById("theme-details-content");
     const themeDetailsName = document.getElementById("theme-details-name");
     const themeDetailsId = document.getElementById("theme-details-id");
-    const themeDetailsLevel = document.getElementById("theme-details-level");
     const themeDetailsOccurrences = document.getElementById("theme-details-occurrences");
     const themeDetailsCoverage = document.getElementById("theme-details-coverage");
-    const themeDetailsDescription = document.getElementById("theme-details-description");
 
     let currentThemeInfoById = {};
     let selectedThemeId = null;
@@ -57,10 +55,8 @@
         themeDetailsContent.classList.add("d-none");
         themeDetailsName.textContent = "";
         themeDetailsId.textContent = "";
-        themeDetailsLevel.textContent = "";
         themeDetailsOccurrences.textContent = "";
         themeDetailsCoverage.textContent = "";
-        themeDetailsDescription.textContent = "";
     }
 
     function highlightSelectedThemeRow() {
@@ -83,12 +79,10 @@
         themeDetailsContent.classList.remove("d-none");
         themeDetailsName.textContent = themeInfo.theme_name ?? "-";
         themeDetailsId.textContent = themeInfo.theme_id ?? "-";
-        themeDetailsLevel.textContent = themeInfo.theme_level ?? "-";
         themeDetailsOccurrences.textContent = String(themeInfo.occurrence_count ?? 0);
         themeDetailsCoverage.textContent = formatCoverage(
             themeInfo.interview_coverage_percentage ?? 0
         );
-        themeDetailsDescription.textContent = themeInfo.description ?? "No description available.";
         highlightSelectedThemeRow();
     }
 
@@ -104,7 +98,6 @@
         for (const frequencyTheme of frequencyThemes) {
             map[frequencyTheme.theme_id] = {
                 ...frequencyTheme,
-                description: null,
             };
         }
 
@@ -116,11 +109,9 @@
             map[theme.id] = {
                 theme_id: theme.id,
                 theme_name: existing.theme_name ?? theme.label,
-                theme_level: existing.theme_level ?? theme.level,
                 occurrence_count: existing.occurrence_count ?? 0,
                 interview_coverage_percentage:
                     existing.interview_coverage_percentage ?? 0,
-                description: theme.description ?? null,
             };
         }
         return map;
@@ -166,7 +157,7 @@
     function toJsTreeNodes(nodes) {
         return nodes.map((node) => ({
             id: node.theme.id,
-            text: `${node.theme.label} (${node.theme.level})`,
+            text: node.theme.label,
             children: toJsTreeNodes(node.children ?? []),
         }));
     }
@@ -193,13 +184,11 @@
         });
     }
 
-    async function loadOverview(version) {
+    async function loadOverview(codebookId) {
         const frequencyUrl =
-            `${apiPrefix}/projects/${encodeURIComponent(projectId)}/themes` +
-            `?version=${encodeURIComponent(version)}&include_candidate_nodes=true`;
+            `${apiPrefix}/codebooks/${encodeURIComponent(codebookId)}/themes`;
         const treeUrl =
-            `${apiPrefix}/projects/${encodeURIComponent(projectId)}/themes/tree` +
-            `?version=${encodeURIComponent(version)}&include_candidate_nodes=true`;
+            `${apiPrefix}/codebooks/${encodeURIComponent(codebookId)}/themes/tree`;
 
         try {
             const [frequencyResponse, treeResponse] = await Promise.all([
@@ -216,17 +205,15 @@
                 treeResponse.json(),
             ]);
 
-            const frequencyData = frequencyPayload.data;
-            const treeData = treePayload.data;
-            const frequencyThemes = frequencyData?.themes ?? [];
-            const treeNodes = treeData?.tree ?? [];
+            const frequencyThemes = frequencyPayload.data ?? [];
+            const treeNodes = treePayload.data ?? [];
 
             currentThemeInfoById = buildThemeInfoMap(frequencyThemes, treeNodes);
             clearThemeDetails();
 
-            totalInterviewsValue.textContent = String(
-                frequencyData?.total_interviews_in_corpus ?? 0
-            );
+            // TODO: Replace hardcoded interview totals once corpus/interview
+            // entities are linked to codebook-level analytics.
+            totalInterviewsValue.textContent = "0";
             renderThemeTable(frequencyThemes);
             renderTree(treeNodes);
 
@@ -240,15 +227,13 @@
         }
     }
 
-    runSelect.addEventListener("change", () => {
-        const selectedVersion = runSelect.value;
-        const query = new URLSearchParams({
-            project_id: projectId,
-            version: selectedVersion,
-        });
-        window.history.replaceState({}, "", `/demo/overview?${query.toString()}`);
-        loadOverview(selectedVersion);
+    refreshOverviewButton.addEventListener("click", () => {
+        if (!currentCodebookId) {
+            showError("Missing codebook_id for refresh.");
+            return;
+        }
+        loadOverview(currentCodebookId);
     });
 
-    loadOverview(initialVersion);
+    loadOverview(initialCodebookId);
 })();

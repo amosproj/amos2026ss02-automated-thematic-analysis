@@ -302,6 +302,35 @@ async def seed_unbalanced_dummy_tree_main_db_for_demo_only() -> DummyTreeIds:
         await engine.dispose()
 
 
+async def seed_all_dummy_trees_main_db_for_demo_only() -> dict[str, UUID]:
+    """
+    FOR DEMONSTRATION PURPOSES ONLY.
+
+    Seeds all dummy theme-tree fixtures into the app `DATABASE_URL` target.
+    Each fixture call creates exactly one codebook.
+    """
+    database_url = _resolve_main_database_url_for_demo_only()
+    engine = create_async_engine(database_url, echo=False, pool_pre_ping=True)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    try:
+        async with session_factory() as session:
+            unbalanced_ids = await seed_unbalanced_dummy_tree(session)
+            three_theme_seed = await seed_three_theme_codebook(session)
+            fifteen_theme_seed = await seed_fifteen_theme_codebook(session)
+            zero_occurrence_seed = await seed_zero_occurrence_theme_corpus(session)
+            long_names_seed = await seed_long_theme_names_codebook(session)
+
+            return {
+                "unbalanced_dummy_tree": unbalanced_ids.codebook_id,
+                "three_theme_codebook": three_theme_seed.codebook_id,
+                "fifteen_theme_codebook": fifteen_theme_seed.codebook_id,
+                "zero_occurrence_theme_corpus": zero_occurrence_seed.codebook_id,
+                "long_theme_names_codebook": long_names_seed.codebook_id,
+            }
+    finally:
+        await engine.dispose()
+
+
 def _resolve_main_database_url_for_demo_only() -> str:
     """
     Resolve DATABASE_URL for demo execution without relying on current cwd.
@@ -329,9 +358,9 @@ def _resolve_main_database_url_for_demo_only() -> str:
 
 
 if __name__ == "__main__":
-    ids = asyncio.run(seed_unbalanced_dummy_tree_main_db_for_demo_only())
+    codebook_ids = asyncio.run(seed_all_dummy_trees_main_db_for_demo_only())
     print(
-        "DEMO ONLY: Seeded theme graph fixture into main DB "
+        "DEMO ONLY: Seeded all dummy tree fixtures into main DB "
         "(potentially production, depending on DATABASE_URL) "
-        f"with codebook_id={ids.codebook_id}"
+        f"with codebook_ids={codebook_ids}"
     )

@@ -41,7 +41,13 @@ The service reads from three tables:
 - `get_theme_tree(codebook_id, root_theme_id=None)`:
   Returns nested `ThemeTreeNode` structures.
 
-## API Endpoint
+## API Endpoints
+
+- `GET /codebooks/{codebook_id}/themes`
+  - Returns a flat list of all active codebook themes.
+  - Each list item contains `theme_name`, `occurrence_count`, and `interview_coverage_percentage`.
+  - For now, `occurrence_count` and `interview_coverage_percentage` are placeholder `0` values.
 
 - `GET /codebooks/{codebook_id}/themes/tree`
-  - optional query param: `root_theme_id`
+  - Returns the theme tree for the selected codebook.
+  - Optional query param: `root_theme_id`.

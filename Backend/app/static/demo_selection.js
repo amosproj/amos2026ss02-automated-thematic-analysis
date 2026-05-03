@@ -10,7 +10,14 @@
 
     const apiPrefix = appRoot.dataset.apiPrefix;
     const initialCodebooks = JSON.parse(appRoot.dataset.initialCodebooks ?? "[]");
-    let selectedCodebook = null;
+    let selectedCodebookId = null;
+
+    function getCodebookId(codebook) {
+        if (!codebook || typeof codebook !== "object") {
+            return "";
+        }
+        return String(codebook.id ?? codebook.codebook_id ?? "").trim();
+    }
 
     function setError(message) {
         if (!message) {
@@ -24,19 +31,25 @@
 
     function renderCodebooks(codebooks) {
         tableBody.innerHTML = "";
-        selectedCodebook = null;
+        selectedCodebookId = null;
         openOverviewButton.disabled = true;
 
         for (const codebook of codebooks) {
+            const codebookId = getCodebookId(codebook);
+            if (!codebookId) {
+                continue;
+            }
+
             const row = document.createElement("tr");
 
             const selectCell = document.createElement("td");
             const radio = document.createElement("input");
             radio.type = "radio";
             radio.name = "codebook-selection";
+            radio.value = codebookId;
             radio.className = "form-check-input";
             radio.addEventListener("change", () => {
-                selectedCodebook = codebook;
+                selectedCodebookId = codebookId;
                 openOverviewButton.disabled = false;
             });
             selectCell.appendChild(radio);
@@ -72,12 +85,12 @@
     }
 
     openOverviewButton.addEventListener("click", () => {
-        if (!selectedCodebook) {
+        if (!selectedCodebookId) {
+            setError("Please select a valid codebook.");
             return;
         }
         const query = new URLSearchParams({
-            project_id: selectedCodebook.project_id,
-            version: String(selectedCodebook.version),
+            codebook_id: selectedCodebookId,
         });
         window.location.href = `/demo/overview?${query.toString()}`;
     });

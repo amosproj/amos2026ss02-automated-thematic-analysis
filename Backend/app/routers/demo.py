@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -53,45 +54,38 @@ async def codebook_selection_screen(
 async def theme_overview_screen(
     request: Request,
     session: DbSession,
-    project_id: str = Query(..., min_length=1),
-    version: int | None = Query(default=None, ge=1),
+    codebook_id: UUID = Query(...),
 ) -> HTMLResponse:
-    stmt = (
+    selected_codebook_stmt = select(Codebook).where(Codebook.id == codebook_id)
+    selected_codebook = (await session.scalars(selected_codebook_stmt)).one_or_none()
+    if selected_codebook is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Codebook '{codebook_id}' was not found.",
+        )
+
+    project_codebooks_stmt = (
         select(Codebook)
-        .where(Codebook.project_id == project_id)
+        .where(Codebook.project_id == selected_codebook.project_id)
         .order_by(desc(Codebook.version))
     )
-    project_codebooks = list((await session.scalars(stmt)).all())
-    if not project_codebooks:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No codebooks found for project '{project_id}'.",
-        )
+    project_codebooks = list((await session.scalars(project_codebooks_stmt)).all())
 
-    available_versions = {codebook.version for codebook in project_codebooks}
-    selected_version = version if version is not None else project_codebooks[0].version
-    if selected_version not in available_versions:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                f"Codebook version {selected_version} was not found "
-                f"for project '{project_id}'."
-            ),
-        )
-
-    selected_codebook = next(
-        codebook for codebook in project_codebooks if codebook.version == selected_version
-    )
     return templates.TemplateResponse(
         request=request,
         name="demo/theme_overview.html",
         context={
             "api_prefix": get_settings().API_V1_PREFIX,
-            "project_id": project_id,
-            "selected_version": selected_version,
+            "project_id": selected_codebook.project_id,
+            "selected_codebook_id": str(selected_codebook.id),
+            "selected_version": selected_codebook.version,
             "selected_codebook_name": selected_codebook.name,
             "analysis_runs": [
-                {"version": codebook.version, "name": codebook.name}
+                {
+                    "version": codebook.version,
+                    "name": codebook.name,
+                    "codebook_id": str(codebook.id),
+                }
                 for codebook in project_codebooks
             ],
         },

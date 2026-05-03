@@ -25,6 +25,7 @@ from app.schemas.theme_graph import (
     ThemeTreeNode,
 )
 from app.schemas.theme_views import (
+    ThemeFrequencyItem,
     ThemeTreeResponse,
 )
 
@@ -47,6 +48,7 @@ __all__ = [
     "ThemeDagValidation",
     "ThemeDagView",
     "ThemeEdgeView",
+    "ThemeFrequencyItem",
     "ThemeNodeView",
     "ThemeTreeNode",
     "ThemeTreeResponse",

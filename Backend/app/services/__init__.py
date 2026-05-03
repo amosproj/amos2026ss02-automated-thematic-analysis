@@ -12,6 +12,7 @@ from app.services.theme_graph import (
     ThemeValidationError,
 )
 from app.services.theme_read import ThemeReadService
+from app.services.theme_frequency import ThemeFrequencyService
 
 __all__ = [
     "ThemeDagValidation",
@@ -23,5 +24,6 @@ __all__ = [
     "ThemeNotFoundError",
     "ThemeTreeNode",
     "ThemeValidationError",
+    "ThemeFrequencyService",
     "ThemeReadService",
 ]
