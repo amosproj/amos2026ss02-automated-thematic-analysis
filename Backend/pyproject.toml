@@ -19,6 +19,9 @@ dependencies = [
     "loguru>=0.7,<1.0",
     "anytree>=2.12,<3.0",
     "langchain-core>=0.3",
+    "langchain>=0.3",
+    "langchain-openai>=0.2",
+    "tiktoken>=0.7",
     "python-multipart>=0.0.9",
 ]
 
@@ -42,6 +45,7 @@ dev-dependencies = [
     "pytest-cov>=5.0",
     "ruff>=0.8",
     "mypy>=1.13",
+    "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "httpx>=0.27",
     "aiosqlite>=0.20",

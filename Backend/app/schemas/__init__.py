@@ -28,6 +28,7 @@ from app.schemas.theme_views import (
     ThemeFrequencyItem,
     ThemeTreeResponse,
 )
+from app.schemas.interview import InterviewMessage, InterviewTranscript
 
 __all__ = [
     "BaseSchema",
@@ -40,6 +41,8 @@ __all__ = [
     "DocumentInput",
     "HealthResponse",
     "IngestResultSchema",
+    "InterviewMessage",
+    "InterviewTranscript",
     "Page",
     "PageMeta",
     "PaginationParams",
