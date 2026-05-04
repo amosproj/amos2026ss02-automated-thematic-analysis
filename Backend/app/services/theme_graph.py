@@ -121,15 +121,6 @@ class ThemeGraphService:
 
         return [self._to_tree_node(node) for node in roots]
 
-    async def auto_generate_theme_tree_for_codebook(
-        self,
-        *,
-        codebook_id: UUID,
-        root_theme_id: UUID | None = None,
-    ) -> list[ThemeTreeNode]:
-        """Compatibility wrapper for existing callers."""
-        return await self.get_theme_tree(codebook_id=codebook_id, root_theme_id=root_theme_id)
-
     async def _ensure_codebook_exists(self, codebook_id: UUID) -> None:
         # Validate codebook identity early so downstream errors are specific.
         stmt = select(Codebook.id).where(Codebook.id == codebook_id)

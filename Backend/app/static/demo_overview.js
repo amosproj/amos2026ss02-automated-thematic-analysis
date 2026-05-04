@@ -166,6 +166,8 @@
         const treeElement = $("#theme-tree");
         const treeNodes = toJsTreeNodes(treeData);
 
+        treeElement.off("select_node.jstree");
+
         if (treeElement.jstree(true)) {
             treeElement.jstree(true).destroy();
         }

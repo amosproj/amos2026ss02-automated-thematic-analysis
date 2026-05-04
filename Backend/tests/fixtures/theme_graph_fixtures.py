@@ -357,6 +357,8 @@ def _resolve_main_database_url_for_demo_only() -> str:
     )
 
 
+# run this file locally. Make sure to change the database connection env to e.g.
+# DATABASE_URL_local=postgresql+asyncpg://postgres:postgres@localhost:5433/appdb
 if __name__ == "__main__":
     codebook_ids = asyncio.run(seed_all_dummy_trees_main_db_for_demo_only())
     print(
