@@ -1,7 +1,9 @@
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.config import Settings, get_settings
@@ -39,6 +41,8 @@ def create_app() -> FastAPI:
     register_middleware(app, settings)
     register_exception_handlers(app)
     register_routers(app, settings)
+    static_dir = Path(__file__).resolve().parent / "static"
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     return app
 
 

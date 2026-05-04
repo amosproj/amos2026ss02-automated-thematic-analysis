@@ -1,12 +1,29 @@
-"""
-Service layer — business logic lives here.
+"""Service layer exports."""
 
-Each domain module gets its own service file, e.g.:
-    app/services/corpus.py
-    app/services/analysis.py
-    app/services/codebook.py
+from app.services.theme_graph import (
+    ThemeDagValidation,
+    ThemeDagView,
+    ThemeEdgeView,
+    ThemeGraphError,
+    ThemeGraphService,
+    ThemeNodeView,
+    ThemeNotFoundError,
+    ThemeTreeNode,
+    ThemeValidationError,
+)
+from app.services.theme_read import ThemeReadService
+from app.services.theme_frequency import ThemeFrequencyService
 
-Services receive an AsyncSession via dependency injection and
-call repository/query helpers. They must not import FastAPI
-concerns (Request, Response, status codes).
-"""
+__all__ = [
+    "ThemeDagValidation",
+    "ThemeDagView",
+    "ThemeEdgeView",
+    "ThemeGraphError",
+    "ThemeGraphService",
+    "ThemeNodeView",
+    "ThemeNotFoundError",
+    "ThemeTreeNode",
+    "ThemeValidationError",
+    "ThemeFrequencyService",
+    "ThemeReadService",
+]

@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 from functools import lru_cache
 
 from loguru import logger
+from sqlalchemy import inspect
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -53,6 +54,17 @@ async def init_db() -> None:
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            expected_tables = set(Base.metadata.tables.keys())
+
+            def _existing_tables(sync_conn) -> set[str]:
+                return set(inspect(sync_conn).get_table_names())
+
+            existing_tables = await conn.run_sync(_existing_tables)
+            missing_tables = expected_tables - existing_tables
+            if missing_tables:
+                raise RuntimeError(
+                    f"Database schema verification failed. Missing tables: {sorted(missing_tables)}"
+                )
         logger.info("Database schema initialization completed")
     except Exception:
         logger.exception("Database schema initialization failed")

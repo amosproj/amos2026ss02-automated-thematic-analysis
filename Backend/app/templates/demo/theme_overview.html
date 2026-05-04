@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Theme Overview{% endblock %}
+
+{% block head_extra %}
+<link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.16/themes/default/style.min.css"
+>
+{% endblock %}
+
+{% block content %}
+<section
+    id="overview-app"
+    data-api-prefix="{{ api_prefix }}"
+    data-project-id="{{ project_id }}"
+    data-selected-codebook-id="{{ selected_codebook_id }}"
+    data-selected-version="{{ selected_version }}"
+>
+    <div class="d-flex flex-wrap justify-content-between align-items-end mb-3 gap-3">
+        <div>
+            <h1 class="h4 mb-1">Theme Overview</h1>
+            <p class="text-secondary mb-0">
+                Project <span class="fw-semibold">{{ project_id }}</span> ·
+                Codebook <span class="fw-semibold">{{ selected_codebook_name }}</span>
+            </p>
+        </div>
+        <button id="refresh-overview-btn" class="btn btn-outline-primary btn-sm" type="button">
+            Refresh
+        </button>
+    </div>
+
+    <div class="alert alert-info py-2 px-3 mb-3" role="alert">
+        Interview counts and coverage values are placeholders for this demo.
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="bg-white border rounded-2 p-3 h-100">
+                <p class="text-secondary small mb-1">Total Interviews in Corpus</p>
+                <p id="total-interviews-value" class="fs-4 mb-0 fw-semibold">-</p>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="bg-white border rounded-2 p-3 h-100">
+                <p class="text-secondary small mb-1">Themes in Selected Run</p>
+                <p id="total-themes-value" class="fs-4 mb-0 fw-semibold">-</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 align-items-stretch">
+        <div class="col-12 col-xl-7">
+            <div class="bg-white border rounded-2 p-3 h-100">
+                <h2 class="h6 mb-3">Theme Frequency Table</h2>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                        <tr>
+                            <th scope="col">Theme Name</th>
+                            <th scope="col" class="text-end">Occurrences</th>
+                            <th scope="col" class="text-end">% Interviews</th>
+                        </tr>
+                        </thead>
+                        <tbody id="themes-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-xl-5">
+            <div class="bg-white border rounded-2 p-3 h-100 d-flex flex-column theme-tree-card">
+                <h2 class="h6 mb-3">Theme Tree Explorer</h2>
+                <div id="theme-tree" class="tree-container border rounded-2 p-2 bg-white flex-grow-1"></div>
+            </div>
+        </div>
+    </div>
+    <div class="row g-3 mt-1">
+        <div class="col-12">
+            <div class="bg-white border rounded-2 p-3">
+                <h2 class="h6 mb-3">Theme Details</h2>
+                <div id="theme-details-empty" class="text-secondary">
+                    Select a theme from the table or tree to view details.
+                </div>
+                <dl id="theme-details-content" class="row mb-0 d-none">
+                    <dt class="col-sm-3">Theme Name</dt>
+                    <dd id="theme-details-name" class="col-sm-9 mb-2"></dd>
+                    <dt class="col-sm-3">Theme ID</dt>
+                    <dd id="theme-details-id" class="col-sm-9 mb-2"></dd>
+                    <dt class="col-sm-3">Occurrences</dt>
+                    <dd id="theme-details-occurrences" class="col-sm-9 mb-2"></dd>
+                    <dt class="col-sm-3">% Interviews</dt>
+                    <dd id="theme-details-coverage" class="col-sm-9 mb-2"></dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <p id="overview-error" class="text-danger mt-3 mb-0 d-none"></p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script
+    src="https://code.jquery.com/jquery-3.7.1.min.js"
+></script>
+<script
+    src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.16/jstree.min.js"
+></script>
+<script src="{{ url_for('static', path='demo_overview.js') }}"></script>
+{% endblock %}

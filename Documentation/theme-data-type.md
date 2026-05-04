@@ -24,3 +24,13 @@ Core fields:
 
 - This is an intentionally simplified design for sprint scope reduction.
 - If stricter behavior is needed later (e.g., uniqueness per active membership), add constraints in a follow-up migration.
+
+## API Endpoint
+
+- `GET /codebooks/{codebook_id}/themes`
+  - Returns a flat list of all active codebook themes.
+  - Each list item contains `theme_name`, `occurrence_count`, and `interview_coverage_percentage`.
+  - For now, `occurrence_count` and `interview_coverage_percentage` are placeholder `0` values.
+- `GET /codebooks/{codebook_id}/themes/tree`
+  - Returns the theme tree for the selected codebook.
+  - Optional query param: `root_theme_id`.
