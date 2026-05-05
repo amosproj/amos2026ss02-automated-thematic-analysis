@@ -1,11 +1,9 @@
 """
-pytest Backend/tests/test_llm_academic_cloud.py -s
+cd Backend
+pytest tests/test_llm_academic_cloud.py -s
 
-The live-call test is skipped automatically unless ``LLM_API_KEY`` is set in the environment.
+The live-call test is skipped automatically unless ``LLM_API_KEY`` is set.
 """
-
-
-import os
 import time
 from pathlib import Path
 
@@ -20,8 +18,8 @@ INTERVIEW_FIXTURE = (
 )
 
 requires_llm_key = pytest.mark.skipif(
-    not os.getenv("LLM_API_KEY"),
-    reason="LLM_API_KEY not set; skipping live Academic Cloud call.",
+    not get_settings().LLM_API_KEY,
+    reason="LLM_API_KEY not set (checked OS env and .env); skipping live Academic Cloud call.",
 )
 
 
@@ -39,8 +37,7 @@ class _AssertionLog:
             print(f"  {i}. {msg}")
 
 
-
-# Test 1: data handling and prompt formatting (no LLM call, just fixture parsing and dialog rendering) 
+# Test 1: data handling and prompt formatting (no LLM call, just fixture parsing and dialog rendering)
 def test_jsonl_fixture_parses_into_dialog() -> None:
     log = _AssertionLog()
     transcript = InterviewTranscript.from_jsonl(INTERVIEW_FIXTURE)
@@ -51,7 +48,6 @@ def test_jsonl_fixture_parses_into_dialog() -> None:
     log.check("Participant:" in dialog, "rendered dialog includes Participant turns")
 
     log.report("Fixture parsing")
-
 
 
 # Test 2: full round-trip against Academic Cloud
