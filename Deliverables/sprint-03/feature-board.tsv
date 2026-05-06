@@ -1,0 +1,41 @@
+Title	URL	Assignees	Status	Estimated size	Real size	Labels
+Link Transcripts and Demographic Data	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/5		Product Backlog			Corpus Management
+Drill Down into a Theme	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/15		Product Backlog			Corpus View
+Navigate to Source Quote	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/16		Product Backlog			Corpus View, Interview View
+Select Demographic Dimensions	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/17		Product Backlog			Corpus View
+View Demographic Breakdown	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/18		Product Backlog			Corpus View
+Open Individual Interview	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/19		Product Backlog			Interview View
+View Highlighted Themes	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/22		Product Backlog			Interview View
+View Theme Legend	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/23		Product Backlog			Interview View
+View Interviewee Demographics	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/24		Product Backlog			Interview View
+Enter Natural Language Query	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/6		Product Backlog			Query & Analysis Initialization
+Select Coding Mode	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/7		Product Backlog			Query & Analysis Initialization
+Trigger Analysis Run	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/10		Product Backlog			Query & Analysis Initialization
+Apply Codebook to Corpus	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/12		Product Backlog			System / AI Processing
+Generate Codebook from Corpus	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/11		Product Backlog			System / AI Processing
+LLM Selection Evaluation	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/44		Product Backlog			System / AI Processing
+Instantiate persistent DB Server to be ready for use	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/36	julianlucawendlandt-jpg	Product Backlog			
+Upload Transcripts	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/2		Sprint Backlog			Corpus Management
+Upload Demographic Data	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/3		Sprint Backlog			Corpus Management
+Read Full Transcript	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/20		Sprint Backlog	8		Interview View
+Upload Predefined Codebook	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/9		Sprint Backlog			Query & Analysis Initialization
+Setting Up LLM in Cluster	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/42	ClimbTheGrind, paulKlarer	Sprint Backlog	13		Set Up, System / AI Processing
+Plan Build Process	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/43		Sprint Backlog	5		Set Up
+Implement Build Process	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/55		Sprint Backlog			Set Up
+Setup Frontend	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/57		Sprint Backlog			Set Up
+Apply Codebook to Interview	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/41	paulKlarer	Sprint Backlog	3		System / AI Processing
+Add Root README File	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/56		Sprint Backlog			documentation
+Simple data persistence layer	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/39	julianlucawendlandt-jpg, Wecoreator	In Progress	5		Corpus Management
+LLM request	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/40	slnkahveci	In Progress	3		System / AI Processing
+Select Open Source Embedding Model	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/38	Wecoreator	In Progress			research
+Read Suggested Research Papers	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/8	ClimbTheGrind, julianlucawendlandt-jpg, slnkahveci, Wecoreator	In Progress			research
+View Theme Overview	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/13	julianlucawendlandt-jpg, Wecoreator	Awaiting Review	8	8	Corpus View
+Automated database structure setup	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/49	julianlucawendlandt-jpg, Wecoreator	Awaiting Review		1	Query & Analysis Initialization
+Setup pytest container	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/51	julianlucawendlandt-jpg, Wecoreator	Awaiting Review		1	Set Up
+Setting up the repository with FASTApi boiler plate code	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/35	hrasul	Feature Archive			System / AI Processing
+Homework 2: Create PDF of software architecture description	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/34	julianlucawendlandt-jpg, slnkahveci	Feature Archive			documentation
+Homework 2: Software bill of materials	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/32	Wecoreator	Feature Archive			documentation
+Create Project Logo	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/1	ClimbTheGrind	Feature Archive			good first issue
+SOTA research for LLM based codebook generation	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/33	hrasul, Wecoreator	Feature Archive			research
+Select Open Source LLM for Generation Phase	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/21	ClimbTheGrind, paulKlarer	Feature Archive	3	5	
+Setup Frontend	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/57		Sprint Backlog			Set Up
