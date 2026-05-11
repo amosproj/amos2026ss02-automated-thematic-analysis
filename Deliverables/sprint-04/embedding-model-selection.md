@@ -17,3 +17,4 @@ _Source: [Hugging Face MTEB leaderboard](https://huggingface.co/spaces/mteb/lead
 ## Best overall model
 
 **`microsoft/harrier-oss-v1-0.6b`** has the best overall leaderboard rank, strong clustering/similarity performance, and a MIT license. It performs well on all potential tasks required for the project like classification and embedding. Additionally, it works for multilingual tasks including german.
+Its balance of strong benchmark performance, multilingual support, and permissive licensing makes it the most practical and future-proof choice.
