@@ -23,6 +23,8 @@ dependencies = [
     "langchain-openai>=0.2",
     "tiktoken>=0.7",
     "python-multipart>=0.0.9",
+    "python-docx>=1.1,<2.0",
+    "pypdf>=5.0,<6.0",
 ]
 
 [project.optional-dependencies]

@@ -40,6 +40,7 @@ class CorpusDocumentSchema(BaseSchema):
     id: uuid.UUID
     corpus_id: uuid.UUID
     title: str
+    filename: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -60,3 +61,20 @@ class IngestResultSchema(BaseSchema):
 
     documents_created: int
     chunks_created: int
+
+
+class UploadFileResult(BaseSchema):
+    """Per-file result for a multi-file upload."""
+
+    filename: str            # original (client-provided) filename
+    stored_filename: str | None = None  # filename actually stored (may differ if renamed)
+    success: bool
+    documents_created: int = 0
+    chunks_created: int = 0
+    error: str | None = None
+
+
+class MultiUploadResultSchema(BaseSchema):
+    """Aggregate response for the multi-file upload endpoint."""
+
+    results: list[UploadFileResult]

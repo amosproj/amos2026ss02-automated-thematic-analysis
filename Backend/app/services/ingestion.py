@@ -1,4 +1,3 @@
-import json
 import uuid
 from dataclasses import dataclass, field
 
@@ -18,59 +17,6 @@ class IngestResult:
 
     documents: list[CorpusDocument] = field(default_factory=list)
     chunks_created: int = 0
-
-
-# ---------------------------------------------------------------------------
-# File parsers
-# ---------------------------------------------------------------------------
-
-
-def parse_jsonl_upload(filename: str, content: bytes) -> list[DocumentInput]:
-    """Parse a .jsonl chatbot interview log. One DocumentInput per unique username.
-    Only 'human_response' events are included; chatbot turns are excluded.
-    Messages are sorted by message_index before joining.
-    Participants with no non-blank human responses are skipped.
-    """
-    try:
-        text_content = content.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise UnprocessableError(f"Could not decode '{filename}' as UTF-8") from exc
-
-    # Collect all messages per participant.
-    participants: dict[str, list[dict]] = {}
-    for line_no, raw in enumerate(text_content.splitlines(), start=1):
-        raw = raw.strip()
-        if not raw:
-            continue
-        try:
-            record = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise UnprocessableError(f"'{filename}': invalid JSON on line {line_no}: {exc}") from exc
-
-        username = record.get("username")
-        if not username:
-            raise UnprocessableError(f"'{filename}': line {line_no} is missing 'username'")
-
-        participants.setdefault(username, []).append(record)
-
-    if not participants:
-        raise UnprocessableError(f"'{filename}': file contains no records")
-
-    docs: list[DocumentInput] = []
-    for username, messages in participants.items():
-        messages.sort(key=lambda m: m.get("message_index", 0))
-
-        human_turns = [
-            m for m in messages
-            if m.get("event_type") == "human_response"
-            and str(m.get("message_content", "")).strip()
-        ]
-        if not human_turns:
-            continue
-
-        text = "\n\n".join(str(m["message_content"]) for m in human_turns)
-        docs.append(DocumentInput(title=username, text=text))
-    return docs
 
 
 # ---------------------------------------------------------------------------
@@ -127,17 +73,47 @@ class IngestionService:
         )
         return list(rows.scalars().all()), total
 
+    async def _resolve_filename_conflict(
+        self, corpus_id: uuid.UUID, filename: str
+    ) -> str:
+        """Lowercase the filename; if it collides within the corpus, append ' (n)'
+        before the extension until unique. e.g. 'Interview.TXT' after
+        'interview.txt' → 'interview (2).txt'."""
+        filename = filename.lower()
+        existing = set(
+            (
+                await self._session.execute(
+                    select(CorpusDocument.filename).where(
+                        CorpusDocument.corpus_id == corpus_id,
+                        CorpusDocument.filename.is_not(None),
+                    )
+                )
+            ).scalars()
+        )
+        if filename not in existing:
+            return filename
+
+        dot = filename.rfind(".")
+        stem, ext = (filename[:dot], filename[dot:]) if dot != -1 else (filename, "")
+        n = 2
+        while f"{stem} ({n}){ext}" in existing:
+            n += 1
+        return f"{stem} ({n}){ext}"
+
     async def ingest_documents(
         self,
         corpus_id: uuid.UUID,
         documents: list[DocumentInput],
         filename: str | None = None,
     ) -> IngestResult:
-        """Core ingestion loop. For each non-empty document: creates a CorpusDocument,
-        chunks the text, and inserts CorpusChunk rows. Commits once at the end.
-        Rolls back and raises UnprocessableError on any failure.
-        """
+        """For each non-empty document: insert a CorpusDocument, chunk its text,
+        insert CorpusChunk rows. One commit at the end; rolls back on any failure.
+        `filename` (if given) is deduplicated and stored on every created document."""
         await self.get_corpus(corpus_id)
+
+        stored_filename: str | None = None
+        if filename:
+            stored_filename = await self._resolve_filename_conflict(corpus_id, filename)
 
         result = IngestResult()
         try:
@@ -148,7 +124,8 @@ class IngestionService:
 
                 doc = CorpusDocument(
                     corpus_id=corpus_id,
-                    title=doc_input.title or filename or "Untitled",
+                    title=doc_input.title or stored_filename or "Untitled",
+                    filename=stored_filename,
                 )
                 self._session.add(doc)
                 # Flush to get doc.id before inserting chunks that reference it.

@@ -43,6 +43,8 @@ class CorpusDocument(Base, TimestampMixin):
         index=True,
     )
     title: Mapped[str] = mapped_column(String(500))
+    # Original uploaded filename (after duplicate-collision resolution). NULL for body-ingested docs.
+    filename: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class CorpusChunk(Base, TimestampMixin):

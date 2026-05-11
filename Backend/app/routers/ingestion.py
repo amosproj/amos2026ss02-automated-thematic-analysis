@@ -13,16 +13,20 @@ from app.schemas.ingestion import (
     CorpusDocumentSchema,
     CorpusSchema,
     IngestResultSchema,
+    MultiUploadResultSchema,
+    UploadFileResult,
 )
 from app.services.ingestion import (
-    IngestResult,
     IngestionService,
-    parse_jsonl_upload,
+    IngestResult,
+)
+from app.services.upload_parsers import (
+    SUPPORTED_EXTENSIONS,
+    get_extension,
+    parse_upload,
 )
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
-
-_SUPPORTED_EXTENSIONS = {".jsonl"}
 
 
 def _pages(total: int, page_size: int) -> int:
@@ -108,37 +112,74 @@ async def bulk_ingest_documents(
     return ResponseEnvelope.ok(_to_result_schema(result))
 
 
+async def _process_one_upload(
+    service: IngestionService,
+    corpus_id: uuid.UUID,
+    file: UploadFile,
+    max_bytes: int,
+) -> UploadFileResult:
+    """Parse and ingest a single uploaded file. Returns a per-file result; never
+    raises (errors are captured as `success=False`)."""
+    filename = file.filename or ""
+    try:
+        ext = get_extension(filename)
+        if ext not in SUPPORTED_EXTENSIONS:
+            raise UnprocessableError(
+                f"Unsupported file extension '{ext}'. "
+                f"Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
+            )
+
+        content = await file.read()
+        if len(content) == 0:
+            raise UnprocessableError(f"'{filename}': file is empty")
+        if len(content) > max_bytes:
+            raise UnprocessableError(
+                f"'{filename}': file exceeds maximum size of {max_bytes} bytes"
+            )
+
+        docs = parse_upload(filename, content)
+        result = await service.ingest_documents(
+            corpus_id=corpus_id,
+            documents=docs,
+            filename=filename,
+        )
+        stored = result.documents[0].filename if result.documents else filename
+        return UploadFileResult(
+            filename=filename,
+            stored_filename=stored,
+            success=True,
+            documents_created=len(result.documents),
+            chunks_created=result.chunks_created,
+        )
+    except UnprocessableError as exc:
+        return UploadFileResult(filename=filename, success=False, error=str(exc))
+
+
 @router.post(
     "/corpora/{corpus_id}/upload",
-    response_model=ResponseEnvelope[IngestResultSchema],
+    response_model=ResponseEnvelope[MultiUploadResultSchema],
     status_code=201,
 )
 async def upload_documents(
     corpus_id: uuid.UUID,
-    file: UploadFile,
+    files: list[UploadFile],
     session: DbSession,
     settings: AppSettings,
-) -> ResponseEnvelope[IngestResultSchema]:
-    """Accept a file upload (.txt / .json / .jsonl / .csv) and ingest its contents."""
-    filename = file.filename or ""
-    dot_pos = filename.rfind(".")
-    ext = filename[dot_pos:].lower() if dot_pos != -1 else ""
-
-    if ext not in _SUPPORTED_EXTENSIONS:
-        raise UnprocessableError(
-            f"Unsupported file extension '{ext}'. Supported: {', '.join(sorted(_SUPPORTED_EXTENSIONS))}"
-        )
-
-    content = await file.read()
-    docs = parse_jsonl_upload(filename, content)
-
+) -> ResponseEnvelope[MultiUploadResultSchema]:
+    """Accept one or more uploaded transcripts (.txt / .docx / .pdf / .jsonl) and
+    ingest their contents. Each file produces an independent result, so a single
+    bad file does not block the others."""
     service = IngestionService(session, settings)
-    result = await service.ingest_documents(
-        corpus_id=corpus_id,
-        documents=docs,
-        filename=filename,
-    )
-    return ResponseEnvelope.ok(_to_result_schema(result))
+    results = [
+        await _process_one_upload(
+            service,
+            corpus_id,
+            f,
+            max_bytes=settings.MAX_UPLOAD_BYTES,
+        )
+        for f in files
+    ]
+    return ResponseEnvelope.ok(MultiUploadResultSchema(results=results))
 
 
 # ---------------------------------------------------------------------------
