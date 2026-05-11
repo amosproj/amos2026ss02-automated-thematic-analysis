@@ -132,3 +132,73 @@ class TestApplyCodebookOutputParsing:
             assert isinstance(theme.present, bool)
             assert isinstance(theme.confidence, float)
             assert theme.quote is None or isinstance(theme.quote, str)
+
+# ---------------------------------------------------------------------------
+# Multiple Interviews Aggregation
+# ---------------------------------------------------------------------------
+
+INTERVIEW_A = """
+Interviewer: How is the new software?
+Participant: It crashes every hour. I lose my work constantly. It's incredibly unstable. On top of that, I know management spent a fortune on this, and it feels like a total waste of money.
+"""
+RESPONSE_A = json.dumps({
+    "summary": "User A",
+    "researcher_notes": "",
+    "themes": [
+        {"theme_label": "System Instability", "present": True, "confidence": 0.95, "quote": "It crashes every hour."},
+        {"theme_label": "Cost Concerns", "present": True, "confidence": 0.9, "quote": "spent a fortune on this"},
+    ]
+})
+
+INTERVIEW_B = """
+Interviewer: How is the new software?
+Participant: When it works, it is very fast. The data processing speed is much better than the old system. However, it freezes at least twice a day, which is frustrating.
+"""
+RESPONSE_B = json.dumps({
+    "summary": "User B",
+    "researcher_notes": "",
+    "themes": [
+        {"theme_label": "System Instability", "present": True, "confidence": 0.95, "quote": "freezes at least twice a day"},
+        {"theme_label": "Performance & Efficiency", "present": True, "confidence": 0.9, "quote": "very fast"},
+    ]
+})
+
+INTERVIEW_C = """
+Interviewer: How is the new software?
+Participant: The rollout was a disaster. No training, just a sudden switch. It's very buggy and crashes often. But I do like the new shared dashboards; they make working with the remote team much easier.
+"""
+RESPONSE_C = json.dumps({
+    "summary": "User C",
+    "researcher_notes": "",
+    "themes": [
+        {"theme_label": "System Instability", "present": True, "confidence": 0.95, "quote": "crashes often"},
+        {"theme_label": "Poor Change Management", "present": True, "confidence": 0.9, "quote": "rollout was a disaster"},
+        {"theme_label": "Collaboration Benefits", "present": True, "confidence": 0.9, "quote": "shared dashboards"},
+    ]
+})
+
+class TestMultipleInterviews:
+    def test_aggregate_frequencies_across_interviews(self) -> None:
+        from collections import defaultdict
+        
+        interviews_and_responses = [
+            (INTERVIEW_A, json.loads(RESPONSE_A)),
+            (INTERVIEW_B, json.loads(RESPONSE_B)),
+            (INTERVIEW_C, json.loads(RESPONSE_C)),
+        ]
+        
+        theme_to_count = defaultdict(int)
+        
+        for text, parsed_dict in interviews_and_responses:
+            result = InterviewAnalysisResult(**parsed_dict)
+            for t in result.themes:
+                if t.present:
+                    theme_to_count[t.theme_label] += 1
+                    
+        assert theme_to_count["System Instability"] == 3
+        assert theme_to_count["Cost Concerns"] == 1
+        assert theme_to_count["Performance & Efficiency"] == 1
+        assert theme_to_count["Poor Change Management"] == 1
+        assert theme_to_count["Collaboration Benefits"] == 1
+        assert "Steep Learning Curve" not in theme_to_count
+
