@@ -10,6 +10,7 @@ from app.models.themes import (
     Theme,
     ThemeHierarchyRelationship,
 )
+from app.models.analysis import DocumentAnalysis, ThemeOccurrence
 
 __all__ = [
     "Base",
@@ -22,4 +23,6 @@ __all__ = [
     "Corpus",
     "CorpusChunk",
     "CorpusDocument",
+    "DocumentAnalysis",
+    "ThemeOccurrence",
 ]

@@ -66,3 +66,47 @@ def build_thematic_analysis_prompt() -> ChatPromptTemplate:
             ("user", DEFAULT_USER_INSTRUCTION),
         ]
     )
+
+APPLY_CODEBOOK_SYSTEM_PROMPT = """You are an experienced qualitative researcher performing deductive thematic analysis.
+You have been provided with a predefined codebook containing themes and their definitions.
+Your task is to analyze the provided interview transcript and determine which of the themes from the codebook are present in the text.
+
+Rules:
+- For each theme in the codebook, evaluate if it is present in the transcript.
+- Provide a confidence score between 0.0 and 1.0 indicating how confident you are that the theme is present.
+- If a theme is present, you MUST provide a short verbatim quote from the transcript that illustrates the theme.
+- Stay close to the participant's words; do not invent content.
+- Do not create new themes; only use the ones provided in the codebook.
+
+You MUST return your answer as a single, valid JSON object matching the following structure exactly (do NOT wrap it in markdown code blocks, just raw JSON):
+{{
+  "summary": "A 2-3 sentence orientation to what the interview is about.",
+  "researcher_notes": "Anything ambiguous or worth follow-up.",
+  "themes": [
+    {{
+      "theme_label": "<Name of theme from codebook>",
+      "present": true or false,
+      "confidence": 0.8,
+      "quote": "<Verbatim quote or null if not present>"
+    }}
+  ]
+}}"""
+
+APPLY_CODEBOOK_USER_INSTRUCTION = """Analyse the interview transcript below using the provided codebook.
+
+--- CODEBOOK START ---
+{codebook}
+--- CODEBOOK END ---
+
+--- TRANSCRIPT START ---
+{transcript}
+--- TRANSCRIPT END ---"""
+
+def build_codebook_application_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", APPLY_CODEBOOK_SYSTEM_PROMPT),
+            ("user", APPLY_CODEBOOK_USER_INSTRUCTION),
+        ]
+    )
+
