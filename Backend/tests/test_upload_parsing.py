@@ -1,9 +1,16 @@
+import io
 import json
 
 import pytest
 
 from app.exceptions import UnprocessableError
-from app.services.ingestion import parse_jsonl_upload
+from app.services.upload_parsers import (
+    parse_docx_upload,
+    parse_jsonl_upload,
+    parse_pdf_upload,
+    parse_txt_upload,
+    parse_upload,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -85,3 +92,143 @@ def test_jsonl_empty_file_raises():
 def test_jsonl_invalid_encoding_raises():
     with pytest.raises(UnprocessableError):
         parse_jsonl_upload("f.jsonl", b"\xff\xfe bad bytes")
+
+
+# ---------------------------------------------------------------------------
+# .txt parser
+# ---------------------------------------------------------------------------
+
+
+def test_txt_one_document_with_filename_title():
+    docs = parse_txt_upload("interview.txt", b"Hello world, this is a transcript.")
+    assert len(docs) == 1
+    assert docs[0].title == "interview.txt"
+    assert "transcript" in docs[0].text
+
+
+def test_txt_empty_file_raises():
+    with pytest.raises(UnprocessableError):
+        parse_txt_upload("f.txt", b"   \n  ")
+
+
+def test_txt_invalid_encoding_raises():
+    with pytest.raises(UnprocessableError):
+        parse_txt_upload("f.txt", b"\xff\xfe bad bytes")
+
+
+def test_txt_special_characters_in_filename_preserved():
+    docs = parse_txt_upload("inteŕview-2025_v1 (final).txt", b"content")
+    assert docs[0].title == "inteŕview-2025_v1 (final).txt"
+
+
+# ---------------------------------------------------------------------------
+# .docx parser
+# ---------------------------------------------------------------------------
+
+
+def _make_docx_bytes(paragraphs: list[str]) -> bytes:
+    from docx import Document
+    doc = Document()
+    for p in paragraphs:
+        doc.add_paragraph(p)
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def test_docx_extracts_paragraphs():
+    content = _make_docx_bytes(["First paragraph.", "Second paragraph."])
+    docs = parse_docx_upload("interview.docx", content)
+    assert len(docs) == 1
+    assert "First paragraph." in docs[0].text
+    assert "Second paragraph." in docs[0].text
+    assert docs[0].title == "interview.docx"
+
+
+def test_docx_empty_document_raises():
+    content = _make_docx_bytes([])
+    with pytest.raises(UnprocessableError):
+        parse_docx_upload("empty.docx", content)
+
+
+def test_docx_corrupted_file_raises():
+    with pytest.raises(UnprocessableError):
+        parse_docx_upload("bad.docx", b"not a real docx")
+
+
+# ---------------------------------------------------------------------------
+# .pdf parser
+# ---------------------------------------------------------------------------
+
+
+def _make_pdf_bytes(text: str) -> bytes:
+    """Build a minimal PDF with one page of `text` using pypdf."""
+    from pypdf import PdfWriter
+    from pypdf.generic import (
+        ArrayObject,
+        DecodedStreamObject,
+        DictionaryObject,
+        FloatObject,
+        NameObject,
+        NumberObject,
+    )
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    page = writer.pages[0]
+    stream = DecodedStreamObject()
+    safe = text.replace("(", r"\(").replace(")", r"\)")
+    stream.set_data(f"BT /F1 12 Tf 72 720 Td ({safe}) Tj ET".encode())
+    page[NameObject("/Contents")] = stream
+    font = DictionaryObject({
+        NameObject("/Type"): NameObject("/Font"),
+        NameObject("/Subtype"): NameObject("/Type1"),
+        NameObject("/BaseFont"): NameObject("/Helvetica"),
+    })
+    page[NameObject("/Resources")] = DictionaryObject({
+        NameObject("/Font"): DictionaryObject({NameObject("/F1"): font}),
+    })
+    page[NameObject("/MediaBox")] = ArrayObject(
+        [NumberObject(0), NumberObject(0), FloatObject(612), FloatObject(792)]
+    )
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+def test_pdf_extracts_text():
+    content = _make_pdf_bytes("Interview transcript content here")
+    docs = parse_pdf_upload("interview.pdf", content)
+    assert len(docs) == 1
+    assert "Interview" in docs[0].text or "transcript" in docs[0].text
+    assert docs[0].title == "interview.pdf"
+
+
+def test_pdf_corrupted_file_raises():
+    with pytest.raises(UnprocessableError):
+        parse_pdf_upload("bad.pdf", b"not a real pdf")
+
+
+# ---------------------------------------------------------------------------
+# dispatcher
+# ---------------------------------------------------------------------------
+
+
+def test_parse_upload_dispatches_by_extension():
+    docs = parse_upload("notes.txt", b"hello")
+    assert docs[0].title == "notes.txt"
+
+
+def test_parse_upload_unsupported_extension_raises():
+    with pytest.raises(UnprocessableError, match="Unsupported"):
+        parse_upload("data.csv", b"a,b\n1,2")
+
+
+def test_parse_upload_no_extension_raises():
+    with pytest.raises(UnprocessableError, match="Unsupported"):
+        parse_upload("README", b"hello")
+
+
+def test_parse_upload_extension_is_case_insensitive():
+    docs = parse_upload("NOTES.TXT", b"hello")
+    assert docs[0].title == "NOTES.TXT"

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Upload Results{% endblock %}
+{% block content %}
+  <h1>Upload Results</h1>
+
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+
+  {% if results %}
+    {% set succeeded = results | selectattr("success") | list | length %}
+    {% set failed = results | rejectattr("success") | list | length %}
+    <p>
+      {{ succeeded }} succeeded, {{ failed }} failed.
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>File</th>
+          <th>Status</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+          <tr class="{{ 'ok' if r.success else 'fail' }}">
+            <td>{{ r.filename }}</td>
+            <td>{{ 'Uploaded' if r.success else 'Failed' }}</td>
+            <td>
+              {% if r.success %}
+                {% if r.stored_filename != r.filename %}
+                  Renamed to <code>{{ r.stored_filename }}</code> (duplicate name).<br>
+                {% endif %}
+                {{ r.documents_created }} document(s), {{ r.chunks_created }} chunk(s).
+              {% else %}
+                {{ r.error }}
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  <p>
+    <a href="{{ url_for('ingestion.upload_form') }}">Upload more</a> ·
+    <a href="{{ url_for('ingestion.list_transcripts') }}">View all transcripts</a>
+  </p>
+{% endblock %}

@@ -40,6 +40,8 @@ bin/
 .env.*
 *.env
 
+!.env.example
+
 # alembic
 alembic.ini
 
@@ -62,3 +64,6 @@ htmlcov/
 *.zip
 *.tar.gz
 *.rar
+
+
+*.egg-info/

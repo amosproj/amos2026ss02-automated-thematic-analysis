@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Transcripts{% endblock %}
+{% block content %}
+  <h1>Uploaded Transcripts</h1>
+
+  {% if error %}
+    <p class="error">{{ error }}</p>
+  {% endif %}
+
+  {% if documents %}
+    <table>
+      <thead>
+        <tr>
+          <th>Filename</th>
+          <th>Title</th>
+          <th>Uploaded</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in documents %}
+          <tr>
+            <td>{{ d.filename or '—' }}</td>
+            <td>{{ d.title }}</td>
+            <td>{{ d.created_at }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No transcripts uploaded yet.</p>
+  {% endif %}
+
+  <p>
+    <a href="{{ url_for('ingestion.upload_form') }}">Upload Interview Transcripts</a>
+  </p>
+{% endblock %}

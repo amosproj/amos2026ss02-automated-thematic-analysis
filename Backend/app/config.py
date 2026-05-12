@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
     INGESTION_CHUNK_SIZE_WORDS: int = 2048
     INGESTION_CHUNK_OVERLAP_WORDS: int = 200
+    MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024 # 10 MB limit for uploaded interview files
 
     @property
     def is_production(self) -> bool:

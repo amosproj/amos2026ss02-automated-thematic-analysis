@@ -1,0 +1,255 @@
+Interview Transcript: AI in Daily Work and Job Security
+Participant p0134 — Long-haul truck driver, owner-operator
+Conducted: 22 March 2026
+Duration: approximately 34 minutes
+
+================================================================
+
+Interviewer: Hello! We are interested in your personal opinion and your own
+experiences with AI in your daily work. Feel free to ask if anything is
+unclear. The interview will take about 30 minutes. To start, could you tell me
+what kind of work you currently do and how long you have been in your role?
+
+Participant: I drive a truck. Long haul, mostly Midwest to West Coast runs.
+I have been driving for twenty two years. The last nine I have been an
+owner operator with my own rig, before that I drove for two different
+carriers.
+
+Interviewer: Thanks for that. Twenty two years is a long view of how the job
+has changed. Could you describe whether AI tools have entered your daily work,
+and if so what they look like for you?
+
+Participant: More than people on the outside probably realize. The truck
+itself has a bunch of AI in it now. Lane keep assist, automatic emergency
+braking, adaptive cruise. The fleet I sometimes contract through has a
+dashcam system with AI that watches my face for drowsiness and the road for
+following too close, lane drift, hard braking. My route planning app uses AI
+for traffic prediction. The load boards use it for matching. So even though
+I am still the one behind the wheel, the job is mediated by these systems
+all day.
+
+Interviewer: Let us start with the in cab dashcam. How does that show up in
+your day, and how do you feel about being monitored that way?
+
+Participant: It feels different than the old paper log days, that is for
+sure. The camera is always on. If it detects you yawning or your eyes off
+the road for more than a few seconds it dings at you and uploads a clip.
+Then someone in an office, or these days probably another algorithm,
+reviews the clip and grades it. You get a safety score. The score affects
+your pay with some carriers and your access to certain loads. I am
+owner operator so I have more flexibility about which fleets I contract
+with, but a lot of company drivers do not have a choice.
+
+Interviewer: Does the system catch real problems, or does it mostly create
+new ones?
+
+Participant: Both honestly. It has caught a couple guys I know who were
+genuinely nodding off and that probably saved lives. But it also flags
+things that are not real problems. Looking at your mirrors gets flagged as
+distracted driving sometimes. Eating a sandwich gets flagged. Scratching
+your face gets flagged. You learn to drive in a way the camera approves of,
+which is not always the same as driving safely. I keep my hands at ten and
+two even when nobody is on the road just because the camera prefers it.
+
+Interviewer: That distinction between driving safely and driving in a way
+the camera approves of seems important. Could you say more about that?
+
+Participant: Sure. A good driver scans the mirrors constantly, looks at the
+gauges, watches the road far ahead not just right in front. The camera does
+not always know the difference between scanning your environment and being
+distracted. So you have drivers who literally stop checking their mirrors
+because they got dinged for it too many times. That is a worse driver. The
+metric is shaping the behavior and the metric is wrong. Anybody who has
+done this work knows this. The companies that buy these systems mostly do
+not.
+
+Interviewer: Have you seen any drivers face consequences from the scoring
+system that you thought were unfair?
+
+Participant: A friend of mine got let go from his carrier last year because
+his safety score dropped below a threshold. He had no accidents in eleven
+years of driving. The score dropped because the camera kept flagging him
+for following too close on a stretch of interstate where the traffic just
+naturally compresses. Anybody who has driven that stretch knows it. He
+appealed and the appeal went nowhere because the data is the data
+according to them. He is now driving for a smaller outfit for less money.
+That is the kind of thing that happens.
+
+Interviewer: Has the introduction of these systems changed your sense of
+how secure your work is, or how the future of truck driving looks?
+
+Participant: I am less worried about being replaced than I was five years
+ago, honestly. The self driving truck thing has not panned out the way the
+hype said it would. The technology can handle the easy highway miles but
+the hard parts, the loading docks, the city streets, the construction
+zones, the weather, the broken pallet falling off the truck ahead of you,
+the cop waving you around an accident, all of that is still very much a
+human job. I think long haul highway driving might eventually be partly
+automated but the full job of being a driver, I do not see that going away
+in the next ten years.
+
+Interviewer: Are there things about the work that you think the technology
+hype gets wrong?
+
+Participant: Yes. The hype treats driving like its just steering between
+lines. The actual job is so much more than that. You are inspecting your
+truck, you are talking to dispatchers and shippers, you are problem
+solving when a load is wrong or a dock is backed up or your trailer has a
+flat. You are reading weather, you are managing your hours and your sleep.
+You are a small business owner if you are owner operator. None of the AI I
+have seen is anywhere near doing all of that. They focus on the steering
+because the steering is what looks impressive in a demo.
+
+Interviewer: How has route planning changed with the AI tools?
+
+Participant: For better in some ways. The traffic prediction is good. It
+catches accidents and construction faster than the old systems. Fuel stop
+optimization is better. But the load matching is a mixed bag. The
+algorithms tend to squeeze rates because the brokers can see exactly what
+load is available and what trucks are nearby. Used to be you had more
+negotiating power. Now the system pretty much sets the price and you take
+it or leave it. Rates have been bad for a couple years and the technology
+is part of the reason.
+
+Interviewer: Could you say more about how the load matching has changed
+your earning power?
+
+Participant: When I started owner operating in 2017 I could call a broker
+and we would haggle a bit and there was room. Now I open the app, I see
+the loads, I see the offered rate, and if I do not take it within fifteen
+minutes someone else will. The system has more information than I do and
+it uses it. My net income has been basically flat for five years even
+though everything else, fuel, insurance, truck payments, has gone up.
+Other drivers have it worse.
+
+Interviewer: Has the pace or stress of the work changed with these tools?
+
+Participant: More stress. More scrutiny. Every minute is tracked now. The
+electronic logs were already a thing before AI got added on top, but now
+the AI is also looking at how you drive within those hours. Dispatchers
+know exactly where you are at all times. There is a lot less downtime to
+just exist in the truck. I used to enjoy this job. The driving part I
+still love. The monitoring and the rate pressure has taken a lot of the
+quality of life out of it.
+
+Interviewer: How did you learn to work with these tools? Was there any
+formal training?
+
+Participant: Mostly figured it out myself. The fleet I contracted with had
+a training video for the dashcam, basically here is the system, here is
+what gets you flagged, do not do those things. The load apps you just
+learn by using them. Older drivers struggled more, some of them retired
+out. The job is becoming less accessible to people who are not comfortable
+with phones and apps. That is a real shift in who can do this work.
+
+Interviewer: Is there any organization, union, or association that
+represents drivers on these tool questions?
+
+Participant: Teamsters represents some company drivers, owner operators
+have OOIDA which advocates for us in policy. Both have raised concerns
+about the dashcams and the load board algorithms. But it is hard. Trucking
+is fragmented, there are a million small operators, and we are spread
+across the whole country. Hard to organize. The companies pushing these
+tools are very organized. So the playing field is uneven.
+
+Interviewer: Are shippers or the general public aware of how much AI
+monitoring is involved in trucking now?
+
+Participant: I do not think most people have any idea. They see a truck on
+the highway and think the driver is the only one in the truck, which is
+true physically, but there is a camera watching me, a GPS tracking me,
+software grading my every move, and an algorithm deciding what I get paid.
+Shippers know because they pay for some of these systems. The general
+public has no idea how surveilled this job has become.
+
+Interviewer: Have you ever felt uncomfortable about something one of these
+AI tools was being used for in your work?
+
+Participant: The dashcam audio thing bothered me. Some of the systems
+record audio inside the cab. The truck is also my home for weeks at a
+time. I sleep in there, I take personal calls, I eat my meals. Having a
+microphone running while you are talking to your wife about your kids
+feels like a real invasion. I switched to a fleet that does not run the
+audio piece. But a lot of drivers do not have that option.
+
+Interviewer: How do you feel about the broader public conversation around
+AI and trucking jobs? Does it match what you see?
+
+Participant: The conversation is mostly about self driving trucks
+replacing all of us, and that is just not the main thing happening. The
+main thing happening is that AI is being used to monitor, score, and
+squeeze the drivers who are already doing the job. That is much less
+dramatic than robot trucks and so it does not get covered. But it is the
+actual reality of the work. Most journalists who write about this have
+never been in a truck. You can tell when you read it.
+
+Interviewer: If you could change one thing about how AI has been rolled
+out in trucking, what would it be?
+
+Participant: I would have drivers in the room when these tools are
+designed and evaluated. We know what the job actually is. The vendors
+selling these systems do not. If you involved experienced drivers you
+would build tools that catch real safety problems without creating fake
+ones. You would build load boards that did not just optimize against the
+drivers earnings. You would respect that the truck is the drivers
+workspace and sometimes home. Right now none of that is happening because
+we are not at the table.
+
+Interviewer: What about regulation or government policy?
+
+Participant: A few things. First, limits on what these monitoring systems
+can record, especially audio inside the sleeper. Second, some kind of due
+process when an algorithm decides to dock your pay or end your contract.
+You should be able to appeal to a human who actually understands driving.
+Third, transparency in how the load matching works, because right now the
+brokers have all the information and we have none. Antitrust people should
+be looking at this. The market is not really a market anymore, it is a
+platform with a lot of power.
+
+Interviewer: Has your overall feeling about AI at work shifted over the
+past couple years, or stayed roughly the same?
+
+Participant: Gotten more skeptical. I started out neutral, thinking some
+of it would help with safety and some of it would not, no big deal. Now I
+see how much of it is really about control and squeezing margins out of
+workers. The safety framing is often a cover. If the goal was really
+safety they would address things like hours and pay that drive fatigue and
+risky behavior in the first place. Instead they put a camera on you and
+call it safety.
+
+Interviewer: Do you have advice for someone entering trucking today,
+knowing what you know?
+
+Participant: Yes. Go into it with your eyes open. The romance of the open
+road is real on some days and gone on others. You are going to be
+monitored constantly. The pay is not what it used to be in real terms.
+Owner operator is harder than it was. If you do go in, find a community of
+drivers, join OOIDA or another association, learn your rights, know your
+contracts. Take care of your body because the job will wear it down.
+Protect your sleep no matter what the load board says. And keep learning
+because the technology is going to keep changing whether you want it to or
+not.
+
+Interviewer: Is there anything we have not covered that you think is
+important about how AI is showing up in your work?
+
+Participant: One thing. There is a loneliness to all this that is
+different from the loneliness drivers always had. You used to feel alone
+because you were physically alone in a truck for days at a time. Now you
+feel alone because you are surrounded by systems watching you but nobody
+is actually with you. The fleet does not know you, the broker does not
+know you, the dispatcher is probably an algorithm now. You are a number
+in a dashboard somewhere. That is a different kind of alone. It wears on
+people. I am not sure what to do about it but I know it is real.
+
+Interviewer: That is a striking way to put it, and not something I have
+heard described that way before. Thank you for taking the time to share
+all of this. Your perspective has been thoughtful and helpful.
+
+Participant: You are welcome. Honestly it was good to think this through
+out loud. Most days I just drive and I do not get to put words to what is
+changing. I hope it is useful to somebody. Tell them to listen to drivers
+once in a while. We know things.
+
+================================================================
+End of transcript.
