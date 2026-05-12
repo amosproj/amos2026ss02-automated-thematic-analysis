@@ -1,26 +1,23 @@
-from flask import Flask, render_template
+from flask import Flask
 
 from web.config import Config, get_config
+from web.services.backend_client import BackendClient
 
 
 def create_app(config: Config | None = None) -> Flask:
     app = Flask(__name__)
-    app.config.from_object(config or get_config())
+    cfg = config or get_config()
+    app.config.from_object(cfg)
+
+    # Shared across requests: pooled connections + memoised corpus id.
+    app.extensions["backend_client"] = BackendClient(
+        cfg.BACKEND_API_URL, timeout=cfg.BACKEND_TIMEOUT_S
+    )
 
     from web.controllers.ingestion import bp as ingestion_bp
     from web.controllers.main import bp as main_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(ingestion_bp, url_prefix="/transcripts")
-
-    # Friendly page for oversize uploads (Flask rejects them pre-handler).
-    @app.errorhandler(413)
-    def _too_large(_err):
-        max_mb = app.config["MAX_UPLOAD_SIZE_MB"]
-        return render_template(
-            "ingestion/results.html",
-            results=[],
-            error=f"Total upload exceeded {max_mb} MB. Please upload fewer or smaller files.",
-        ), 413
 
     return app

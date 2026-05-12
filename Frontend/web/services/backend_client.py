@@ -12,11 +12,12 @@ class BackendError(Exception):
 
 class BackendClient:
     def __init__(self, base_url: str, timeout: float = 60.0) -> None:
-        self._base_url = base_url
-        self._timeout = timeout
+        # Reused across requests; closed via `close()` on app teardown.
+        self._client = httpx.Client(base_url=base_url, timeout=timeout)
+        self._corpus_id_by_project: dict[str, str] = {}
 
-    def _client(self) -> httpx.Client:
-        return httpx.Client(base_url=self._base_url, timeout=self._timeout)
+    def close(self) -> None:
+        self._client.close()
 
     # ---- Corpora ------------------------------------------------------------
 
@@ -27,11 +28,13 @@ class BackendClient:
         return self._post("/ingestion/corpora", json={"project_id": project_id, "name": name})
 
     def ensure_corpus(self, project_id: str, name: str) -> str:
-        """Return the first corpus_id for `project_id`, creating one if none exists."""
+        """Return the first corpus_id for `project_id`, creating one if none exists. Memoised."""
+        if project_id in self._corpus_id_by_project:
+            return self._corpus_id_by_project[project_id]
         existing = self.list_corpora(project_id)
-        if existing:
-            return existing[0]["id"]
-        return self.create_corpus(project_id, name)["id"]
+        corpus_id = existing[0]["id"] if existing else self.create_corpus(project_id, name)["id"]
+        self._corpus_id_by_project[project_id] = corpus_id
+        return corpus_id
 
     # ---- Documents ----------------------------------------------------------
 
@@ -44,10 +47,9 @@ class BackendClient:
             for f in files
         ]
         try:
-            with self._client() as c:
-                r = c.post(f"/ingestion/corpora/{corpus_id}/upload", files=multipart)
-                r.raise_for_status()
-                return r.json()["data"]["results"]
+            r = self._client.post(f"/ingestion/corpora/{corpus_id}/upload", files=multipart)
+            r.raise_for_status()
+            return r.json()["data"]["results"]
         except httpx.HTTPError as exc:
             raise BackendError(f"Backend upload failed: {exc}") from exc
 
@@ -61,18 +63,16 @@ class BackendClient:
 
     def _get(self, path: str, **kwargs) -> dict:
         try:
-            with self._client() as c:
-                r = c.get(path, **kwargs)
-                r.raise_for_status()
-                return r.json()["data"]
+            r = self._client.get(path, **kwargs)
+            r.raise_for_status()
+            return r.json()["data"]
         except httpx.HTTPError as exc:
             raise BackendError(f"Backend GET {path} failed: {exc}") from exc
 
     def _post(self, path: str, **kwargs) -> dict:
         try:
-            with self._client() as c:
-                r = c.post(path, **kwargs)
-                r.raise_for_status()
-                return r.json()["data"]
+            r = self._client.post(path, **kwargs)
+            r.raise_for_status()
+            return r.json()["data"]
         except httpx.HTTPError as exc:
             raise BackendError(f"Backend POST {path} failed: {exc}") from exc

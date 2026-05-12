@@ -113,17 +113,18 @@ def test_upload_submit_renders_backend_error(client, fake_backend):
     assert b"simulated upload_files failure" in resp.data
 
 
-def test_upload_oversize_request_returns_413(client):
-    """Flask's MAX_CONTENT_LENGTH cap kicks in before our handler. The 413
-    handler renders the friendly results page instead of the default."""
-    huge = b"x" * (11 * 1024 * 1024)  # 11 MB > 10 MB cap
+def test_upload_rejects_oversize_file(client, fake_backend):
+    """Per-file cap is enforced in the controller before forwarding."""
+    huge = b"x" * (11 * 1024 * 1024)
     resp = client.post(
         "/transcripts/upload",
         data={"files": [(io.BytesIO(huge), "big.txt")]},
         content_type="multipart/form-data",
     )
-    assert resp.status_code == 413
-    assert b"exceeded 10 MB" in resp.data
+    assert resp.status_code == 200
+    assert b"at most 10 MB" in resp.data
+    assert b"big.txt" in resp.data
+    assert fake_backend.uploaded_files == []
 
 
 # ---------------------------------------------------------------------------

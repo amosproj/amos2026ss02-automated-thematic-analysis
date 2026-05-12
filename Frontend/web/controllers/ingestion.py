@@ -6,8 +6,7 @@ bp = Blueprint("ingestion", __name__)
 
 
 def _backend() -> BackendClient:
-    cfg = current_app.config
-    return BackendClient(cfg["BACKEND_API_URL"], timeout=cfg["BACKEND_TIMEOUT_S"])
+    return current_app.extensions["backend_client"]
 
 
 def _resolve_workspace_corpus(client: BackendClient) -> str:
@@ -33,6 +32,15 @@ def _render_upload_form(error: str | None = None) -> str:
     )
 
 
+def _file_size(fileobj) -> int:
+    stream = fileobj.stream
+    pos = stream.tell()
+    stream.seek(0, 2)
+    size = stream.tell()
+    stream.seek(pos)
+    return size
+
+
 @bp.get("/upload")
 def upload_form() -> str:
     return _render_upload_form()
@@ -43,6 +51,14 @@ def upload_submit() -> str:
     files = [f for f in request.files.getlist("files") if f and f.filename]
     if not files:
         return _render_upload_form(error="Please select at least one file to upload.")
+
+    max_bytes = current_app.config["MAX_UPLOAD_SIZE_MB"] * 1024 * 1024
+    oversize = [f.filename for f in files if _file_size(f) > max_bytes]
+    if oversize:
+        max_mb = current_app.config["MAX_UPLOAD_SIZE_MB"]
+        return _render_upload_form(
+            error=f"Each file must be at most {max_mb} MB. Too large: {', '.join(oversize)}."
+        )
 
     try:
         client = _backend()

@@ -33,9 +33,13 @@ class Config(BaseSettings):
     ACCEPTED_EXTENSIONS: frozenset[str] = frozenset({".txt", ".docx", ".pdf", ".jsonl"})
 
     @property
-    def MAX_CONTENT_LENGTH(self) -> int:
-        """Flask request body cap, in bytes."""
+    def MAX_UPLOAD_BYTES(self) -> int:
         return self.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+    # Werkzeug aborts body parsing once this is exceeded.
+    @property
+    def MAX_CONTENT_LENGTH(self) -> int:
+        return 10 * self.MAX_UPLOAD_BYTES
 
     @property
     def is_production(self) -> bool:
