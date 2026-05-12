@@ -4,11 +4,7 @@ from web.config import Config, get_config
 
 
 def create_app(config: Config | None = None) -> Flask:
-    app = Flask(
-        __name__,
-        template_folder="../templates",
-        static_folder="../static",
-    )
+    app = Flask(__name__)
     app.config.from_object(config or get_config())
 
     from web.controllers.ingestion import bp as ingestion_bp
