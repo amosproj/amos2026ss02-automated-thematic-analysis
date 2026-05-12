@@ -32,27 +32,58 @@ The recommended way to start the application is via Docker.
    cd amos2026ss02-automated-thematic-analysis
    ```
 
-2. **Set up configuration:**
-   Navigate to the `Backend` folder and prepare your environment variables.
+2. **Run the bootstrap script:**
 
+   **Linux / macOS / Git Bash (Windows):**
    ```bash
-   cd Backend
-   cp .env.example .env
-   # Update .env if necessary with specific credentials
+   chmod +x setup.sh
+   ./setup.sh
    ```
 
-3. **Start the application:**
-   Launch the FastAPI backend and the PostgreSQL database container.
-
-   ```bash
-   docker compose up --build
+   **Windows (PowerShell / Windows Terminal):**
+   ```powershell
+   .\setup.ps1
    ```
+
+   The script will:
+   - Verify Docker and Docker Compose v2 are installed and running
+   - Create `Backend/.env` from the template (if it does not exist yet)
+   - Build the Docker images and start the stack
+   - Wait until the API health check passes, then print the service URLs
+
+3. **Set your LLM API key** (required for analysis features):
+
+   Open `Backend/.env` and replace the placeholder value for `LLM_API_KEY`.
 
 4. **Access the API:**
 
    - **API Server:** [http://localhost:8000](http://localhost:8000)
    - **Interactive API Docs (Swagger):** [http://localhost:8000/docs](http://localhost:8000/docs)
    - The application also serves a Demo UI and Codebook Selection templates to visually interact with the thematic graph.
+
+#### Common commands
+
+| Task | Linux/macOS | Windows PowerShell |
+|------|-------------|-------------------|
+| Start stack | `./setup.sh` | `.\setup.ps1` |
+| Start (foreground logs) | `./setup.sh -f` | `.\setup.ps1 -Foreground` |
+| Run tests | `./setup.sh --test` | `.\setup.ps1 -Test` |
+| Stop stack | `./setup.sh --down` | `.\setup.ps1 -Down` |
+| Stop + delete data | `./setup.sh --down-volumes` | `.\setup.ps1 -DownVolumes` |
+
+Run `./setup.sh --help` or `Get-Help .\setup.ps1` for the full option reference.
+
+<details>
+<summary>Manual setup (fallback)</summary>
+
+```bash
+cd Backend
+cp .env.example .env
+# Edit .env with your credentials
+docker compose up --build
+```
+
+</details>
 
 ## Further Documentation
 
