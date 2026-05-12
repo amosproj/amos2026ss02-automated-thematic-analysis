@@ -4,21 +4,23 @@ Flask + Jinja2 server-rendered frontend. Talks to the FastAPI backend over inter
 
 ## Layout
 
+> [!WARNING] source directory is temporarily named as `web/`, should be renamed to `app/`after containerization.
+
 ```
 Frontend/
 ├── web/
 │   ├── __init__.py          # Flask app factory
-│   ├── config.py            
-│   └── controllers/
-│       ├── main.py          # /, /health
-│       └── ingestion.py     # /transcripts, /transcripts/upload  (stubs)
-├── templates/
-│   ├── base.html
-│   ├── index.html
-│   └── ingestion/
-│       ├── upload.html
-│       └── list.html
-├── static/css/main.css
+│   ├── config.py
+│   ├── controllers/
+│   │   ├── main.py          # /, /health
+│   │   └── ingestion.py     # /transcripts, /transcripts/upload  (stubs)
+│   ├── templates/
+│   │   ├── base.html
+│   │   ├── index.html
+│   │   └── ingestion/
+│   │       ├── upload.html
+│   │       └── list.html
+│   └── static/css/main.css
 ├── tests/
 │   ├── conftest.py
 │   └── test_smoke.py
