@@ -4,6 +4,8 @@ FastAPI backend — async SQLAlchemy 2.x, Pydantic v2, Loguru.
 
 ## Quick Start
 
+> **One-command setup:** From the repository root, run `./setup.sh` (Linux/macOS/Git Bash) or `.\setup.ps1` (Windows PowerShell). It handles everything below automatically. See the [root README](../README.md) for details.
+
 ### Prerequisites
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip

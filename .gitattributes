@@ -1,0 +1,5 @@
+# Enforce LF line endings for shell scripts on all platforms.
+# This prevents Windows Git from checking out .sh files with CRLF,
+# which would break the bash shebang line.
+*.sh    text eol=lf
+*.sh    diff
