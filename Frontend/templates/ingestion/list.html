@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Transcripts{% endblock %}
+{% block content %}
+  <h1>Uploaded Transcripts</h1>
+  {# TODO: render rows from {{ transcripts }} once the backend fetch is wired. #}
+  {% if transcripts %}
+    <ul>
+      {% for t in transcripts %}
+        <li>{{ t.filename }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No transcripts uploaded yet.</p>
+  {% endif %}
+{% endblock %}

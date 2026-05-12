@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Upload Interview Transcripts{% endblock %}
+{% block content %}
+  <h1>Upload Interview Transcripts</h1>
+  <p>
+    Accepted formats: {{ accepted_extensions | join(", ") }}.
+    Maximum size per file: {{ max_size_mb }} MB.
+  </p>
+
+  {# TODO: implement multi-file form, client-side validation, and per-file
+     success/error feedback once the POST handler is wired to the backend. #}
+  <form method="post"
+        action="{{ url_for('ingestion.upload_submit') }}"
+        enctype="multipart/form-data">
+    <input type="file"
+           name="files"
+           multiple
+           accept="{{ accepted_extensions | join(',') }}">
+    <button type="submit">Upload Interview Transcripts</button>
+  </form>
+{% endblock %}

@@ -1,0 +1,8 @@
+:root { font-family: system-ui, sans-serif; }
+body { margin: 0; color: #1a1a1a; }
+header { background: #f4f4f4; padding: 0.75rem 1.5rem; border-bottom: 1px solid #ddd; }
+nav a { margin-right: 1rem; text-decoration: none; color: #1a1a1a; }
+nav a:hover { text-decoration: underline; }
+main { padding: 1.5rem; max-width: 960px; }
+form { margin-top: 1rem; }
+button { padding: 0.5rem 1rem; cursor: pointer; }
