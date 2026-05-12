@@ -10,6 +10,5 @@ def index() -> str:
 
 @bp.get("/health")
 def health() -> dict:
-    """Liveness probe. Used by Docker HEALTHCHECK and ops tooling. Does not call
-    the backend — only checks that the frontend process itself is responsive."""
+    """Liveness probe for Docker HEALTHCHECK; does not check the backend."""
     return {"status": "ok"}

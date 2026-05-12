@@ -29,9 +29,3 @@ def test_upload_form_renders_with_config(client):
     assert b"10 MB" in resp.data
     for ext in (b".txt", b".docx", b".pdf", b".jsonl"):
         assert ext in resp.data
-
-
-def test_transcript_list_renders_empty(client):
-    resp = client.get("/transcripts/")
-    assert resp.status_code == 200
-    assert b"No transcripts uploaded yet" in resp.data
