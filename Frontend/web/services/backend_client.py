@@ -1,4 +1,4 @@
-"""HTTP client for the FastAPI backend. Network/HTTP errors → BackendError."""
+"""HTTP client for the FastAPI backend. Network/HTTP errors => BackendError."""
 
 from typing import Iterable
 
@@ -58,6 +58,17 @@ class BackendClient:
             f"/ingestion/corpora/{corpus_id}/documents",
             params={"page_size": page_size},
         )["items"]
+
+    # ---- Codebooks ----------------------------------------------------------
+
+    def list_codebooks(self) -> list[dict]:
+        return self._get("/codebooks/")
+
+    def get_theme_frequencies(self, codebook_id: str) -> list[dict]:
+        return self._get(f"/codebooks/{codebook_id}/themes")
+
+    def get_theme_tree(self, codebook_id: str) -> list[dict]:
+        return self._get(f"/codebooks/{codebook_id}/themes/tree")
 
     # ---- Helpers ------------------------------------------------------------
 
