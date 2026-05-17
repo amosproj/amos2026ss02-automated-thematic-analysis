@@ -4,7 +4,12 @@ registered route, and the upload form's hint rendering."""
 
 def test_app_factory_returns_flask_app(app):
     assert app is not None
-    expected_routes = {"/", "/health", "/transcripts/", "/transcripts/upload"}
+    expected_routes = {
+        "/", "/health",
+        "/transcripts/", "/transcripts/upload",
+        "/codebooks/", "/codebooks/<codebook_id>/themes",
+        "/analysis/",
+    }
     actual_routes = {r.rule for r in app.url_map.iter_rules()}
     assert expected_routes <= actual_routes
 
