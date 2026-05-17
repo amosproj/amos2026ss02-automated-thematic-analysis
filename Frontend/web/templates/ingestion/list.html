@@ -1,36 +1,39 @@
 {% extends "base.html" %}
 {% block title %}Transcripts{% endblock %}
 {% block content %}
-  <h1>Uploaded Transcripts</h1>
+  <h1 class="h3 mb-4">Uploaded Transcripts</h1>
 
   {% if error %}
-    <p class="error">{{ error }}</p>
+    <div class="alert alert-danger" role="alert">{{ error }}</div>
   {% endif %}
 
   {% if documents %}
-    <table>
-      <thead>
-        <tr>
-          <th>Filename</th>
-          <th>Title</th>
-          <th>Uploaded</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for d in documents %}
-          <tr>
-            <td>{{ d.filename or '—' }}</td>
-            <td>{{ d.title }}</td>
-            <td>{{ d.created_at }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="bg-white border rounded-2">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Filename</th>
+              <th>Title</th>
+              <th>Uploaded</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in documents %}
+              <tr>
+                <td>{{ d.filename or '—' }}</td>
+                <td>{{ d.title }}</td>
+                <td class="text-secondary">{{ d.created_at }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
   {% else %}
-    <p>No transcripts uploaded yet.</p>
+    <p class="text-secondary">
+      No transcripts uploaded yet.
+      <a href="{{ url_for('ingestion.upload_form') }}">Upload</a>
+    </p>
   {% endif %}
-
-  <p>
-    <a href="{{ url_for('ingestion.upload_form') }}">Upload Interview Transcripts</a>
-  </p>
 {% endblock %}

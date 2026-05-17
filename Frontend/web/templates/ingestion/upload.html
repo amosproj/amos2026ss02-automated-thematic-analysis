@@ -1,24 +1,36 @@
 {% extends "base.html" %}
-{% block title %}Upload Interview Transcripts{% endblock %}
+{% block title %}Upload Transcripts{% endblock %}
 {% block content %}
-  <h1>Upload Interview Transcripts</h1>
-  <p>
-    Accepted formats: {{ accepted_extensions | join(", ") }}.
-    Maximum size per file: {{ max_size_mb }} MB.
-  </p>
+  <div class="mb-4">
+    <h1 class="h3 mb-1">Upload Interview Transcripts</h1>
+    <p class="text-secondary mb-0">
+      Accepted:
+      {% for ext in accepted_extensions %}
+        <span class="badge text-bg-secondary me-1">{{ ext }}</span>
+      {% endfor %}.
+      Maximum {{ max_size_mb }} MB per file.
+    </p>
+  </div>
 
   {% if error %}
-    <p class="error">{{ error }}</p>
+    <div class="alert alert-danger" role="alert">{{ error }}</div>
   {% endif %}
 
-  <form method="post"
-        action="{{ url_for('ingestion.upload_submit') }}"
-        enctype="multipart/form-data">
-    <input type="file"
-           name="files"
-           multiple
-           accept="{{ accepted_extensions | join(',') }}"
-           required>
-    <button type="submit">Upload Interview Transcripts</button>
-  </form>
+  <div class="bg-white border rounded-2 p-4" style="max-width: 540px;">
+    <form method="post"
+          action="{{ url_for('ingestion.upload_submit') }}"
+          enctype="multipart/form-data">
+      <div class="mb-3">
+        <label for="files" class="form-label fw-semibold">Select files</label>
+        <input class="form-control"
+               type="file"
+               id="files"
+               name="files"
+               multiple
+               accept="{{ accepted_extensions | join(',') }}"
+               required>
+      </div>
+      <button type="submit" class="btn btn-primary">Upload Interview Transcripts</button>
+    </form>
+  </div>
 {% endblock %}
