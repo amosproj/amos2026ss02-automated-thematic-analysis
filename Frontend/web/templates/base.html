@@ -37,12 +37,12 @@
                href="{{ url_for('main.index') }}">Home</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'ingestion.list_transcripts' %}active{% endif %}"
-               href="{{ url_for('ingestion.list_transcripts') }}">Transcripts</a>
-          </li>
-          <li class="nav-item">
             <a class="nav-link {% if request.endpoint in ('ingestion.upload_form', 'ingestion.upload_submit') %}active{% endif %}"
                href="{{ url_for('ingestion.upload_form') }}">Upload</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'ingestion.list_transcripts' %}active{% endif %}"
+               href="{{ url_for('ingestion.list_transcripts') }}">Transcripts</a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint and request.endpoint.startswith('codebooks.') %}active{% endif %}"
