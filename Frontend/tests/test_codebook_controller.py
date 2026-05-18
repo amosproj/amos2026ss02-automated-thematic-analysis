@@ -16,6 +16,7 @@ class FakeCodebookBackend:
         self.parse_csv_results = []
         self.create_codebook_result = {}
         self.get_codebook_result = {}
+        self.list_codebooks_result = []
         self.raise_on = None
 
         self.last_parsed_file = None
@@ -37,6 +38,10 @@ class FakeCodebookBackend:
         self.last_fetched_id = codebook_id
         return self.get_codebook_result
 
+    def list_codebooks(self) -> list[dict]:
+        self._maybe_raise("list_codebooks")
+        return self.list_codebooks_result
+
     def _maybe_raise(self, method: str) -> None:
         if self.raise_on == method:
             raise BackendError(f"simulated {method} failure")
@@ -50,6 +55,39 @@ def fake_codebook_backend(monkeypatch) -> FakeCodebookBackend:
 
 
 # ---------------------------------------------------------------------------
+# GET /codebooks/   — list view
+# ---------------------------------------------------------------------------
+
+
+def test_list_codebooks_renders_empty_state(client, fake_codebook_backend):
+    fake_codebook_backend.list_codebooks_result = []
+    resp = client.get("/codebooks/")
+    assert resp.status_code == 200
+    assert b"No codebooks yet" in resp.data
+
+
+def test_list_codebooks_renders_saved_entries(client, fake_codebook_backend):
+    fake_codebook_backend.list_codebooks_result = [
+        {"id": "abc-1", "name": "Interview Framework", "version": 1,
+         "project_id": "default-project", "created_by": "researcher"},
+        {"id": "abc-2", "name": "Health Study", "version": 2,
+         "project_id": "default-project", "created_by": "researcher"},
+    ]
+    resp = client.get("/codebooks/")
+    assert resp.status_code == 200
+    assert b"Interview Framework" in resp.data
+    assert b"Health Study" in resp.data
+    assert b"No codebooks yet" not in resp.data
+
+
+def test_list_codebooks_surfaces_backend_error(client, fake_codebook_backend):
+    fake_codebook_backend.raise_on = "list_codebooks"
+    resp = client.get("/codebooks/")
+    assert resp.status_code == 200
+    assert b"simulated list_codebooks failure" in resp.data
+
+
+# ---------------------------------------------------------------------------
 # GET /codebooks/upload
 # ---------------------------------------------------------------------------
 
@@ -59,6 +97,19 @@ def test_upload_form_renders_correctly(client):
     assert resp.status_code == 200
     assert b"Upload" in resp.data
     assert b"CSV" in resp.data
+
+
+# ---------------------------------------------------------------------------
+# GET /codebooks/manual  — manual entry (now a proper GET, no loop)
+# ---------------------------------------------------------------------------
+
+
+def test_manual_form_renders_blank_row(client, fake_codebook_backend):
+    resp = client.get("/codebooks/manual")
+    assert resp.status_code == 200
+    assert b"Preview &amp; Confirm Themes" in resp.data
+    assert b'name="theme_names[]"' in resp.data
+    assert b'name="theme_descriptions[]"' in resp.data
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +139,16 @@ def test_upload_submit_csv_success(client, fake_codebook_backend):
     assert fake_codebook_backend.last_parsed_file == "my_codebook.csv"
 
 
+def test_upload_submit_manual_redirects_to_manual_form(client, fake_codebook_backend):
+    """POST with action=manual should redirect to GET /codebooks/manual (not render inline)."""
+    resp = client.post(
+        "/codebooks/upload",
+        data={"action": "manual"},
+    )
+    assert resp.status_code == 302
+    assert "/codebooks/manual" in resp.headers["Location"]
+
+
 def test_upload_submit_no_file_renders_warning(client):
     resp = client.post(
         "/codebooks/upload",
@@ -109,18 +170,6 @@ def test_upload_submit_invalid_extension(client):
     )
     assert resp.status_code == 200
     assert b"Only CSV files" in resp.data
-
-
-def test_upload_submit_manual_renders_empty_row(client, fake_codebook_backend):
-    resp = client.post(
-        "/codebooks/upload",
-        data={"action": "manual"},
-    )
-    assert resp.status_code == 200
-    assert b"Preview &amp; Confirm Themes" in resp.data
-    # Confirms that a blank name/description theme input is present
-    assert b'name="theme_names[]"' in resp.data
-    assert b'name="theme_descriptions[]"' in resp.data
 
 
 def test_upload_submit_surfaces_backend_parse_error(client, fake_codebook_backend):
@@ -157,7 +206,6 @@ def test_confirm_submit_success(client, fake_codebook_backend):
         },
     )
 
-    # Success redirects to success screen
     assert resp.status_code == 302
     assert "codebook_id=e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002" in resp.headers["Location"]
     payload = fake_codebook_backend.last_created_payload

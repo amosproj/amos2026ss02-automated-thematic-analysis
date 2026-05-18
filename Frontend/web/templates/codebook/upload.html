@@ -243,10 +243,9 @@
         </div>
       </div>
 
-      <form method="post" action="{{ url_for('codebook.upload_submit') }}">
-        <input type="hidden" name="action" value="manual">
-        <button type="submit" class="btn btn-outline" style="margin-top: auto;">Create Manually</button>
-      </form>
+      <div style="margin-top: auto;">
+        <a href="{{ url_for('codebook.manual_form') }}" class="btn btn-outline" style="display: block;">Create Manually</a>
+      </div>
     </div>
   </div>
 </div>

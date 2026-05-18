@@ -10,32 +10,41 @@ def _backend() -> BackendClient:
 
 
 # ---------------------------------------------------------------------------
+# List Codebooks
+# ---------------------------------------------------------------------------
+
+
+@bp.get("/")
+def list_codebooks() -> str:
+    """Show all saved codebooks with their theme counts."""
+    try:
+        client = _backend()
+        codebooks = client.list_codebooks()
+    except BackendError as exc:
+        return render_template("codebook/list.html", codebooks=[], error=str(exc))
+    return render_template("codebook/list.html", codebooks=codebooks, error=None)
+
+
+# ---------------------------------------------------------------------------
 # Upload / Manual Entry Selection Screen
 # ---------------------------------------------------------------------------
 
 
 @bp.get("/upload")
 def upload_form() -> str:
-    """Render the upload form (or start manual entry choice)."""
+    """Render the upload form (choose CSV or manual)."""
     return render_template("codebook/upload.html", error=None)
 
 
 @bp.post("/upload")
 def upload_submit() -> str:
-    """Handle either CSV file upload or manual entry selection."""
+    """Handle either CSV file upload or redirect to manual entry."""
     action = request.form.get("action", "upload")
 
     if action == "manual":
-        # Render the preview screen with 1 blank theme to start manual entry
-        empty_themes = [{"name": "", "description": ""}]
-        return render_template(
-            "codebook/preview.html",
-            codebook_name="New Codebook",
-            themes=empty_themes,
-            error=None,
-        )
+        return redirect(url_for("codebook.manual_form"))
 
-    # Otherwise, it's CSV file upload
+    # CSV file upload path
     file = request.files.get("file")
     if not file or not file.filename:
         return render_template(
@@ -52,7 +61,7 @@ def upload_submit() -> str:
     try:
         client = _backend()
         parsed_themes = client.parse_csv_preview(file)
-        # Deduce a default codebook name from file name
+        # Derive a readable default name from the file name
         default_name = file.filename.rsplit(".", 1)[0].replace("_", " ").title()
         return render_template(
             "codebook/preview.html",
@@ -62,6 +71,23 @@ def upload_submit() -> str:
         )
     except BackendError as exc:
         return render_template("codebook/upload.html", error=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Manual Entry
+# ---------------------------------------------------------------------------
+
+
+@bp.get("/manual")
+def manual_form() -> str:
+    """Render the preview editor pre-filled with one blank theme row."""
+    empty_themes = [{"name": "", "description": ""}]
+    return render_template(
+        "codebook/preview.html",
+        codebook_name="New Codebook",
+        themes=empty_themes,
+        error=None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -81,7 +107,7 @@ def confirm_submit() -> str:
     for name, desc in zip(theme_names, theme_descriptions):
         themes.append({"name": name.strip(), "description": desc.strip()})
 
-    # Frontend validation checks
+    # Frontend validation
     error = None
     if not codebook_name:
         error = "Codebook Name must not be blank."
@@ -101,7 +127,6 @@ def confirm_submit() -> str:
     try:
         client = _backend()
         project_id = current_app.config["DEFAULT_PROJECT_ID"]
-        # Save codebook in backend
         res = client.create_codebook(project_id, codebook_name, themes)
         codebook_id = res["id"]
         return redirect(url_for("codebook.success", codebook_id=codebook_id))
