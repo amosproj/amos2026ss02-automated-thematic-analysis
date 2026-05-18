@@ -3,7 +3,9 @@
 {% block content %}
   <h1 class="h3 mb-4">Codebooks</h1>
 
-  {% if codebooks %}
+  {% if error %}
+    <p class="text-secondary">Couldn't load codebooks right now.</p>
+  {% elif codebooks %}
     <div class="bg-white border rounded-2">
       <div class="table-responsive">
         <table class="table table-sm table-hover align-middle mb-0">

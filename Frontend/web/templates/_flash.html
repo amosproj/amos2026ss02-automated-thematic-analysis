@@ -1,7 +1,20 @@
+{% set _flash_icons = {
+  "success": "&#x2714;",
+  "info":    "&#x24D8;",
+  "warning": "&#x26A0;",
+  "danger":  "&#x2716;"
+} %}
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
     {% for category, message in messages %}
-      <div class="alert alert-{{ category }}" role="alert">{{ message }}</div>
+      {% set _cat = category if category in _flash_icons else "info" %}
+      <div class="alert alert-{{ _cat }} alert-dismissible fade show d-flex align-items-start gap-2 site-flash"
+           data-flash-category="{{ _cat }}"
+           role="alert">
+        <span class="flash-icon" aria-hidden="true">{{ _flash_icons[_cat] | safe }}</span>
+        <div class="flex-grow-1">{{ message }}</div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
     {% endfor %}
   {% endif %}
 {% endwith %}

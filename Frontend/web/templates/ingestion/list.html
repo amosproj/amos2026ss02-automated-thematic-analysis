@@ -3,7 +3,9 @@
 {% block content %}
   <h1 class="h3 mb-4">Uploaded Transcripts</h1>
 
-  {% if documents %}
+  {% if error %}
+    <p class="text-secondary">Couldn't load transcripts right now.</p>
+  {% elif documents %}
     <div class="bg-white border rounded-2">
       <div class="table-responsive">
         <table class="table table-sm table-hover align-middle mb-0">
@@ -26,10 +28,12 @@
         </table>
       </div>
     </div>
-  {% else %}
+  {% elif corpus_id %}
     <p class="text-secondary">
       No transcripts uploaded yet.
       <a href="{{ url_for('ingestion.upload_form', corpus_id=corpus_id) }}">Upload</a>
     </p>
+  {% else %}
+    <p class="text-secondary">No transcripts to show.</p>
   {% endif %}
 {% endblock %}

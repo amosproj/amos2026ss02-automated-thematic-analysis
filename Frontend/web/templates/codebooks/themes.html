@@ -29,7 +29,9 @@
     </div>
   </div>
 
-  {% if frequencies or tree %}
+  {% if error %}
+    <p class="text-secondary">Couldn't load themes for this codebook right now.</p>
+  {% elif frequencies or tree %}
 
     {# Metric cards #}
     <div class="row g-3 mb-4">
