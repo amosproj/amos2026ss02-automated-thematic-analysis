@@ -1,4 +1,10 @@
-from app.schemas.codebook import CodebookSchema
+from app.schemas.codebook import (
+    CodebookCreateRequest,
+    CodebookDetailSchema,
+    CodebookSchema,
+    ThemeInCodebookSchema,
+    ThemeInput,
+)
 from app.schemas.common import (
     BaseSchema,
     HealthResponse,
@@ -39,6 +45,10 @@ from app.schemas.theme_views import (
 
 __all__ = [
     "BaseSchema",
+    "CodebookCreateRequest",
+    "CodebookDetailSchema",
+    "ThemeInCodebookSchema",
+    "ThemeInput",
     "BulkDocumentIngestRequest",
     "CodebookSchema",
     "CorpusChunkSchema",
