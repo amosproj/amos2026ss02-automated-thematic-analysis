@@ -17,7 +17,10 @@
 #       assert b"My Codebook" in resp.data
 #
 # To simulate a backend error, set raise_on to the method name:
-#   fake_backend.raise_on = "list_codebooks"  # that call will raise BackendError
+#   fake_backend.raise_on = "list_codebooks"
+#       → raises generic BackendError
+#   fake_backend.raise_on = ("list_codebooks", BackendUnavailableError)
+#       → raises that specific subclass (with its default user_message)
 
 import pytest
 
@@ -36,7 +39,9 @@ class FakeBackend:
         self.codebooks: list[dict] = []
         self.theme_frequencies: list[dict] = []
         self.theme_tree: list[dict] = []
-        self.raise_on: str | None = None
+        # Either a method-name string (generic BackendError) or a
+        # (method-name, ExceptionClass) tuple (specific typed subclass).
+        self.raise_on: str | tuple[str, type] | None = None
 
     # ---- Corpora / documents ------------------------------------------------
 
@@ -70,9 +75,17 @@ class FakeBackend:
     # ---- Internal -----------------------------------------------------------
 
     def _maybe_raise(self, method: str) -> None:
+        from web.services.backend_client import BackendError
+
         if self.raise_on == method:
-            from web.services.backend_client import BackendError
             raise BackendError(f"simulated {method} failure")
+        if (
+            isinstance(self.raise_on, tuple)
+            and len(self.raise_on) == 2
+            and self.raise_on[0] == method
+        ):
+            exc_class = self.raise_on[1]
+            raise exc_class()
 
 
 @pytest.fixture
