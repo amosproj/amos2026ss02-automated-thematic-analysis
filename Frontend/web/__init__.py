@@ -33,12 +33,14 @@ def create_app(config: Config | None = None) -> Flask:
 
     from web.controllers.analysis import bp as analysis_bp
     from web.controllers.codebooks import bp as codebooks_bp
+    from web.controllers.codebook import bp as codebook_bp
     from web.controllers.ingestion import bp as ingestion_bp
     from web.controllers.main import bp as main_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(ingestion_bp, url_prefix="/transcripts")
     app.register_blueprint(codebooks_bp, url_prefix="/codebooks")
+    app.register_blueprint(codebook_bp)
     app.register_blueprint(analysis_bp, url_prefix="/analysis")
 
     _register_error_handlers(app)
