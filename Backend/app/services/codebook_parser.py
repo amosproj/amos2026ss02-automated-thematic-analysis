@@ -1,0 +1,83 @@
+"""CSV parser for researcher-uploaded codebooks.
+
+Accepts raw bytes (UTF-8, optionally with BOM), validates structure,
+and returns a list of ThemeInput objects ready for persistence.
+"""
+from __future__ import annotations
+
+import csv
+import io
+
+from app.exceptions import UnprocessableError
+from app.schemas.codebook import MAX_THEMES, MIN_THEMES, ThemeInput
+
+# Columns that every codebook CSV must contain (matched case-insensitively after stripping).
+REQUIRED_COLUMNS = {"name", "description"}
+
+
+def parse_codebook_csv(content: bytes) -> list[ThemeInput]:
+    """Parse a codebook CSV file from raw bytes.
+
+    Args:
+        content: Raw file bytes — UTF-8 with or without BOM.
+
+    Returns:
+        A list of ThemeInput objects (guaranteed 1 ≤ len ≤ 50).
+
+    Raises:
+        UnprocessableError: If the file cannot be decoded, columns are missing,
+            any theme name is blank, or the row count is out of range.
+    """
+    # ------------------------------------------------------------------ decode
+    try:
+        text = content.decode("utf-8-sig")  # utf-8-sig strips BOM if present
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise UnprocessableError(
+            f"Codebook file could not be decoded as UTF-8: {exc}"
+        ) from exc
+
+    # ------------------------------------------------------------------ parse
+    reader = csv.DictReader(io.StringIO(text))
+
+    # DictReader.fieldnames is None if the file is completely empty (0 bytes
+    # after stripping BOM).  Access it once to trigger the first read.
+    raw_fieldnames = reader.fieldnames
+    if not raw_fieldnames:
+        raise UnprocessableError(
+            "Codebook CSV appears to be empty or has no header row."
+        )
+
+    # Normalise column names: lowercase + strip whitespace
+    normalised: dict[str, str] = {col.strip().lower(): col for col in raw_fieldnames}
+
+    missing = REQUIRED_COLUMNS - normalised.keys()
+    if missing:
+        raise UnprocessableError(
+            f"Codebook CSV is missing required column(s): {', '.join(sorted(missing))}. "
+            f"Found: {', '.join(sorted(normalised.keys()))}."
+        )
+
+    name_col = normalised["name"]
+    description_col = normalised["description"]
+
+    # ----------------------------------------------------------------- collect
+    themes: list[ThemeInput] = []
+    for row_number, raw_row in enumerate(reader, start=2):  # row 1 is the header
+        name_value = (raw_row.get(name_col) or "").strip()
+        description_value = (raw_row.get(description_col) or "").strip()
+
+        if not name_value:
+            raise UnprocessableError(
+                f"Row {row_number}: theme 'name' must not be empty."
+            )
+
+        themes.append(ThemeInput(name=name_value, description=description_value or " "))
+
+    # ----------------------------------------------------------------- count
+    if not (MIN_THEMES <= len(themes) <= MAX_THEMES):
+        raise UnprocessableError(
+            f"Codebook must contain between {MIN_THEMES} and {MAX_THEMES} themes; "
+            f"found {len(themes)}."
+        )
+
+    return themes
