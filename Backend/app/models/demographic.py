@@ -37,10 +37,8 @@ class DemographicRow(Base):
         Uuid(as_uuid=True), ForeignKey("demographic_files.id", ondelete="CASCADE"), index=True
     )
     row_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    interviewee_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     data: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     file: Mapped["DemographicFiles"] = relationship(
         back_populates="rows",
-    )
-    corpus_document_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("corpus_documents.id", ondelete="CASCADE"), index=True
     )

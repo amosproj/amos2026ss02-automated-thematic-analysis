@@ -6,13 +6,9 @@ from pydantic import Field
 
 from app.schemas import BaseSchema
 
-class ImportDemographicPreview(BaseSchema): # TODO
+class ImportDemographicPreview(BaseSchema):
     rows_detected: int
-    #valid_rows: int | None
-    #invalid_rows: int | None
     columns_detected: int
-    #valid_columns: int | None
-    #invalid_columns: int | None
     sample_rows: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -30,3 +26,21 @@ class UploadDemographicConfirmResponse(BaseSchema):
     name: str
     rows_created: int = 0
     status: str
+
+
+class DemographicFileSummary(BaseSchema):
+    id: uuid.UUID
+    corpus_id: uuid.UUID
+    name: str
+    original_columns: list[str]
+    rows_total: int
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+
+
+class DemographicRowSchema(BaseSchema):
+    id: uuid.UUID
+    demographic_file_id: uuid.UUID
+    interviewee_id: str
+    row_number: int
+    data: dict[str, Any]

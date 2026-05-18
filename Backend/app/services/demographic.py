@@ -8,14 +8,15 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import UploadFile
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.exceptions import NotFoundError, UnprocessableError
 from app.models.demographic import DemographicFiles, DemographicRow
-from app.models.ingestion import CorpusDocument
 from app.schemas.demographic import (
+    DemographicFileSummary,
+    DemographicRowSchema,
     ImportDemographicPreview,
     ImportDemographicResponse,
     UploadDemographicConfirmResponse,
@@ -29,7 +30,7 @@ SUPPORTED_DEMOGRAPHIC_UPLOAD_EXTENSIONS = frozenset({".csv"})
 
 @dataclass
 class ParsedDemographicRow:
-    corpus_document_id: uuid.UUID
+    interviewee_id: str
     values: dict[str, Any]
 
 
@@ -111,14 +112,14 @@ class DemographicService:
 
         if not fieldnames:
             raise UnprocessableError(f"'{filename}': CSV has no header row")
-        if "corpus_document_id" not in fieldnames:
+        if "username" not in fieldnames:
             raise UnprocessableError(
-                f"'{filename}': CSV must include 'corpus_document_id' column"
+                f"'{filename}': CSV must include 'username' column"
             )
         if len(fieldnames) < 2:
             raise UnprocessableError(
                 f"'{filename}': CSV must contain at least 2 columns for demographic import.\n"
-                f"One corpus_document_id and one demographic data row."
+                f"One username and one demographic data column."
             )
         if not rows:
             raise UnprocessableError(f"'{filename}': CSV contains no data rows")
@@ -130,29 +131,22 @@ class DemographicService:
                     f"'{filename}': malformed CSV row at line {row_index + 1}: too many columns"
                 )
 
-            raw_document_id = (row.get("corpus_document_id") or "").strip()
-            if not raw_document_id:
+            raw_interviewee_id = (row.get("username") or "").strip()
+            if not raw_interviewee_id:
                 raise UnprocessableError(
-                    f"'{filename}': invalid corpus_document_id at line {row_index + 1}: empty value"
+                    f"'{filename}': invalid username at line {row_index + 1}: empty value"
                 )
-
-            try:
-                parsed_document_id = uuid.UUID(raw_document_id)
-            except ValueError:
-                raise UnprocessableError(
-                    f"'{filename}': invalid corpus_document_id at line {row_index + 1}: '{raw_document_id}'"
-                ) from None
 
             # Keep dynamic demographic columns and intentionally remove the foreign key
             # to avoid duplicated storage in JSON and dedicated relational column.
             demographic_values = {
                 key: value
                 for key, value in row.items()
-                if key not in {"corpus_document_id", "__extra__"}
+                if key not in {"username", "__extra__"}
             }
             parsed_rows.append(
                 ParsedDemographicRow(
-                    corpus_document_id=parsed_document_id,
+                    interviewee_id=raw_interviewee_id,
                     values=demographic_values,
                 )
             )
@@ -169,29 +163,126 @@ class DemographicService:
         except NotFoundError:
             raise UnprocessableError(f"Corpus with id '{corpus_id}' does not exist") from None
 
-    async def _validate_corpus_document_ids(
+    async def _validate_interviewee_ids_unique(
         self,
         corpus_id: uuid.UUID,
         parsed_rows: list[ParsedDemographicRow],
-        filename: str,
     ) -> None:
-        unique_ids = {row.corpus_document_id for row in parsed_rows}
-        existing_document_ids = set(
+        ids_in_upload = [row.interviewee_id for row in parsed_rows]
+        if len(ids_in_upload) != len(set(ids_in_upload)):
+            raise UnprocessableError("CSV contains duplicate username values")
+
+        existing = set(
             (
                 await self._session.execute(
-                    select(CorpusDocument.id).where(
-                        CorpusDocument.corpus_id == corpus_id,
-                        CorpusDocument.id.in_(unique_ids),
+                    select(DemographicRow.interviewee_id)
+                    .join(
+                        DemographicFiles,
+                        DemographicRow.demographic_file_id == DemographicFiles.id,
+                    )
+                    .where(
+                        DemographicFiles.corpus_id == corpus_id,
+                        DemographicRow.interviewee_id.in_(set(ids_in_upload)),
                     )
                 )
             ).scalars()
         )
-        missing_ids = [doc_id for doc_id in unique_ids if doc_id not in existing_document_ids]
-        if missing_ids:
-            missing = str(missing_ids[0])
+        if existing:
             raise UnprocessableError(
-                f"'{filename}': invalid corpus_document_id not present in corpus '{corpus_id}': '{missing}'"
+                f"username already exists: '{sorted(existing)[0]}'"
             )
+
+    async def list_files(
+        self,
+        corpus_id: uuid.UUID,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[DemographicFileSummary], int]:
+        await self._validate_corpus(corpus_id)
+
+        count_q = (
+            select(func.count())
+            .select_from(DemographicFiles)
+            .where(DemographicFiles.corpus_id == corpus_id)
+        )
+        total: int = (await self._session.execute(count_q)).scalar_one()
+
+        offset = (page - 1) * page_size
+        rows = await self._session.execute(
+            select(
+                DemographicFiles,
+                func.count(DemographicRow.id).label("rows_total"),
+            )
+            .outerjoin(DemographicRow, DemographicRow.demographic_file_id == DemographicFiles.id)
+            .where(DemographicFiles.corpus_id == corpus_id)
+            .group_by(DemographicFiles.id)
+            .order_by(DemographicFiles.created_at.desc())
+            .offset(offset)
+            .limit(page_size)
+        )
+
+        items: list[DemographicFileSummary] = []
+        for file_row, rows_total in rows.all():
+            items.append(
+                DemographicFileSummary(
+                    id=file_row.id,
+                    corpus_id=file_row.corpus_id,
+                    name=file_row.name,
+                    original_columns=file_row.original_columns,
+                    rows_total=int(rows_total or 0),
+                    created_at=file_row.created_at,
+                    updated_at=file_row.updated_at,
+                )
+            )
+        return items, total
+
+    async def list_rows(
+        self,
+        corpus_id: uuid.UUID,
+        demographic_file_id: uuid.UUID | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[DemographicRowSchema], int]:
+        await self._validate_corpus(corpus_id)
+
+        base = (
+            select(DemographicRow)
+            .join(DemographicFiles, DemographicRow.demographic_file_id == DemographicFiles.id)
+            .where(DemographicFiles.corpus_id == corpus_id)
+        )
+        count_q = (
+            select(func.count())
+            .select_from(DemographicRow)
+            .join(DemographicFiles, DemographicRow.demographic_file_id == DemographicFiles.id)
+            .where(DemographicFiles.corpus_id == corpus_id)
+        )
+
+        if demographic_file_id is not None:
+            file_exists_in_corpus = (
+                await self._session.execute(
+                    select(DemographicFiles.id).where(
+                        DemographicFiles.id == demographic_file_id,
+                        DemographicFiles.corpus_id == corpus_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if file_exists_in_corpus is None:
+                raise UnprocessableError(
+                    f"Demographic file '{demographic_file_id}' does not belong to corpus '{corpus_id}'"
+                )
+
+            base = base.where(DemographicRow.demographic_file_id == demographic_file_id)
+            count_q = count_q.where(DemographicRow.demographic_file_id == demographic_file_id)
+
+        total: int = (await self._session.execute(count_q)).scalar_one()
+        offset = (page - 1) * page_size
+        rows = await self._session.execute(
+            base.order_by(DemographicRow.demographic_file_id, DemographicRow.row_number)
+            .offset(offset)
+            .limit(page_size)
+        )
+        items = [DemographicRowSchema.model_validate(row) for row in rows.scalars().all()]
+        return items, total
 
     async def upload_demographic_data(
         self,
@@ -215,7 +306,7 @@ class DemographicService:
 
         parsed = self._parse_demographic_csv(filename, content)
         await self._validate_corpus(corpus_id)
-        await self._validate_corpus_document_ids(corpus_id, parsed.parsed_rows, filename)
+        await self._validate_interviewee_ids_unique(corpus_id, parsed.parsed_rows)
 
         import_id = uuid.uuid4()
         out_file_path = self._get_out_file_path(corpus_id, import_id)
@@ -273,7 +364,7 @@ class DemographicService:
 
         content = pending_file_path.read_bytes()
         parsed = self._parse_demographic_csv(filename=pending_file_path.name, content=content)
-        await self._validate_corpus_document_ids(corpus_id, parsed.parsed_rows, pending_file_path.name)
+        await self._validate_interviewee_ids_unique(corpus_id, parsed.parsed_rows)
         if pending_meta_path.exists():
             metadata = json.loads(pending_meta_path.read_text(encoding="utf-8"))
             desired_name = self._normalize_demographic_name(str(metadata.get("name") or ""))
@@ -294,7 +385,7 @@ class DemographicService:
                 DemographicRow(
                     demographic_file_id=import_id,
                     row_number=row_number,
-                    corpus_document_id=row.corpus_document_id,
+                    interviewee_id=row.interviewee_id,
                     data=row.values,
                 )
             )

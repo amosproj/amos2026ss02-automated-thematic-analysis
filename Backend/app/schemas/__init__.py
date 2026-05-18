@@ -17,6 +17,8 @@ from app.schemas.ingestion import (
     IngestResultSchema,
 )
 from app.schemas.demographic import (
+    DemographicFileSummary,
+    DemographicRowSchema,
     ImportDemographicPreview,
     ImportDemographicResponse,
     UploadDemographicConfirmResponse,
@@ -43,6 +45,8 @@ __all__ = [
     "CorpusCreate",
     "CorpusDocumentSchema",
     "CorpusSchema",
+    "DemographicFileSummary",
+    "DemographicRowSchema",
     "DocumentInput",
     "HealthResponse",
     "IngestResultSchema",
