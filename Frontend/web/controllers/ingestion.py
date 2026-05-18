@@ -1,4 +1,4 @@
-from flask import Blueprint, current_app, render_template, request
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
 from web.services.backend_client import BackendClient, BackendError
 
@@ -10,7 +10,11 @@ def _backend() -> BackendClient:
 
 
 def _resolve_workspace_corpus(client: BackendClient) -> str:
-    """MVP single-workspace: every request shares one corpus, created on demand."""
+    """MVP single-workspace: resolve or create the default corpus.
+
+    Only invoked from the no-arg landing routes. Every other view receives
+    the corpus_id from the URL, so the id is explicit and shareable rather
+    than hidden in an in-memory cache."""
     cfg = current_app.config
     return client.ensure_corpus(
         project_id=cfg["DEFAULT_PROJECT_ID"],
@@ -19,16 +23,33 @@ def _resolve_workspace_corpus(client: BackendClient) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Upload
+# Landings — resolve the default corpus then redirect to the corpus-scoped URL.
 # ---------------------------------------------------------------------------
 
 
-def _render_upload_form(error: str | None = None) -> str:
+@bp.get("/")
+def transcripts_landing():
+    corpus_id = _resolve_workspace_corpus(_backend())
+    return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+
+
+@bp.get("/upload")
+def upload_landing():
+    corpus_id = _resolve_workspace_corpus(_backend())
+    return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
+
+
+# ---------------------------------------------------------------------------
+# Upload (corpus-scoped)
+# ---------------------------------------------------------------------------
+
+
+def _render_upload_form(corpus_id: str) -> str:
     return render_template(
         "ingestion/upload.html",
+        corpus_id=corpus_id,
         max_size_mb=current_app.config["MAX_UPLOAD_SIZE_MB"],
         accepted_extensions=sorted(current_app.config["ACCEPTED_EXTENSIONS"]),
-        error=error,
     )
 
 
@@ -41,46 +62,47 @@ def _file_size(fileobj) -> int:
     return size
 
 
-@bp.get("/upload")
-def upload_form() -> str:
-    return _render_upload_form()
+@bp.get("/<corpus_id>/upload")
+def upload_form(corpus_id: str) -> str:
+    return _render_upload_form(corpus_id)
 
 
-@bp.post("/upload")
-def upload_submit() -> str:
+@bp.post("/<corpus_id>/upload")
+def upload_submit(corpus_id: str) -> str:
     files = [f for f in request.files.getlist("files") if f and f.filename]
     if not files:
-        return _render_upload_form(error="Please select at least one file to upload.")
+        flash("Please select at least one file to upload.", "danger")
+        return _render_upload_form(corpus_id)
 
     max_bytes = current_app.config["MAX_UPLOAD_SIZE_MB"] * 1024 * 1024
     oversize = [f.filename for f in files if _file_size(f) > max_bytes]
     if oversize:
         max_mb = current_app.config["MAX_UPLOAD_SIZE_MB"]
-        return _render_upload_form(
-            error=f"Each file must be at most {max_mb} MB. Too large: {', '.join(oversize)}."
+        flash(
+            f"Each file must be at most {max_mb} MB. Too large: {', '.join(oversize)}.",
+            "danger",
         )
+        return _render_upload_form(corpus_id)
 
     try:
-        client = _backend()
-        corpus_id = _resolve_workspace_corpus(client)
-        results = client.upload_files(corpus_id, files)
+        results = _backend().upload_files(corpus_id, files)
     except BackendError as exc:
-        return render_template("ingestion/results.html", results=[], error=str(exc))
+        flash(str(exc), "danger")
+        return render_template("ingestion/results.html", results=[], corpus_id=corpus_id)
 
-    return render_template("ingestion/results.html", results=results, error=None)
+    return render_template("ingestion/results.html", results=results, corpus_id=corpus_id)
 
 
 # ---------------------------------------------------------------------------
-# List
+# List (corpus-scoped)
 # ---------------------------------------------------------------------------
 
 
-@bp.get("/")
-def list_transcripts() -> str:
+@bp.get("/<corpus_id>/")
+def list_transcripts(corpus_id: str) -> str:
     try:
-        client = _backend()
-        corpus_id = _resolve_workspace_corpus(client)
-        documents = client.list_documents(corpus_id)
+        documents = _backend().list_documents(corpus_id)
     except BackendError as exc:
-        return render_template("ingestion/list.html", documents=[], error=str(exc))
-    return render_template("ingestion/list.html", documents=documents, error=None)
+        flash(str(exc), "danger")
+        return render_template("ingestion/list.html", documents=[], corpus_id=corpus_id)
+    return render_template("ingestion/list.html", documents=documents, corpus_id=corpus_id)

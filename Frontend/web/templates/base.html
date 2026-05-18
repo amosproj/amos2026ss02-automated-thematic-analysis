@@ -16,7 +16,7 @@
   <nav class="navbar navbar-expand-md navbar-dark bg-dark">
     <div class="container-xl">
       <a class="navbar-brand fw-semibold d-flex align-items-center gap-2" href="{{ url_for('main.index') }}">
-        <img src="{{ url_for('static', filename='img/team-logo.png') }}"
+        <img src="{{ url_for('static', filename='img/team-logo.svg') }}"
              alt="NIM + AMOS"
              class="navbar-brand-logo">
         <span>Thematic Analysis</span>
@@ -37,12 +37,12 @@
                href="{{ url_for('main.index') }}">Home</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint in ('ingestion.upload_form', 'ingestion.upload_submit') %}active{% endif %}"
-               href="{{ url_for('ingestion.upload_form') }}">Upload</a>
+            <a class="nav-link {% if request.endpoint in ('ingestion.upload_landing', 'ingestion.upload_form', 'ingestion.upload_submit') %}active{% endif %}"
+               href="{{ url_for('ingestion.upload_landing') }}">Upload</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'ingestion.list_transcripts' %}active{% endif %}"
-               href="{{ url_for('ingestion.list_transcripts') }}">Transcripts</a>
+            <a class="nav-link {% if request.endpoint in ('ingestion.transcripts_landing', 'ingestion.list_transcripts') %}active{% endif %}"
+               href="{{ url_for('ingestion.transcripts_landing') }}">Transcripts</a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint and request.endpoint.startswith('codebooks.') %}active{% endif %}"
@@ -59,6 +59,7 @@
 
   <main class="py-4 site-main">
     <div class="container-xl">
+      {% include "_flash.html" %}
       {% block content %}{% endblock %}
     </div>
   </main>
@@ -68,7 +69,7 @@
       <div class="row g-3">
 
         <div class="col-12 col-md-4 footer-project">
-          <img src="{{ url_for('static', filename='img/team-logo.png') }}"
+          <img src="{{ url_for('static', filename='img/team-logo.svg') }}"
                alt="NIM + AMOS"
                class="footer-logo mb-1">
           <p class="footer-project-name mb-0">Automated Thematic Analysis</p>

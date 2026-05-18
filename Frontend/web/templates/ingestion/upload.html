@@ -12,13 +12,9 @@
     </p>
   </div>
 
-  {% if error %}
-    <div class="alert alert-danger" role="alert">{{ error }}</div>
-  {% endif %}
-
   <div class="bg-white border rounded-2 p-4" style="max-width: 540px;">
     <form method="post"
-          action="{{ url_for('ingestion.upload_submit') }}"
+          action="{{ url_for('ingestion.upload_submit', corpus_id=corpus_id) }}"
           enctype="multipart/form-data">
       <div class="mb-3">
         <label for="files" class="form-label fw-semibold">Select files</label>

@@ -3,10 +3,6 @@
 {% block content %}
   <h1 class="h3 mb-4">Upload Results</h1>
 
-  {% if error %}
-    <div class="alert alert-danger" role="alert">{{ error }}</div>
-  {% endif %}
-
   {% if results %}
     {% set succeeded = results | selectattr("success") | list | length %}
     {% set failed = results | rejectattr("success") | list | length %}
@@ -52,7 +48,7 @@
   {% endif %}
 
   <div class="d-flex gap-2">
-    <a class="btn btn-primary" href="{{ url_for('ingestion.upload_form') }}">Upload more</a>
-    <a class="btn btn-outline-secondary" href="{{ url_for('ingestion.list_transcripts') }}">View all transcripts</a>
+    <a class="btn btn-primary" href="{{ url_for('ingestion.upload_form', corpus_id=corpus_id) }}">Upload more</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('ingestion.list_transcripts', corpus_id=corpus_id) }}">View all transcripts</a>
   </div>
 {% endblock %}

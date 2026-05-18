@@ -1,4 +1,4 @@
-from flask import Blueprint, current_app, render_template, request
+from flask import Blueprint, current_app, flash, render_template, request
 
 from web.services.backend_client import BackendClient, BackendError
 
@@ -14,8 +14,9 @@ def list_codebooks() -> str:
     try:
         codebooks = _backend().list_codebooks()
     except BackendError as exc:
-        return render_template("codebooks/list.html", codebooks=[], error=str(exc))
-    return render_template("codebooks/list.html", codebooks=codebooks, error=None)
+        flash(str(exc), "danger")
+        return render_template("codebooks/list.html", codebooks=[])
+    return render_template("codebooks/list.html", codebooks=codebooks)
 
 
 @bp.get("/<codebook_id>/themes")
@@ -27,6 +28,7 @@ def codebook_themes(codebook_id: str) -> str:
         frequencies = client.get_theme_frequencies(codebook_id)
         tree = client.get_theme_tree(codebook_id)
     except BackendError as exc:
+        flash(str(exc), "danger")
         return render_template(
             "codebooks/themes.html",
             codebook_id=codebook_id,
@@ -34,7 +36,6 @@ def codebook_themes(codebook_id: str) -> str:
             version=version,
             frequencies=[],
             tree=[],
-            error=str(exc),
         )
     return render_template(
         "codebooks/themes.html",
@@ -43,5 +44,4 @@ def codebook_themes(codebook_id: str) -> str:
         version=version,
         frequencies=frequencies,
         tree=tree,
-        error=None,
     )
