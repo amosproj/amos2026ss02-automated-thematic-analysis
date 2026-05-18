@@ -1,6 +1,10 @@
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
-from web.services.backend_client import BackendClient, BackendError
+from web.services.backend_client import (
+    BackendClient,
+    BackendError,
+    BackendValidationError,
+)
 
 bp = Blueprint("ingestion", __name__)
 
@@ -29,13 +33,25 @@ def _resolve_workspace_corpus(client: BackendClient) -> str:
 
 @bp.get("/")
 def transcripts_landing():
-    corpus_id = _resolve_workspace_corpus(_backend())
+    try:
+        corpus_id = _resolve_workspace_corpus(_backend())
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return render_template(
+            "ingestion/list.html", documents=[], corpus_id=None, error=True
+        )
     return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
 
 
 @bp.get("/upload")
 def upload_landing():
-    corpus_id = _resolve_workspace_corpus(_backend())
+    try:
+        corpus_id = _resolve_workspace_corpus(_backend())
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return render_template(
+            "ingestion/list.html", documents=[], corpus_id=None, error=True
+        )
     return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
 
 
@@ -86,9 +102,16 @@ def upload_submit(corpus_id: str) -> str:
 
     try:
         results = _backend().upload_files(corpus_id, files)
+    except BackendValidationError as exc:
+        # Backend rejected the payload — re-render the form so the user
+        # can fix it. The validation message names the offending field.
+        flash(exc.user_message, "danger")
+        return _render_upload_form(corpus_id)
     except BackendError as exc:
-        flash(str(exc), "danger")
-        return render_template("ingestion/results.html", results=[], corpus_id=corpus_id)
+        flash(exc.user_message, "danger")
+        return render_template(
+            "ingestion/results.html", results=[], corpus_id=corpus_id, error=True
+        )
 
     return render_template("ingestion/results.html", results=results, corpus_id=corpus_id)
 
@@ -103,6 +126,8 @@ def list_transcripts(corpus_id: str) -> str:
     try:
         documents = _backend().list_documents(corpus_id)
     except BackendError as exc:
-        flash(str(exc), "danger")
-        return render_template("ingestion/list.html", documents=[], corpus_id=corpus_id)
+        flash(exc.user_message, "danger")
+        return render_template(
+            "ingestion/list.html", documents=[], corpus_id=corpus_id, error=True
+        )
     return render_template("ingestion/list.html", documents=documents, corpus_id=corpus_id)

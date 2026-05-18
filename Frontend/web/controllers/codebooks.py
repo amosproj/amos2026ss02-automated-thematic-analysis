@@ -1,6 +1,10 @@
 from flask import Blueprint, current_app, flash, render_template, request
 
-from web.services.backend_client import BackendClient, BackendError
+from web.services.backend_client import (
+    BackendClient,
+    BackendError,
+    BackendNotFoundError,
+)
 
 bp = Blueprint("codebooks", __name__)
 
@@ -14,8 +18,8 @@ def list_codebooks() -> str:
     try:
         codebooks = _backend().list_codebooks()
     except BackendError as exc:
-        flash(str(exc), "danger")
-        return render_template("codebooks/list.html", codebooks=[])
+        flash(exc.user_message, "danger")
+        return render_template("codebooks/list.html", codebooks=[], error=True)
     return render_template("codebooks/list.html", codebooks=codebooks)
 
 
@@ -27,8 +31,11 @@ def codebook_themes(codebook_id: str) -> str:
         client = _backend()
         frequencies = client.get_theme_frequencies(codebook_id)
         tree = client.get_theme_tree(codebook_id)
-    except BackendError as exc:
-        flash(str(exc), "danger")
+    except BackendNotFoundError:
+        flash(
+            "That codebook couldn't be found. It may have been deleted.",
+            "danger",
+        )
         return render_template(
             "codebooks/themes.html",
             codebook_id=codebook_id,
@@ -36,6 +43,18 @@ def codebook_themes(codebook_id: str) -> str:
             version=version,
             frequencies=[],
             tree=[],
+            error=True,
+        )
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return render_template(
+            "codebooks/themes.html",
+            codebook_id=codebook_id,
+            name=name,
+            version=version,
+            frequencies=[],
+            tree=[],
+            error=True,
         )
     return render_template(
         "codebooks/themes.html",
