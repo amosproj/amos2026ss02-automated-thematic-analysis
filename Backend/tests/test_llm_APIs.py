@@ -1,6 +1,6 @@
 """
 cd Backend
-pytest tests/test_llm_academic_cloud.py -s
+pytest tests/test_llm_APIs.py -s
 
 Live-call tests are skipped automatically unless the required API key is set.
   SELECTED_API=ACADEMIC → needs LLM_API_KEY
