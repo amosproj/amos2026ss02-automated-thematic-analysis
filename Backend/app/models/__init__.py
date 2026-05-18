@@ -11,6 +11,7 @@ from app.models.themes import (
     ThemeHierarchyRelationship,
 )
 from app.models.analysis import DocumentAnalysis, ThemeOccurrence
+from app.models.demographic import DemographicFiles, DemographicRow
 
 __all__ = [
     "Base",
@@ -25,4 +26,6 @@ __all__ = [
     "CorpusDocument",
     "DocumentAnalysis",
     "ThemeOccurrence",
+    "DemographicFiles",
+    "DemographicRow",
 ]
