@@ -60,7 +60,7 @@ $AppPort     = if ($env:APP_PORT) { $env:APP_PORT } else { '8000' }
 $EnvFile     = Join-Path $ComposeDir '.env'
 $EnvExample  = Join-Path $ComposeDir '.env.example'
 
-# ── Logging helpers ───────────────────────────────────────────────────────────
+# == Logging helpers ===========================================================
 function Write-Info    { param([string]$Msg) Write-Host "[INFO]  $Msg" -ForegroundColor Cyan }
 function Write-Ok      { param([string]$Msg) Write-Host "[OK]    $Msg" -ForegroundColor Green }
 function Write-Warning { param([string]$Msg) Write-Host "[WARN]  $Msg" -ForegroundColor Yellow }
@@ -72,7 +72,7 @@ function Exit-WithError {
   exit 1
 }
 
-# ── Prerequisite checks ───────────────────────────────────────────────────────
+# == Prerequisite checks =======================================================
 function Assert-Docker {
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     Exit-WithError "Docker is not installed. Get it at: https://docs.docker.com/get-docker/"
@@ -95,10 +95,10 @@ function Assert-ComposeV2 {
   Write-Ok "Docker Compose v2 is available"
 }
 
-# ── .env bootstrap ────────────────────────────────────────────────────────────
+# == .env bootstrap ============================================================
 function Ensure-EnvFile {
   if (Test-Path $EnvFile) {
-    Write-Info ".env already exists — skipping copy"
+    Write-Info ".env already exists - skipping copy"
     return
   }
 
@@ -121,7 +121,7 @@ function Test-EnvPlaceholders {
   }
 }
 
-# ── HTTP readiness poll ───────────────────────────────────────────────────────
+# == HTTP readiness poll =======================================================
 function Wait-ForHttp {
   param(
     [string]$Url,
@@ -138,7 +138,7 @@ function Wait-ForHttp {
       if ($response.StatusCode -eq 200) { return $true }
     }
     catch {
-      # Connection refused or non-200 — keep waiting
+      # Connection refused or non-200 - keep waiting
     }
 
     Start-Sleep -Seconds $interval
@@ -148,8 +148,8 @@ function Wait-ForHttp {
   return $false
 }
 
-# ── Compose wrapper ───────────────────────────────────────────────────────────
-# NOTE: $Args is a PowerShell automatic variable — do NOT use it as a param name.
+# == Compose wrapper ===========================================================
+# NOTE: $Args is a PowerShell automatic variable - do NOT use it as a param name.
 function Invoke-Compose {
   param([string[]]$ComposeArgs)
   Push-Location $ComposeDir
@@ -164,7 +164,7 @@ function Invoke-Compose {
   }
 }
 
-# ── Mode: down ────────────────────────────────────────────────────────────────
+# == Mode: down ================================================================
 function Invoke-Down {
   param([bool]$RemoveVolumes)
 
@@ -174,7 +174,7 @@ function Invoke-Down {
     if (-not $Yes) {
       $answer = Read-Host "[WARN]  This will DELETE the Postgres data volume. Continue? [y/N]"
       if ($answer -notmatch '^[Yy]$') {
-        Write-Info "Aborted — no changes made."
+        Write-Info "Aborted - no changes made."
         exit 0
       }
     }
@@ -187,7 +187,7 @@ function Invoke-Down {
   }
 }
 
-# ── Mode: test ────────────────────────────────────────────────────────────────
+# == Mode: test ================================================================
 function Invoke-Test {
   Write-Info "Running test suite inside Docker..."
 
@@ -202,7 +202,7 @@ function Invoke-Test {
   Write-Ok "Tests complete. Open Backend\htmlcov\index.html for the coverage report."
 }
 
-# ── Mode: up ──────────────────────────────────────────────────────────────────
+# == Mode: up ==================================================================
 function Invoke-Up {
   Write-Info "Starting the stack..."
 
@@ -212,12 +212,12 @@ function Invoke-Up {
   elseif (-not $NoBuild){ $upFlags += '--build' }
 
   if (-not $NoBuild) {
-    Write-Info "Building images — first run can take 3-5 minutes..."
+    Write-Info "Building images - first run can take 3-5 minutes..."
   }
 
   Invoke-Compose (@('up') + $upFlags)
 
-  # In foreground mode, Compose streams until Ctrl+C — nothing more to do.
+  # In foreground mode, Compose streams until Ctrl+C - nothing more to do.
   if ($Foreground) { return }
 
   Write-Info "Waiting for API to become ready (up to 60s)..."
@@ -225,9 +225,9 @@ function Invoke-Up {
 
   if (Wait-ForHttp -Url $healthUrl -MaxSeconds 60) {
     Write-Host ""
-    Write-Host "╔══════════════════════════════════════════════╗" -ForegroundColor Green
-    Write-Host "║        Stack is up and healthy!              ║" -ForegroundColor Green
-    Write-Host "╚══════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "+----------------------------------------------+" -ForegroundColor Green
+    Write-Host "|        Stack is up and healthy!              |" -ForegroundColor Green
+    Write-Host "+----------------------------------------------+" -ForegroundColor Green
     Write-Host ""
     Write-Host "  API server   http://localhost:${AppPort}"      -ForegroundColor White
     Write-Host "  API docs     http://localhost:${AppPort}/docs"  -ForegroundColor White
@@ -255,8 +255,8 @@ function Invoke-Up {
   }
 }
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-Write-Host "Automated Thematic Analysis — bootstrap" -ForegroundColor White
+# == Main ======================================================================
+Write-Host "Automated Thematic Analysis - bootstrap" -ForegroundColor White
 Write-Host ""
 
 Assert-Docker
@@ -279,3 +279,4 @@ elseif ($Test) {
 else {
   Invoke-Up
 }
+
