@@ -295,3 +295,94 @@
     color: #374151;
     margin-top: 0.3rem;
 }
+
+/* ── Header brand logo ──────────────────────────────────────────────────────── */
+.navbar-brand-logo {
+    height: 28px;
+    width: auto;
+    display: block;
+}
+
+/* ── Sticky-bottom layout ───────────────────────────────────────────────────── */
+.site-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.site-main {
+    flex: 1 0 auto;
+}
+
+/* ── Site footer ────────────────────────────────────────────────────────────── */
+.site-footer {
+    flex-shrink: 0;
+    background: #f8f9fb;
+    border-top: 3px solid #4f46e5;
+    color: #374151;
+}
+
+.footer-logo {
+    height: 36px;
+    width: auto;
+}
+
+.footer-project-name {
+    font-weight: 600;
+    color: #1e1b4b;
+    font-size: 0.9rem;
+    line-height: 1.2;
+}
+
+.footer-project-sub {
+    font-size: 0.75rem;
+    color: #6b7280;
+    line-height: 1.2;
+}
+
+.footer-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #4f46e5;
+    line-height: 1.2;
+}
+
+.footer-partner-name {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 0.85rem;
+    line-height: 1.25;
+}
+
+.footer-partner-tag {
+    font-size: 0.76rem;
+    color: #6b7280;
+    font-style: italic;
+    line-height: 1.2;
+}
+
+.footer-link {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #4f46e5;
+    text-decoration: none;
+}
+
+.footer-link:hover {
+    color: #3730a3;
+    text-decoration: underline;
+}
+
+.footer-bottom {
+    border-top: 1px solid #e5e7eb;
+    background: #f3f4f6;
+    color: #6b7280;
+    font-size: 0.78rem;
+}
+
+@media (max-width: 767.98px) {
+    .footer-logo { height: 32px; }
+    .footer-partner-name { font-size: 0.82rem; }
+}
