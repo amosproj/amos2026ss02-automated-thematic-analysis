@@ -14,9 +14,7 @@ import io
 CORPUS = "test-corpus-id"
 
 
-# ---------------------------------------------------------------------------
 # POST /transcripts/<corpus_id>/upload
-# ---------------------------------------------------------------------------
 
 
 def test_upload_submit_renders_per_file_results(client, fake_backend):
@@ -118,6 +116,38 @@ def test_upload_submit_renders_backend_error(client, fake_backend):
     )
     assert resp.status_code == 200
     assert b"simulated upload_files failure" in resp.data
+    assert b"Traceback" not in resp.data
+
+
+def test_upload_submit_shows_unavailable_message_when_backend_down(client, fake_backend):
+    from web.services.backend_client import BackendUnavailableError
+
+    fake_backend.raise_on = ("upload_files", BackendUnavailableError)
+    resp = client.post(
+        f"/transcripts/{CORPUS}/upload",
+        data={"files": [(io.BytesIO(b"x"), "a.txt")]},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 200
+    # Substring chosen to avoid the apostrophe in "can't" (Jinja2 HTML-escapes it).
+    assert b"reach the analysis service" in resp.data
+
+
+def test_upload_submit_re_renders_form_on_validation_error(client, fake_backend):
+    """A BackendValidationError should send the user back to the form (not the
+    results page) so they can fix the input."""
+    from web.services.backend_client import BackendValidationError
+
+    fake_backend.raise_on = ("upload_files", BackendValidationError)
+    resp = client.post(
+        f"/transcripts/{CORPUS}/upload",
+        data={"files": [(io.BytesIO(b"x"), "a.txt")]},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 200
+    # Upload form markers — confirms we re-rendered the form, not the results page.
+    assert b"Select files" in resp.data
+    assert b"Upload Results" not in resp.data
 
 
 def test_upload_rejects_oversize_file(client, fake_backend):
@@ -134,9 +164,7 @@ def test_upload_rejects_oversize_file(client, fake_backend):
     assert fake_backend.uploaded_files == []
 
 
-# ---------------------------------------------------------------------------
 # GET /transcripts/  (landing -> 302 -> /transcripts/<corpus_id>/)
-# ---------------------------------------------------------------------------
 
 
 def test_list_renders_documents_from_backend(client, fake_backend):
@@ -167,3 +195,15 @@ def test_list_renders_backend_error(client, fake_backend):
     resp = client.get("/transcripts/", follow_redirects=True)
     assert resp.status_code == 200
     assert b"simulated list_documents failure" in resp.data
+    assert b"Traceback" not in resp.data
+
+
+def test_list_shows_unavailable_message_when_backend_down(client, fake_backend):
+    from web.services.backend_client import BackendUnavailableError
+
+    fake_backend.raise_on = ("list_documents", BackendUnavailableError)
+    resp = client.get("/transcripts/", follow_redirects=True)
+    assert resp.status_code == 200
+    # Substring chosen to avoid the apostrophe in "can't" (Jinja2 HTML-escapes it).
+    assert b"reach the analysis service" in resp.data
+    assert b"No transcripts uploaded yet" not in resp.data

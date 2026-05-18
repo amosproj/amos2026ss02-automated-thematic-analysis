@@ -29,7 +29,7 @@ def _client_with_handler(handler) -> BackendClient:
     return client
 
 
-# Network / connection failures → BackendUnavailableError
+# Network / connection failures > BackendUnavailableError
 
 
 def test_connect_error_maps_to_unavailable():

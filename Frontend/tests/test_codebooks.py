@@ -54,6 +54,22 @@ def test_codebook_list_renders_backend_error(client, fake_backend):
     resp = client.get("/codebooks/")
     assert resp.status_code == 200
     assert b"simulated list_codebooks failure" in resp.data
+    # Never leak internals.
+    assert b"Traceback" not in resp.data
+    assert b"BackendError" not in resp.data
+
+
+def test_codebook_list_shows_unavailable_message_when_backend_down(client, fake_backend):
+    from web.services.backend_client import BackendUnavailableError
+
+    fake_backend.raise_on = ("list_codebooks", BackendUnavailableError)
+    resp = client.get("/codebooks/")
+    assert resp.status_code == 200
+    # Substring chosen to avoid the apostrophe in "can't", which Jinja2
+    # HTML-escapes to "can&#39;t" when rendering the flash message.
+    assert b"reach the analysis service" in resp.data
+    # Empty-state line must NOT appear alongside the error.
+    assert b"No codebooks found" not in resp.data
 
 
 # GET /codebooks/<id>/themes
@@ -95,3 +111,16 @@ def test_codebook_themes_renders_backend_error(client, fake_backend):
     resp = client.get("/codebooks/cb-1/themes")
     assert resp.status_code == 200
     assert b"simulated get_theme_frequencies failure" in resp.data
+    assert b"Traceback" not in resp.data
+
+
+def test_codebook_themes_shows_not_found_message_for_missing_codebook(client, fake_backend):
+    from web.services.backend_client import BackendNotFoundError
+
+    fake_backend.raise_on = ("get_theme_frequencies", BackendNotFoundError)
+    resp = client.get("/codebooks/missing-id/themes")
+    assert resp.status_code == 200
+    # Substring avoids apostrophe in "couldn't" — Jinja2 HTML-escapes it.
+    assert b"may have been deleted" in resp.data
+    # Empty-state line must NOT appear alongside the error.
+    assert b"No themes found for this codebook" not in resp.data

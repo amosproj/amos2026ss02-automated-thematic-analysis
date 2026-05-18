@@ -18,9 +18,9 @@
 #
 # To simulate a backend error, set raise_on to the method name:
 #   fake_backend.raise_on = "list_codebooks"
-#       → raises generic BackendError
+#       > raises generic BackendError
 #   fake_backend.raise_on = ("list_codebooks", BackendUnavailableError)
-#       → raises that specific subclass (with its default user_message)
+#       > raises that specific subclass (with its default user_message)
 
 import pytest
 
