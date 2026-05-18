@@ -1,0 +1,232 @@
+"""Unit/integration tests for the codebook frontend Blueprint/controller.
+
+Mocks the BackendClient to isolate Flask template rendering and controller behavior.
+"""
+from __future__ import annotations
+
+import io
+import pytest
+from web.services.backend_client import BackendError
+
+
+class FakeCodebookBackend:
+    """Standalone Mock BackendClient for codebook controller testing."""
+
+    def __init__(self) -> None:
+        self.parse_csv_results = []
+        self.create_codebook_result = {}
+        self.get_codebook_result = {}
+        self.raise_on = None
+
+        self.last_parsed_file = None
+        self.last_created_payload = None
+        self.last_fetched_id = None
+
+    def parse_csv_preview(self, file) -> list[dict]:
+        self._maybe_raise("parse_csv_preview")
+        self.last_parsed_file = file.filename
+        return self.parse_csv_results
+
+    def create_codebook(self, project_id: str, name: str, themes: list[dict]) -> dict:
+        self._maybe_raise("create_codebook")
+        self.last_created_payload = {"project_id": project_id, "name": name, "themes": themes}
+        return self.create_codebook_result
+
+    def get_codebook(self, codebook_id: str) -> dict:
+        self._maybe_raise("get_codebook")
+        self.last_fetched_id = codebook_id
+        return self.get_codebook_result
+
+    def _maybe_raise(self, method: str) -> None:
+        if self.raise_on == method:
+            raise BackendError(f"simulated {method} failure")
+
+
+@pytest.fixture
+def fake_codebook_backend(monkeypatch) -> FakeCodebookBackend:
+    fake = FakeCodebookBackend()
+    monkeypatch.setattr("web.controllers.codebook._backend", lambda: fake)
+    return fake
+
+
+# ---------------------------------------------------------------------------
+# GET /codebooks/upload
+# ---------------------------------------------------------------------------
+
+
+def test_upload_form_renders_correctly(client):
+    resp = client.get("/codebooks/upload")
+    assert resp.status_code == 200
+    assert b"Upload" in resp.data
+    assert b"CSV" in resp.data
+
+
+# ---------------------------------------------------------------------------
+# POST /codebooks/upload
+# ---------------------------------------------------------------------------
+
+
+def test_upload_submit_csv_success(client, fake_codebook_backend):
+    fake_codebook_backend.parse_csv_results = [
+        {"name": "Theme A", "description": "Desc A"},
+        {"name": "Theme B", "description": "Desc B"},
+    ]
+
+    resp = client.post(
+        "/codebooks/upload",
+        data={
+            "file": (io.BytesIO(b"name,description\nTheme A,Desc A\nTheme B,Desc B"), "my_codebook.csv"),
+            "action": "upload",
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 200
+    assert b"Preview &amp; Confirm Themes" in resp.data
+    assert b"Theme A" in resp.data
+    assert b"Theme B" in resp.data
+    assert fake_codebook_backend.last_parsed_file == "my_codebook.csv"
+
+
+def test_upload_submit_no_file_renders_warning(client):
+    resp = client.post(
+        "/codebooks/upload",
+        data={"action": "upload"},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 200
+    assert b"Please select a CSV file" in resp.data
+
+
+def test_upload_submit_invalid_extension(client):
+    resp = client.post(
+        "/codebooks/upload",
+        data={
+            "file": (io.BytesIO(b"stuff"), "codebook.txt"),
+            "action": "upload",
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 200
+    assert b"Only CSV files" in resp.data
+
+
+def test_upload_submit_manual_renders_empty_row(client, fake_codebook_backend):
+    resp = client.post(
+        "/codebooks/upload",
+        data={"action": "manual"},
+    )
+    assert resp.status_code == 200
+    assert b"Preview &amp; Confirm Themes" in resp.data
+    # Confirms that a blank name/description theme input is present
+    assert b'name="theme_names[]"' in resp.data
+    assert b'name="theme_descriptions[]"' in resp.data
+
+
+def test_upload_submit_surfaces_backend_parse_error(client, fake_codebook_backend):
+    fake_codebook_backend.raise_on = "parse_csv_preview"
+    resp = client.post(
+        "/codebooks/upload",
+        data={
+            "file": (io.BytesIO(b"bad_csv"), "codebook.csv"),
+            "action": "upload",
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 200
+    assert b"simulated parse_csv_preview failure" in resp.data
+
+
+# ---------------------------------------------------------------------------
+# POST /codebooks/confirm
+# ---------------------------------------------------------------------------
+
+
+def test_confirm_submit_success(client, fake_codebook_backend):
+    fake_codebook_backend.create_codebook_result = {
+        "id": "e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002",
+        "name": "Persisted Codebook",
+    }
+
+    resp = client.post(
+        "/codebooks/confirm",
+        data={
+            "codebook_name": "Verified Codebook",
+            "theme_names[]": ["Theme 1", "Theme 2"],
+            "theme_descriptions[]": ["Desc 1", "Desc 2"],
+        },
+    )
+
+    # Success redirects to success screen
+    assert resp.status_code == 302
+    assert "codebook_id=e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002" in resp.headers["Location"]
+    payload = fake_codebook_backend.last_created_payload
+    assert payload["name"] == "Verified Codebook"
+    assert len(payload["themes"]) == 2
+    assert payload["themes"][0]["name"] == "Theme 1"
+
+
+def test_confirm_submit_validation_missing_name(client):
+    resp = client.post(
+        "/codebooks/confirm",
+        data={
+            "codebook_name": "",
+            "theme_names[]": ["T1"],
+            "theme_descriptions[]": ["D1"],
+        },
+    )
+    assert resp.status_code == 200
+    assert b"Codebook Name must not be blank" in resp.data
+
+
+def test_confirm_submit_validation_blank_theme_names(client):
+    resp = client.post(
+        "/codebooks/confirm",
+        data={
+            "codebook_name": "Tst",
+            "theme_names[]": ["", "Valid"],
+            "theme_descriptions[]": ["D1", "D2"],
+        },
+    )
+    assert resp.status_code == 200
+    assert b"All themes must have a name" in resp.data
+
+
+def test_confirm_submit_surfaces_backend_error(client, fake_codebook_backend):
+    fake_codebook_backend.raise_on = "create_codebook"
+    resp = client.post(
+        "/codebooks/confirm",
+        data={
+            "codebook_name": "Tst",
+            "theme_names[]": ["Theme A"],
+            "theme_descriptions[]": ["Desc A"],
+        },
+    )
+    assert resp.status_code == 200
+    assert b"simulated create_codebook failure" in resp.data
+
+
+# ---------------------------------------------------------------------------
+# GET /codebooks/success
+# ---------------------------------------------------------------------------
+
+
+def test_success_renders_saved_details(client, fake_codebook_backend):
+    fake_codebook_backend.get_codebook_result = {
+        "id": "e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002",
+        "name": "Success Codebook",
+        "project_id": "proj-123",
+        "version": 2,
+        "created_by": "researcher",
+        "themes": [
+            {"id": "t1", "name": "Theme A", "description": "D A"},
+        ],
+    }
+
+    resp = client.get("/codebooks/success?codebook_id=e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002")
+
+    assert resp.status_code == 200
+    assert b"Codebook Saved Successfully" in resp.data
+    assert b"Success Codebook" in resp.data
+    assert b"Theme A" in resp.data
+    assert fake_codebook_backend.last_fetched_id == "e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002"

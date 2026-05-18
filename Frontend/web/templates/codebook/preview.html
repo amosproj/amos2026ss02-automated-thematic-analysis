@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}Preview &amp; Edit Codebook{% endblock %}
+
+{% block head_extra %}
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary-color: #4f46e5;
+    --primary-hover: #4338ca;
+    --danger-color: #ef4444;
+    --danger-hover: #dc2626;
+    --border-radius: 12px;
+    --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  }
+
+  .preview-container {
+    font-family: 'Outfit', 'Inter', sans-serif;
+    max-width: 900px;
+    margin: 2rem auto;
+    padding: 0 1.5rem;
+  }
+
+  .header-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--border-radius);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: var(--card-shadow);
+  }
+
+  .header-card h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 1.5rem 0;
+  }
+
+  .form-control {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1rem;
+    color: #1e293b;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  }
+
+  .themes-list {
+    margin-bottom: 2rem;
+  }
+
+  .theme-row {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1.5rem;
+    align-items: start;
+    transition: all 0.2s ease;
+  }
+
+  .theme-row:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+  }
+
+  .theme-inputs {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 1rem;
+  }
+
+  @media (max-width: 640px) {
+    .theme-inputs {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .theme-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.65rem 1.25rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    font-size: 0.95rem;
+  }
+
+  .btn-primary {
+    background: var(--primary-color);
+    color: #ffffff;
+  }
+
+  .btn-primary:hover {
+    background: var(--primary-hover);
+  }
+
+  .btn-danger {
+    background: var(--danger-color);
+    color: #ffffff;
+  }
+
+  .btn-danger:hover {
+    background: var(--danger-hover);
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+  }
+
+  .btn-outline:hover {
+    background: #f5f3ff;
+  }
+
+  .remove-btn {
+    padding: 0.5rem;
+    background: #fef2f2;
+    color: var(--danger-color);
+    border-radius: 6px;
+    height: 38px;
+    width: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: bold;
+    border: 1px solid #fee2e2;
+    transition: all 0.2s ease;
+  }
+
+  .remove-btn:hover {
+    background: var(--danger-color);
+    color: #ffffff;
+    border-color: var(--danger-color);
+  }
+
+  .action-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    box-shadow: var(--card-shadow);
+  }
+
+  .custom-alert {
+    background: #fef2f2;
+    border-left: 4px solid #ef4444;
+    color: #b91c1c;
+    padding: 1rem 1.25rem;
+    border-radius: 6px;
+    margin-bottom: 2rem;
+    font-size: 0.95rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="preview-container">
+  <div class="header-card">
+    <h1>Preview &amp; Confirm Themes</h1>
+    <p style="color: #64748b; margin-top: -1rem; margin-bottom: 1.5rem;">Verify, modify, or add themes to your codebook before locking it in.</p>
+
+    {% if error %}
+      <div class="custom-alert">
+        <strong>Validation Error:</strong> {{ error }}
+      </div>
+    {% endif %}
+
+    <form id="codebook-form" method="post" action="{{ url_for('codebook.confirm_submit') }}">
+      <div class="form-group">
+        <label for="codebook_name" class="theme-label">Codebook Name</label>
+        <input type="text"
+               id="codebook_name"
+               name="codebook_name"
+               value="{{ codebook_name or 'My Codebook' }}"
+               class="form-control"
+               placeholder="Enter a name for this codebook"
+               required>
+      </div>
+  </div>
+
+  <div class="themes-list" id="themes-list-container">
+    {% for theme in themes %}
+      <div class="theme-row">
+        <div class="theme-inputs">
+          <div>
+            <label class="theme-label">Theme Name</label>
+            <input type="text"
+                   name="theme_names[]"
+                   value="{{ theme.name }}"
+                   class="form-control"
+                   placeholder="e.g. Safety"
+                   required>
+          </div>
+          <div>
+            <label class="theme-label">Description</label>
+            <textarea name="theme_descriptions[]"
+                      class="form-control"
+                      rows="1"
+                      placeholder="Theme definition/instructions..."
+                      style="resize: vertical; min-height: 42px;"
+                      required>{{ theme.description or '' }}</textarea>
+          </div>
+        </div>
+        <div class="remove-btn" onclick="removeRow(this)" title="Remove Theme">✕</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="action-bar">
+    <button type="button" class="btn btn-outline" onclick="addRow()">+ Add Theme</button>
+    <button type="submit" class="btn btn-primary">Confirm &amp; Save Codebook</button>
+  </div>
+  </form>
+</div>
+
+<script>
+  function addRow() {
+    const container = document.getElementById('themes-list-container');
+    const newRow = document.createElement('div');
+    newRow.className = 'theme-row';
+    newRow.innerHTML = `
+      <div class="theme-inputs">
+        <div>
+          <label class="theme-label">Theme Name</label>
+          <input type="text" name="theme_names[]" class="form-control" placeholder="e.g. Efficiency" required>
+        </div>
+        <div>
+          <label class="theme-label">Description</label>
+          <textarea name="theme_descriptions[]" class="form-control" rows="1" placeholder="Theme definition/instructions..." style="resize: vertical; min-height: 42px;" required></textarea>
+        </div>
+      </div>
+      <div class="remove-btn" onclick="removeRow(this)" title="Remove Theme">✕</div>
+    `;
+    container.appendChild(newRow);
+  }
+
+  function removeRow(button) {
+    const rows = document.querySelectorAll('.theme-row');
+    if (rows.length <= 1) {
+      alert("A codebook must contain at least 1 theme.");
+      return;
+    }
+    const row = button.closest('.theme-row');
+    row.remove();
+  }
+</script>
+{% endblock %}

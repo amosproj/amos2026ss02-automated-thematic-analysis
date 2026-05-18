@@ -228,6 +228,34 @@ class BackendClient:
         """Get transcript ↔ demographic linking status."""
         return self._get(f"/demographic/{corpus_id}/link-summary")
 
+    # ---- Codebook Upload & Parsing ------------------------------------------
+
+    def parse_csv_preview(self, file: FileStorage) -> list[dict]:
+        """Send a CSV file to the backend parser to get a theme preview list."""
+        multipart = {
+            "file": (file.filename, file.stream, file.mimetype or "text/csv")
+        }
+        started_at = time.monotonic()
+        try:
+            r = self._client.post("/codebooks/parse-csv", files=multipart)
+            r.raise_for_status()
+            return self._unwrap(r)
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, "/codebooks/parse-csv", "POST", started_at)
+        except (json.JSONDecodeError, KeyError) as exc:
+            self._handle_exc(exc, "/codebooks/parse-csv", "POST", started_at)
+
+    def create_codebook(self, project_id: str, name: str, themes: list[dict]) -> dict:
+        """Persist a new codebook and its themes in the backend database."""
+        return self._post(
+            "/codebooks/",
+            json={"project_id": project_id, "name": name, "themes": themes},
+        )
+
+    def get_codebook(self, codebook_id: str) -> dict:
+        """Fetch details of a codebook by its unique UUID."""
+        return self._get(f"/codebooks/{codebook_id}")
+
     # ---- Helpers ------------------------------------------------------------
 
     def _unwrap(self, response: httpx.Response, *, sub_key: str | None = None):
