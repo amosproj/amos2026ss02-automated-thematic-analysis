@@ -298,9 +298,17 @@
 
 /* ── Header brand logo ──────────────────────────────────────────────────────── */
 .navbar-brand-logo {
-    height: 28px;
+    height: 40px;
     width: auto;
     display: block;
+    object-fit: contain;
+}
+
+/* Tighten navbar vertical padding so the larger logo sets the bar height
+   instead of stacking on top of Bootstrap's default 0.5rem y-padding. */
+.navbar-brand {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
 }
 
 /* ── Sticky-bottom layout ───────────────────────────────────────────────────── */
