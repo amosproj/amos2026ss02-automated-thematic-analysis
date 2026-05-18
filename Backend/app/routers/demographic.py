@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, UploadFile
+from fastapi import APIRouter, Form, UploadFile
 
 from app.dependencies import AppSettings, DbSession
 from app.exceptions import UnprocessableError
@@ -24,12 +24,14 @@ async def upload_demographic_data(
     file: UploadFile,
     session: DbSession,
     settings: AppSettings,
+    name: str | None = Form(default=None),
 ) -> ResponseEnvelope[ImportDemographicResponse]:
     service = DemographicService(session, settings)
     try:
         response = await service.upload_demographic_data(
             corpus_id=corpus_id,
             file=file,
+            name=name,
             max_bytes=settings.MAX_UPLOAD_BYTES,
         )
     except UnprocessableError as exc:

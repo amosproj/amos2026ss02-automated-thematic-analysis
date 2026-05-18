@@ -18,6 +18,7 @@ class ImportDemographicPreview(BaseSchema): # TODO
 
 class ImportDemographicResponse(BaseSchema):
     import_id: uuid.UUID
+    name: str
     status: str
     preview: ImportDemographicPreview
     expires_at: datetime.datetime
@@ -26,5 +27,6 @@ class ImportDemographicResponse(BaseSchema):
 class UploadDemographicConfirmResponse(BaseSchema):
     """Summary returned after a demographic upload confirmation."""
     import_id: uuid.UUID
+    name: str
     rows_created: int = 0
     status: str

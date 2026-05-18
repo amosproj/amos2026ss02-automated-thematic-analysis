@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import ForeignKey, Integer, JSON, Uuid
+from sqlalchemy import ForeignKey, Integer, JSON, String, UniqueConstraint, Uuid
 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin
@@ -11,7 +11,11 @@ class DemographicFiles(Base, TimestampMixin):
     """Model for demographic files uploaded."""
 
     __tablename__ = 'demographic_files'
+    __table_args__ = (
+        UniqueConstraint("corpus_id", "name", name="uq_demographic_file_corpus_name"),
+    )
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
     original_columns: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     corpus_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("corpora.id", ondelete="CASCADE"), index=True

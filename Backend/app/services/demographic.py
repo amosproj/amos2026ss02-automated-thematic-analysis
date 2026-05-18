@@ -1,6 +1,7 @@
 import csv
 import datetime
 import io
+import json
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,6 +53,40 @@ class DemographicService:
             str(corpus_id),
             f"{import_id}.csv",
         )
+
+    def _get_out_meta_path(self, corpus_id: uuid.UUID, import_id: uuid.UUID) -> Path:
+        return Path(
+            self._settings.UPLOADS_DIR,
+            "demographic",
+            str(corpus_id),
+            f"{import_id}.meta.json",
+        )
+
+    @staticmethod
+    def _normalize_demographic_name(name: str) -> str:
+        normalized = name.strip()
+        if not normalized:
+            raise UnprocessableError("Demographic file name cannot be empty")
+        if len(normalized) > 255:
+            raise UnprocessableError("Demographic file name exceeds 255 characters")
+        return normalized
+
+    async def _resolve_name_conflict(self, corpus_id: uuid.UUID, desired_name: str) -> str:
+        desired_name = self._normalize_demographic_name(desired_name)
+        existing_names = set(
+            (
+                await self._session.execute(
+                    select(DemographicFiles.name).where(DemographicFiles.corpus_id == corpus_id)
+                )
+            ).scalars()
+        )
+        if desired_name not in existing_names:
+            return desired_name
+
+        n = 2
+        while f"{desired_name} ({n})" in existing_names:
+            n += 1
+        return f"{desired_name} ({n})"
 
     def _validate_file_extension(self, filename: str) -> None:
         ext = get_extension(filename)
@@ -162,10 +197,13 @@ class DemographicService:
         self,
         corpus_id: uuid.UUID,
         file: UploadFile,
+        name: str | None,
         max_bytes: int,
     ) -> ImportDemographicResponse:
         filename = file.filename or ""
         self._validate_file_extension(filename)
+        requested_name = name or Path(filename).stem or "demographic"
+        normalized_name = self._normalize_demographic_name(requested_name)
 
         content = await file.read()
         if len(content) == 0:
@@ -181,11 +219,14 @@ class DemographicService:
 
         import_id = uuid.uuid4()
         out_file_path = self._get_out_file_path(corpus_id, import_id)
+        out_meta_path = self._get_out_meta_path(corpus_id, import_id)
         out_file_path.parent.mkdir(parents=True, exist_ok=True)
         out_file_path.write_bytes(content)
+        out_meta_path.write_text(json.dumps({"name": normalized_name}), encoding="utf-8")
 
         return ImportDemographicResponse(
             import_id=import_id,
+            name=normalized_name,
             status="pending",
             preview=ImportDemographicPreview(
                 rows_detected=len(parsed.rows),
@@ -203,6 +244,7 @@ class DemographicService:
         confirm: bool,
     ) -> UploadDemographicConfirmResponse:
         pending_file_path = self._get_out_file_path(corpus_id, import_id)
+        pending_meta_path = self._get_out_meta_path(corpus_id, import_id)
         if not pending_file_path.exists():
             raise UnprocessableError(
                 f"No pending upload found for import_id '{import_id}'\n"
@@ -211,9 +253,18 @@ class DemographicService:
             )
 
         if not confirm:
+            cancelled_name = "demographic"
+            if pending_meta_path.exists():
+                try:
+                    metadata = json.loads(pending_meta_path.read_text(encoding="utf-8"))
+                    cancelled_name = self._normalize_demographic_name(str(metadata.get("name") or ""))
+                except Exception:
+                    cancelled_name = "demographic"
             pending_file_path.unlink(missing_ok=True)
+            pending_meta_path.unlink(missing_ok=True)
             return UploadDemographicConfirmResponse(
                 import_id=import_id,
+                name=cancelled_name,
                 status="Upload cancelled by user",
                 rows_created=0,
             )
@@ -223,10 +274,17 @@ class DemographicService:
         content = pending_file_path.read_bytes()
         parsed = self._parse_demographic_csv(filename=pending_file_path.name, content=content)
         await self._validate_corpus_document_ids(corpus_id, parsed.parsed_rows, pending_file_path.name)
+        if pending_meta_path.exists():
+            metadata = json.loads(pending_meta_path.read_text(encoding="utf-8"))
+            desired_name = self._normalize_demographic_name(str(metadata.get("name") or ""))
+        else:
+            desired_name = "demographic"
+        final_name = await self._resolve_name_conflict(corpus_id, desired_name)
 
         self._session.add(
             DemographicFiles(
                 id=import_id,
+                name=final_name,
                 corpus_id=corpus_id,
                 original_columns=parsed.original_columns,
             )
@@ -248,8 +306,10 @@ class DemographicService:
             raise UnprocessableError(f"Could not persist demographic data: {exc}") from exc
 
         pending_file_path.unlink(missing_ok=True)
+        pending_meta_path.unlink(missing_ok=True)
         return UploadDemographicConfirmResponse(
             import_id=import_id,
+            name=final_name,
             status="Demographic data successfully uploaded",
             rows_created=len(parsed.parsed_rows),
         )

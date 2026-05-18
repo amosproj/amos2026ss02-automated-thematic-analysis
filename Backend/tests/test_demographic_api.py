@@ -51,6 +51,7 @@ async def test_demographic_csv_valid_dynamic_columns_and_confirm_persists_rows(c
     assert upload.status_code == 201
     upload_body = upload.json()
     assert upload_body["success"] is True
+    assert upload_body["data"]["name"] == "demographics"
     assert upload_body["data"]["preview"]["columns_detected"] == 4
     assert upload_body["data"]["preview"]["rows_detected"] == 1
 
@@ -62,6 +63,7 @@ async def test_demographic_csv_valid_dynamic_columns_and_confirm_persists_rows(c
     assert confirm.status_code == 201
     confirm_body = confirm.json()
     assert confirm_body["success"] is True
+    assert confirm_body["data"]["name"] == "demographics"
     assert confirm_body["data"]["rows_created"] == 1
 
     session_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
@@ -208,3 +210,74 @@ async def test_demographic_confirm_second_attempt_fails_after_successful_confirm
     assert second_confirm.status_code == 201
     assert second_confirm.json()["success"] is False
     assert "No pending upload found" in second_confirm.json()["meta"]["detail"]
+
+
+async def test_demographic_name_unique_within_corpus(client, db_engine):
+    corpus_id = await _create_corpus(client, "Corpus Names")
+    document_id = await _create_document(client, corpus_id)
+    csv_content = f"corpus_document_id,country\n{document_id},DE\n".encode("utf-8")
+
+    first_upload = await client.post(
+        f"{DEMOGRAPHIC_API}/{corpus_id}/upload",
+        data={"name": "participants"},
+        files={"file": ("a.csv", csv_content, "application/octet-stream")},
+    )
+    first_import_id = first_upload.json()["data"]["import_id"]
+    first_confirm = await client.post(
+        f"{DEMOGRAPHIC_API}/{corpus_id}/confirm",
+        params={"import_id": first_import_id, "confirm": True},
+    )
+    assert first_confirm.json()["data"]["name"] == "participants"
+
+    second_upload = await client.post(
+        f"{DEMOGRAPHIC_API}/{corpus_id}/upload",
+        data={"name": "participants"},
+        files={"file": ("b.csv", csv_content, "application/octet-stream")},
+    )
+    second_import_id = second_upload.json()["data"]["import_id"]
+    second_confirm = await client.post(
+        f"{DEMOGRAPHIC_API}/{corpus_id}/confirm",
+        params={"import_id": second_import_id, "confirm": True},
+    )
+    assert second_confirm.json()["data"]["name"] == "participants (2)"
+
+    session_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_factory() as session:
+        rows = (
+            await session.execute(
+                select(DemographicFiles).where(DemographicFiles.corpus_id == uuid.UUID(corpus_id))
+            )
+        ).scalars().all()
+    names = sorted(row.name for row in rows)
+    assert names == ["participants", "participants (2)"]
+
+
+async def test_demographic_name_can_repeat_across_corpora(client):
+    corpus_a = await _create_corpus(client, "Corpus A")
+    corpus_b = await _create_corpus(client, "Corpus B")
+    doc_a = await _create_document(client, corpus_a)
+    doc_b = await _create_document(client, corpus_b)
+    csv_a = f"corpus_document_id,age\n{doc_a},31\n".encode("utf-8")
+    csv_b = f"corpus_document_id,age\n{doc_b},29\n".encode("utf-8")
+
+    upload_a = await client.post(
+        f"{DEMOGRAPHIC_API}/{corpus_a}/upload",
+        data={"name": "shared-name"},
+        files={"file": ("a.csv", csv_a, "application/octet-stream")},
+    )
+    upload_b = await client.post(
+        f"{DEMOGRAPHIC_API}/{corpus_b}/upload",
+        data={"name": "shared-name"},
+        files={"file": ("b.csv", csv_b, "application/octet-stream")},
+    )
+
+    confirm_a = await client.post(
+        f"{DEMOGRAPHIC_API}/{corpus_a}/confirm",
+        params={"import_id": upload_a.json()["data"]["import_id"], "confirm": True},
+    )
+    confirm_b = await client.post(
+        f"{DEMOGRAPHIC_API}/{corpus_b}/confirm",
+        params={"import_id": upload_b.json()["data"]["import_id"], "confirm": True},
+    )
+    assert confirm_a.json()["data"]["name"] == "shared-name"
+    assert confirm_b.json()["data"]["name"] == "shared-name"
