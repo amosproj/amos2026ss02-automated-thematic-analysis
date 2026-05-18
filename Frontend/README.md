@@ -17,10 +17,14 @@ Frontend/
 │   ├── services/
 │   │   └── backend_client.py          # HTTP client wrapping all FastAPI calls
 │   ├── templates/
-│   │   ├── base.html                  # Shared layout — Bootstrap 5.3.3, top nav
+│   │   ├── base.html                  # Shared layout — Bootstrap 5.3.3, top nav, footer, flash, favicon
+│   │   ├── _flash.html                # Dismissible flash partial (icons + auto-dismiss)
 │   │   ├── index.html                 # Home page with 3-card quick-links
+│   │   ├── errors/
+│   │   │   ├── 404.html               # Branded page not found
+│   │   │   └── 500.html               # Branded server error
 │   │   ├── ingestion/
-│   │   │   ├── upload.html            # Multi-file upload form
+│   │   │   ├── upload.html            # Multi-file upload form (dynamic JS file list)
 │   │   │   ├── list.html              # Transcript list
 │   │   │   └── results.html           # Upload results summary
 │   │   ├── codebooks/
@@ -30,12 +34,15 @@ Frontend/
 │   │       └── index.html             # Analysis page (placeholder)
 │   └── static/
 │       ├── css/main.css               # All custom styles
+│       ├── img/team-logo.svg          # NIM+AMOS team logo (navbar + footer + favicon)
 │       └── js/codebook_themes.js      # Vanilla JS for the theme browser
 ├── tests/
-│   ├── conftest.py                    # Shared fixtures — FakeBackend, app, client
+│   ├── conftest.py                    # Shared fixtures — FakeBackend (typed errors), app, client
 │   ├── test_smoke.py                  # Basic route smoke tests
-│   ├── test_ingestion.py              # Ingestion route tests
-│   └── test_codebooks.py              # Codebook route tests
+│   ├── test_ingestion.py              # Ingestion route tests (incl. typed-error paths)
+│   ├── test_codebooks.py              # Codebook route tests (incl. typed-error paths)
+│   ├── test_backend_client.py         # Unit tests for BackendClient exception categorisation
+│   └── test_error_handlers.py         # Flask 404 / 413 / 500 handler tests
 ├── Dockerfile                         # Multi-stage build (runtime + test targets)
 ├── pyproject.toml
 └── .env.example
@@ -66,7 +73,7 @@ All data is embedded server-side as JSON in `data-` attributes on `#theme-app`. 
 
 ## Backend client
 
-`web/services/backend_client.py` wraps every FastAPI call. All HTTP errors are caught and re-raised as `BackendError`, which controllers render as an alert rather than crashing.
+`web/services/backend_client.py` wraps every FastAPI call. HTTP and network errors are categorised into typed `BackendError` subclasses, each carrying a `user_message` attribute that controllers flash to the user.
 
 | Method | Backend endpoint |
 |---|---|
@@ -76,6 +83,48 @@ All data is embedded server-side as JSON in `data-` attributes on `#theme-app`. 
 | `list_codebooks()` | `GET /codebooks/` |
 | `get_theme_frequencies(codebook_id)` | `GET /codebooks/{id}/themes` |
 | `get_theme_tree(codebook_id)` | `GET /codebooks/{id}/themes/tree` |
+
+## Error handling
+
+A four-layer model: BackendClient categorises, controllers catch and flash, templates render error- vs empty-state, Flask handlers catch what escapes.
+
+### Exception hierarchy
+
+| Class | Raised when | User-facing message |
+|---|---|---|
+| `BackendError` (base) | Anything uncategorised (malformed JSON, missing keys) | "Something went wrong. Please try again." |
+| `BackendUnavailableError` | Connect refused, DNS failure, read timeout | "We can't reach the analysis service right now. Please try again in a moment." |
+| `BackendNotFoundError` | Backend returns HTTP 404 | "The requested item couldn't be found. It may have been deleted." |
+| `BackendValidationError` | Backend returns HTTP 422 — parses FastAPI's structured `detail[].msg` per field | Per-field message, e.g. `"name: field required; themes: must contain at least 1 item"` |
+| `BackendServerError` | Backend returns 500 / 502 / 503 / 504 | "The analysis service had a problem. The team has been notified." |
+
+Every failed request is logged once at the BackendClient boundary with a level matching the exception class (`warning` for unavailable, `info` for not-found / validation, `error` for everything else).
+
+### Flask error handlers
+
+| Status | Behaviour |
+|---|---|
+| 404 | Renders `templates/errors/404.html` — branded page with navbar/footer intact |
+| 413 | Flashes "Upload too large…" and redirects (303) to the referrer |
+| Generic `Exception` | Logs full traceback, renders `templates/errors/500.html` |
+
+### Template convention
+
+Every page that loads data from the backend uses a three-way conditional so the user never sees a red error alert *and* a "no items found" empty-state message at the same time:
+
+```jinja
+{% if error %}
+  <p class="text-secondary">Couldn't load this section.</p>
+{% elif data %}
+  ...
+{% else %}
+  <p class="text-secondary">No items yet.</p>
+{% endif %}
+```
+
+### Flash alerts
+
+Rendered by `templates/_flash.html` as dismissible Bootstrap alerts with category icons. `success` and `info` auto-dismiss after 5 s (10-line JS snippet in `base.html`); `warning` and `danger` persist until the user closes them.
 
 ## Configuration
 
@@ -87,8 +136,11 @@ All config is read from environment variables (or a `.env` file). Key settings:
 | `BACKEND_TIMEOUT_S` | `60.0` | HTTP request timeout in seconds |
 | `SECRET_KEY` | `dev-secret` | Flask session secret — change in production |
 | `APP_ENV` | `development` | Set to `production` to enable production mode |
+| `LOG_LEVEL` | `INFO` | Logger level for both Flask and `backend_client` (`DEBUG`/`INFO`/`WARNING`/`ERROR`) |
 | `MAX_UPLOAD_SIZE_MB` | `10` | Per-file upload size cap |
 | `DEFAULT_PROJECT_ID` | `00000000-0000-0000-0000-000000000001` | Single-workspace MVP project ID |
+
+`MAX_CONTENT_LENGTH` (the raw-request-body cap that triggers a 413) is derived as `MAX_UPLOAD_SIZE_MB × 10 × 1024 × 1024` — about 100 MB by default — so Werkzeug rejects oversized payloads before fully buffering them.
 
 ## Running with Docker (recommended)
 
@@ -142,11 +194,13 @@ pytest
 docker compose run --rm frontend-test
 ```
 
-The test suite covers:
+The test suite (36 tests) covers:
 - Smoke tests for all routes (home, health, transcripts, upload, codebooks, analysis)
-- Codebook list — data rendered, empty state, backend error handling
-- Theme browser — frequency data, name from query param, empty state, backend error handling
-- Ingestion — upload flow, file size validation, transcript listing
+- Codebook list — data rendered, empty state, generic + typed backend errors
+- Theme browser — frequency data, name from query param, empty state, generic + `BackendNotFoundError` paths
+- Ingestion — upload flow, file size validation, transcript listing, generic + `BackendUnavailableError` + `BackendValidationError` paths
+- BackendClient — unit tests using `httpx.MockTransport` for each exception category (connect refused, timeout, 404, 422-with-detail-parsing, 5xx, malformed JSON)
+- Flask handlers — 404 renders branded page, 413 returns 303 + flash, generic `Exception` renders branded 500 without leaking traceback
 
 ## Dockerfile
 
