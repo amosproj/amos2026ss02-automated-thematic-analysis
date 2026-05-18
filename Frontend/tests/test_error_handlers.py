@@ -13,7 +13,7 @@ def test_404_renders_branded_page(client):
     resp = client.get("/this-route-does-not-exist")
     assert resp.status_code == 404
     assert b"Error 404" in resp.data
-    assert b"couldn't find that page" in resp.data
+    assert b"Page Not Found" in resp.data
     # The branded template extends base.html so the navbar must still be present.
     assert b"navbar" in resp.data
 

@@ -3,10 +3,11 @@
 {% block content %}
   <div class="text-center py-5">
     <p class="text-secondary text-uppercase fw-semibold mb-2" style="letter-spacing:.1em">Error 404</p>
-    <h1 class="h2 mb-3">We couldn't find that page</h1>
+    <h1 class="h2 mb-3">Page Not Found</h1>
     <p class="text-secondary mb-4">
-      The link may be broken, or the page may have moved or been deleted.
+      The URL you requested doesn't match any page on this site.
+      Please check the link or return to the home page.
     </p>
-    <a class="btn btn-primary" href="{{ url_for('main.index') }}">Back to home</a>
+    <a class="btn btn-primary" href="{{ url_for('main.index') }}">Return to home</a>
   </div>
 {% endblock %}
