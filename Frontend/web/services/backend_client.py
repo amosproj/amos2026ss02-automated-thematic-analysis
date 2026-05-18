@@ -256,6 +256,14 @@ class BackendClient:
         """Fetch details of a codebook by its unique UUID."""
         return self._get(f"/codebooks/{codebook_id}")
 
+    def list_codebooks(self) -> list[dict]:
+        """Return all persisted codebooks, ordered by project then descending version."""
+        result = self._get("/codebooks/")
+        # The envelope `data` field is a list directly for this endpoint
+        if isinstance(result, list):
+            return result
+        return result.get("items", result) if isinstance(result, dict) else []
+
     # ---- Helpers ------------------------------------------------------------
 
     def _unwrap(self, response: httpx.Response, *, sub_key: str | None = None):
