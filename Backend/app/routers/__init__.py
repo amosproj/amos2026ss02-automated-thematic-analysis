@@ -10,4 +10,5 @@ def register_routers(app: FastAPI, settings: Settings) -> None:
     app.include_router(ingestion.router, prefix=prefix)
     app.include_router(codebooks.router, prefix=prefix)
     app.include_router(themes.router, prefix=prefix)
+    app.include_router(demo.router, prefix=prefix)
     app.include_router(demo.router)

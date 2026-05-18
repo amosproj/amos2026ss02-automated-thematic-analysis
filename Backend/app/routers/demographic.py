@@ -6,7 +6,6 @@ from pathlib import Path
 
 from fastapi import APIRouter, UploadFile
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 
 from app.dependencies import DbSession, AppSettings
 from app.exceptions import UnprocessableError, NotFoundError
@@ -48,8 +47,8 @@ async def upload_demographic_data(
     filename = file.filename or ""
 
     try:
-        # Validate file type for csv
-        if file.content_type != "text/csv":
+        # Validate file type for csv or excel (xls, xlsx)
+        if file.content_type not in ["text/csv", "application/vnd.ms-excel"]:
             raise UnprocessableError(
                 f"Unsupported file extension '{file.content_type}'. "
                 f"Supported: csv"
@@ -175,7 +174,7 @@ async def confirm_demographic_upload(
             raise UnprocessableError(
                 f"No pending upload found for import_id '{import_id}'\n"
                 f"Maybe it expired? Pending uploads must be confirmed within "
-                f""f"{settings.DEMOGRAPHIC_UPLOAD_TTL_SECONDS} seconds of the initial upload."
+                f"{settings.DEMOGRAPHIC_UPLOAD_TTL_SECONDS} seconds of the initial upload."
             )
 
         if not confirm:
@@ -190,17 +189,18 @@ async def confirm_demographic_upload(
                 data=response
             )
 
+        # Check if corpus_id exists in the database
+        try:
+            await IngestionService.get_corpus(corpus_id=corpus_id)
+        except NotFoundError:
+            raise UnprocessableError(f"Corpus with id '{corpus_id}' does not exist")
+
     except UnprocessableError as exc:
         return ResponseEnvelope[UploadDemographicConfirmResponse].fail(
             error="UnprocessableError",
             detail=str(exc),
         )
 
-    # Check if corpus_id exists in the database
-    try:
-        await IngestionService.get_corpus(corpus_id=corpus_id)
-    except NotFoundError:
-        raise UnprocessableError(f"Corpus with id '{corpus_id}' does not exist")
 
     # read the pending file and insert demographic data into the database, linked to the corresponding corpus documents
     pending_file_path = _get_out_file_path(corpus_id, import_id, settings)
@@ -222,9 +222,15 @@ async def confirm_demographic_upload(
             demographic_file_id=import_id,
             row_number=row_number,
             data=row,
+            corpus_document_id=uuid.UUID(row.get("corpus_document_id"))
         )
         session.add(demographic_row)
         rows_created += 1
+
+    await session.commit()
+
+    # delete the pending file after processing
+    pending_file_path.unlink(missing_ok=True)
 
     response = UploadDemographicConfirmResponse(
         import_id=import_id,
