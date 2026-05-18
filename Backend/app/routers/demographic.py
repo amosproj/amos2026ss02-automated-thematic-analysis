@@ -6,13 +6,16 @@ from pathlib import Path
 
 from fastapi import APIRouter, UploadFile
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 
 from app.dependencies import DbSession, AppSettings
-from app.exceptions import UnprocessableError
+from app.exceptions import UnprocessableError, NotFoundError
+from app.models.demographic import DemographicFiles, DemographicRow
 from app.models.ingestion import CorpusDocument
 from app.schemas import ResponseEnvelope
 from app.schemas.demographic import ImportDemographicResponse, ImportDemographicPreview, \
     UploadDemographicConfirmResponse
+from app.services.ingestion import IngestionService
 
 router = APIRouter(prefix="/demographic/{corpus_id}", tags=["demographic"])
 
@@ -79,6 +82,12 @@ async def upload_demographic_data(
         if len(reader.fieldnames) < 2:
             raise UnprocessableError(f"'{filename}': CSV must contain at least 2 columns for demographic import.\n"
                                      f"One corpus_document_id and one demographic data row.")
+
+        # Check if corpus_id exists in the database
+        try:
+            await IngestionService.get_corpus(corpus_id=corpus_id)
+        except NotFoundError:
+            raise UnprocessableError(f"Corpus with id '{corpus_id}' does not exist")
 
         # Validate that all corpus_document_id values are valid UUIDs and exist in the database
         parsed_document_ids: set[uuid.UUID] = set()
@@ -175,8 +184,7 @@ async def confirm_demographic_upload(
             response = UploadDemographicConfirmResponse(
                 import_id=import_id,
                 status="Upload cancelled by user",
-                rows_created=0,
-                rows_updated=0,
+                rows_created=0
             )
             return ResponseEnvelope[UploadDemographicConfirmResponse].ok(
                 data=response
@@ -188,13 +196,40 @@ async def confirm_demographic_upload(
             detail=str(exc),
         )
 
+    # Check if corpus_id exists in the database
+    try:
+        await IngestionService.get_corpus(corpus_id=corpus_id)
+    except NotFoundError:
+        raise UnprocessableError(f"Corpus with id '{corpus_id}' does not exist")
 
+    # read the pending file and insert demographic data into the database, linked to the corresponding corpus documents
+    pending_file_path = _get_out_file_path(corpus_id, import_id, settings)
+    content = pending_file_path.read_bytes()
+    text_stream = io.StringIO(content.decode("utf-8-sig"))
+    reader = csv.DictReader(text_stream)
+    original_columns = list(reader.fieldnames or [])
+
+    session.add(
+        DemographicFiles(
+            id=import_id,
+            corpus_id=corpus_id,
+            original_columns=original_columns
+        )
+    )
+    rows_created = 0
+    for row_number, row in enumerate(reader, start=1):
+        demographic_row = DemographicRow(
+            demographic_file_id=import_id,
+            row_number=row_number,
+            data=row,
+        )
+        session.add(demographic_row)
+        rows_created += 1
 
     response = UploadDemographicConfirmResponse(
         import_id=import_id,
         status="Demographic data successfully uploaded",
-        rows_created=,
-        rows_updated=
+        rows_created=rows_created
     )
 
     return ResponseEnvelope[UploadDemographicConfirmResponse].ok(

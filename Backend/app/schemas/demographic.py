@@ -27,5 +27,4 @@ class UploadDemographicConfirmResponse(BaseSchema):
     """Summary returned after a demograhic upload confirmation."""
     import_id: uuid.UUID
     rows_created: int = 0
-    rows_updated: int = 0
     status: str
