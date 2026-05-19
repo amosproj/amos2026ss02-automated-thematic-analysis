@@ -155,8 +155,6 @@ docker compose build --no-cache frontend
 docker compose up -d --no-deps frontend
 ```
 
-> **Note:** On Windows, `docker compose up --build` can reuse a stale BuildKit cache layer and serve old static files. If styles or JS disappear after a rebuild, always use `--no-cache` for the frontend image.
-
 Services started:
 
 | Service | URL |
@@ -164,6 +162,20 @@ Services started:
 | Frontend (Flask) | http://localhost:3000 |
 | Backend (FastAPI) | http://localhost:8000 |
 | API docs (Swagger) | http://localhost:8000/docs |
+
+## Cache cleanup — if the UI looks stale
+
+After pulling new commits or rebuilding, you may see old CSS / JS / templates. Walk down this table until the page refreshes — try cheaper fixes first.
+
+| # | Layer | Symptom | Fix |
+|---|---|---|---|
+| 1 | **Browser cache** | New CSS/JS not visible even after a Docker rebuild | Hard refresh: `Ctrl + Shift + R` (or open in Incognito) |
+| 2 | **Frontend image** | Container still serves old templates / static files | `docker compose build --no-cache frontend && docker compose up -d --no-deps frontend` |
+| 3 | **Docker BuildKit cache** | `--no-cache` rebuild still produces wrong output (most common on Windows + OneDrive) | `docker builder prune -af` then redo step 2 |
+| 4 | **Python bytecode** (local dev only) | Tests behave oddly after editing source outside Docker | `Get-ChildItem . -Filter __pycache__ -Recurse -Directory \| Remove-Item -Recurse -Force` |
+| 5 | **Full reset** (keeps DB volume) | Nothing above worked | `docker compose down; docker builder prune -af; docker compose build --no-cache; docker compose up -d` |
+
+The nuclear option (`docker system prune -af --volumes`) also drops the postgres data volume, so you lose seeded transcripts and codebooks — use only when you genuinely want a blank database too.
 
 ## Running locally (without Docker)
 
