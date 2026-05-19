@@ -14,11 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings
 from app.exceptions import NotFoundError, UnprocessableError
 from app.models.demographic import DemographicFiles, DemographicRow
+from app.models.ingestion import CorpusDocument
+from app.services.linking import auto_link_demographics
 from app.schemas.demographic import (
     DemographicFileSummary,
     DemographicRowSchema,
     ImportDemographicPreview,
     ImportDemographicResponse,
+    LinkingSummary,
+    TranscriptLinkStatus,
     UploadDemographicConfirmResponse,
 )
 from app.services.ingestion import IngestionService
@@ -394,6 +398,8 @@ class DemographicService:
             await self._session.rollback()
             raise UnprocessableError(f"Could not persist demographic data: {exc}") from exc
 
+        await auto_link_demographics(self._session, corpus_id)
+
         pending_file_path.unlink(missing_ok=True)
         pending_meta_path.unlink(missing_ok=True)
         return UploadDemographicConfirmResponse(
@@ -401,4 +407,32 @@ class DemographicService:
             name=final_name,
             status="Demographic data successfully uploaded",
             rows_created=len(parsed.parsed_rows),
+        )
+
+    async def get_link_summary(self, corpus_id: uuid.UUID) -> LinkingSummary:
+        await self._validate_corpus(corpus_id)
+
+        documents = list(
+            (
+                await self._session.execute(
+                    select(CorpusDocument).where(CorpusDocument.corpus_id == corpus_id)
+                )
+            ).scalars()
+        )
+
+        details = [
+            TranscriptLinkStatus(
+                document_id=doc.id,
+                document_title=doc.title,
+                demographic_row_id=doc.demographic_row_id,
+                matched=doc.demographic_row_id is not None,
+            )
+            for doc in documents
+        ]
+
+        matched_count = sum(1 for d in details if d.matched)
+        return LinkingSummary(
+            total_transcripts=len(details),
+            matched=matched_count,
+            details=details,
         )

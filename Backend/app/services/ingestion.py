@@ -8,6 +8,7 @@ from app.config import Settings
 from app.exceptions import NotFoundError, UnprocessableError
 from app.models.ingestion import Corpus, CorpusChunk, CorpusDocument
 from app.schemas.ingestion import CorpusCreate, DocumentInput
+from app.services.linking import auto_link_demographics
 from app.services.text_chunking import chunk_text_by_words
 
 
@@ -152,6 +153,8 @@ class IngestionService:
         except Exception as exc:
             await self._session.rollback()
             raise UnprocessableError(f"Ingestion failed: {exc}") from exc
+
+        await auto_link_demographics(self._session, corpus_id)
 
         return result
 

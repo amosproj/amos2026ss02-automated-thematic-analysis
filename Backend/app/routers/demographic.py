@@ -11,9 +11,11 @@ from app.schemas.demographic import (
     DemographicFileSummary,
     DemographicRowSchema,
     ImportDemographicResponse,
+    LinkingSummary,
     UploadDemographicConfirmResponse,
 )
 from app.services.demographic import DemographicService
+from app.services.linking import auto_link_demographics
 
 router = APIRouter(prefix="/demographic/{corpus_id}", tags=["demographic"])
 
@@ -184,3 +186,24 @@ async def list_demographic_rows(
             meta=PageMeta(total=total, page=page, page_size=page_size, pages=_pages(total, page_size)),
         )
     )
+
+
+@router.get(
+    "/link-summary",
+    response_model=ResponseEnvelope[LinkingSummary],
+)
+async def get_link_summary(
+    corpus_id: uuid.UUID,
+    session: DbSession,
+    settings: AppSettings,
+) -> ResponseEnvelope[LinkingSummary]:
+    service = DemographicService(session, settings)
+    try:
+        await auto_link_demographics(session, corpus_id)
+        summary = await service.get_link_summary(corpus_id)
+    except UnprocessableError as exc:
+        return ResponseEnvelope[LinkingSummary].fail(
+            error="UnprocessableError",
+            detail=str(exc),
+        )
+    return ResponseEnvelope[LinkingSummary].ok(data=summary)

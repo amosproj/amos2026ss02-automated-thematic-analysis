@@ -44,3 +44,16 @@ class DemographicRowSchema(BaseSchema):
     interviewee_id: str
     row_number: int
     data: dict[str, Any]
+
+
+class TranscriptLinkStatus(BaseSchema):
+    document_id: uuid.UUID
+    document_title: str
+    demographic_row_id: uuid.UUID | None
+    matched: bool
+
+
+class LinkingSummary(BaseSchema):
+    total_transcripts: int
+    matched: int
+    details: list[TranscriptLinkStatus]
