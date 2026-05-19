@@ -24,7 +24,11 @@ class ResponseEnvelope(BaseSchema, Generic[T]):
         return cls(success=True, data=data, meta=meta)
 
     @classmethod
-    def fail(cls, error: str, detail: str | None = None) -> "ResponseEnvelope[None]":
+    def fail(
+        cls: type["ResponseEnvelope[T]"],
+        error: str,
+        detail: str | None = None,
+    ) -> "ResponseEnvelope[T]":
         return cls(
             success=False,
             error=error,

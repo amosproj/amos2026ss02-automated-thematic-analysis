@@ -58,9 +58,9 @@ async def client(db_engine) -> AsyncGenerator[AsyncClient, None]:
 
     # Patch startup/shutdown so the app doesn't try to connect to a real DB
     with (
-        patch("app.main.check_db_connection", new=AsyncMock(return_value=True)),
-        patch("app.main.init_db", new=AsyncMock()),
-        patch("app.main.dispose_engine", new=AsyncMock()),
+        patch("app.database.check_db_connection", new=AsyncMock(return_value=True)),
+        patch("app.database.init_db", new=AsyncMock()),
+        patch("app.database.dispose_engine", new=AsyncMock()),
     ):
         # Import here so patches above are in place before create_app runs
         from app.database import get_session

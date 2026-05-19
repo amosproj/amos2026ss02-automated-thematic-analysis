@@ -16,6 +16,13 @@ from app.schemas.ingestion import (
     DocumentInput,
     IngestResultSchema,
 )
+from app.schemas.demographic import (
+    DemographicFileSummary,
+    DemographicRowSchema,
+    ImportDemographicPreview,
+    ImportDemographicResponse,
+    UploadDemographicConfirmResponse,
+)
 from app.schemas.theme import ThemeSchema
 from app.schemas.theme_graph import (
     ThemeDagValidation,
@@ -38,9 +45,13 @@ __all__ = [
     "CorpusCreate",
     "CorpusDocumentSchema",
     "CorpusSchema",
+    "DemographicFileSummary",
+    "DemographicRowSchema",
     "DocumentInput",
     "HealthResponse",
     "IngestResultSchema",
+    "ImportDemographicPreview",
+    "ImportDemographicResponse",
     "InterviewMessage",
     "InterviewTranscript",
     "Page",
@@ -55,4 +66,5 @@ __all__ = [
     "ThemeNodeView",
     "ThemeTreeNode",
     "ThemeTreeResponse",
+    "UploadDemographicConfirmResponse",
 ]

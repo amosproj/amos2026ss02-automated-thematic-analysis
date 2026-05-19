@@ -67,3 +67,10 @@ htmlcov/
 
 
 *.egg-info/
+
+# PyCharm Plugins
+.codebuddy
+
+
+#app
+uploads/
