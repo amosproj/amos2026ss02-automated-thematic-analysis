@@ -42,6 +42,12 @@ class CorpusDocument(Base, TimestampMixin):
         ForeignKey("corpora.id", ondelete="CASCADE"),
         index=True,
     )
+    demographic_row_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("demographic_row.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(500))
     # Original uploaded filename (after duplicate-collision resolution). NULL for body-ingested docs.
     filename: Mapped[str | None] = mapped_column(String(500), nullable=True)
