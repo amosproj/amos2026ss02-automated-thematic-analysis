@@ -1,7 +1,9 @@
 import uuid
 
-from sqlalchemy import select
+import pytest
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.exc import IntegrityError
 
 from app.models.demographic import DemographicFiles, DemographicRow
 
@@ -104,13 +106,13 @@ async def test_demographic_upload_requires_interviewee_id_and_at_least_one_demog
 
     missing_id_column = "age,gender\n34,female\n".encode("utf-8")
     response_missing_id = await _upload_csv(client, corpus_id, "missing_id.csv", missing_id_column)
-    assert response_missing_id.status_code == 201
+    assert response_missing_id.status_code == 422
     assert response_missing_id.json()["success"] is False
     assert "must include 'username' column" in response_missing_id.json()["meta"]["detail"]
 
     only_id_column = "username\nuser_c\n".encode("utf-8")
     response_only_id = await _upload_csv(client, corpus_id, "only_id.csv", only_id_column)
-    assert response_only_id.status_code == 201
+    assert response_only_id.status_code == 422
     assert response_only_id.json()["success"] is False
     assert "at least 2 columns" in response_only_id.json()["meta"]["detail"]
 
@@ -124,7 +126,7 @@ async def test_demographic_upload_validates_malformed_csv_row_and_reports_clear_
     ).encode("utf-8")
     response = await _upload_csv(client, corpus_id, "malformed.csv", malformed)
 
-    assert response.status_code == 201
+    assert response.status_code == 422
     body = response.json()
     assert body["success"] is False
     assert "malformed CSV row" in body["meta"]["detail"]
@@ -151,9 +153,19 @@ async def test_demographic_upload_rejects_non_csv_extension_even_with_csv_mime_v
         content,
         content_type="text/csv",
     )
-    assert bad_response.status_code == 201
+    assert bad_response.status_code == 422
     assert bad_response.json()["success"] is False
     assert "Unsupported file extension" in bad_response.json()["meta"]["detail"]
+
+
+async def test_demographic_upload_rejects_semicolon_delimited_csv(client):
+    corpus_id = await _create_corpus(client, "Corpus Delimiter")
+    content = "username;segment\nuser_e;A\n".encode("utf-8")
+
+    response = await _upload_csv(client, corpus_id, "demo.csv", content, content_type="text/csv")
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+    assert "must include 'username' column" in response.json()["meta"]["detail"]
 
 
 async def test_demographic_upload_rejects_duplicate_username(client):
@@ -173,7 +185,7 @@ async def test_demographic_upload_rejects_duplicate_username(client):
     assert first_confirm.json()["success"] is True
 
     response = await _upload_csv(client, corpus_id, "second.csv", second)
-    assert response.status_code == 201
+    assert response.status_code == 422
     assert response.json()["success"] is False
     assert "username already exists" in response.json()["meta"]["detail"]
 
@@ -222,7 +234,7 @@ async def test_demographic_confirm_second_attempt_fails_after_successful_confirm
         f"{DEMOGRAPHIC_API}/{corpus_id}/confirm",
         params={"import_id": import_id, "confirm": True},
     )
-    assert second_confirm.status_code == 201
+    assert second_confirm.status_code == 422
     assert second_confirm.json()["success"] is False
     assert "No pending upload found" in second_confirm.json()["meta"]["detail"]
 
@@ -294,6 +306,86 @@ async def test_demographic_name_can_repeat_across_corpora(client):
     )
     assert confirm_a.json()["data"]["name"] == "shared-name"
     assert confirm_b.json()["data"]["name"] == "shared-name"
+
+
+async def test_demographic_row_username_is_db_unique_within_corpus(db_engine):
+    """DB guardrail: username cannot appear twice in one corpus, even across files."""
+    corpus_id = uuid.uuid4()
+    file_a_id = uuid.uuid4()
+    file_b_id = uuid.uuid4()
+
+    session_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_factory() as session:
+        await session.execute(
+            text("INSERT INTO corpora (id, project_id, name) VALUES (:id, :project_id, :name)"),
+            {
+                "id": str(corpus_id),
+                "project_id": str(uuid.uuid4()),
+                "name": "Corpus DB Constraint",
+            },
+        )
+        await session.execute(
+            text(
+                "INSERT INTO demographic_files (id, name, original_columns, corpus_id) "
+                "VALUES (:id, :name, :original_columns, :corpus_id)"
+            ),
+            {
+                "id": str(file_a_id),
+                "name": "batch-a",
+                "original_columns": '["username","group"]',
+                "corpus_id": str(corpus_id),
+            },
+        )
+        await session.execute(
+            text(
+                "INSERT INTO demographic_files (id, name, original_columns, corpus_id) "
+                "VALUES (:id, :name, :original_columns, :corpus_id)"
+            ),
+            {
+                "id": str(file_b_id),
+                "name": "batch-b",
+                "original_columns": '["username","group"]',
+                "corpus_id": str(corpus_id),
+            },
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        await session.execute(
+            text(
+                "INSERT INTO demographic_row "
+                "(id, demographic_file_id, corpus_id, row_number, interviewee_id, data) "
+                "VALUES (:id, :demographic_file_id, :corpus_id, :row_number, :interviewee_id, :data)"
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "demographic_file_id": str(file_a_id),
+                "corpus_id": str(corpus_id),
+                "row_number": 1,
+                "interviewee_id": "duplicate_user",
+                "data": '{"group":"A"}',
+            },
+        )
+        await session.commit()
+
+    async with session_factory() as session:
+        with pytest.raises(IntegrityError):
+            await session.execute(
+                text(
+                    "INSERT INTO demographic_row "
+                    "(id, demographic_file_id, corpus_id, row_number, interviewee_id, data) "
+                    "VALUES (:id, :demographic_file_id, :corpus_id, :row_number, :interviewee_id, :data)"
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "demographic_file_id": str(file_b_id),
+                    "corpus_id": str(corpus_id),
+                    "row_number": 1,
+                    "interviewee_id": "duplicate_user",
+                    "data": '{"group":"B"}',
+                },
+            )
+            await session.commit()
 
 
 async def _upload_and_confirm_named_csv(client, corpus_id: str, name: str, csv_content: bytes) -> str:
@@ -383,6 +475,6 @@ async def test_list_demographic_rows_pagination_and_file_filter(client):
         f"{DEMOGRAPHIC_API}/{corpus_id}/rows",
         params={"demographic_file_id": other_file_id},
     )
-    assert wrong_filter.status_code == 200
+    assert wrong_filter.status_code == 422
     assert wrong_filter.json()["success"] is False
     assert "does not belong to corpus" in wrong_filter.json()["meta"]["detail"]

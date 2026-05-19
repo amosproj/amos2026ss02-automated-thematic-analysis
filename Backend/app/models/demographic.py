@@ -32,9 +32,16 @@ class DemographicRow(Base):
     file."""
 
     __tablename__ = 'demographic_row'
+    __table_args__ = (
+        UniqueConstraint("corpus_id", "interviewee_id", name="uq_demographic_row_corpus_interviewee"),
+    )
+
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     demographic_file_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("demographic_files.id", ondelete="CASCADE"), index=True
+    )
+    corpus_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("corpora.id", ondelete="CASCADE"), index=True
     )
     row_number: Mapped[int] = mapped_column(Integer, nullable=False)
     interviewee_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)

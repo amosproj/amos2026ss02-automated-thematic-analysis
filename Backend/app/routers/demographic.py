@@ -1,7 +1,8 @@
 import uuid
 import math
 
-from fastapi import APIRouter, Form, UploadFile
+from fastapi import APIRouter, File, Form, Query, UploadFile
+from fastapi.responses import JSONResponse
 
 from app.dependencies import AppSettings, DbSession
 from app.exceptions import UnprocessableError
@@ -19,6 +20,7 @@ from app.services.linking import auto_link_demographics
 router = APIRouter(prefix="/demographic/{corpus_id}", tags=["demographic"])
 
 def _pages(total: int, page_size: int) -> int:
+    """Calculate total number of pages for pagination metadata."""
     return math.ceil(total / page_size) if total > 0 else 0
 
 
@@ -26,14 +28,23 @@ def _pages(total: int, page_size: int) -> int:
     "/upload",
     response_model=ResponseEnvelope[ImportDemographicResponse],
     status_code=201,
+    summary="Upload demographic CSV (preview)",
+    description=(
+        "Validate a demographic CSV file for one corpus and return a preview. "
+        "The upload stays pending until `/confirm` is called."
+    ),
 )
 async def upload_demographic_data(
     corpus_id: uuid.UUID,
-    file: UploadFile,
     session: DbSession,
     settings: AppSettings,
-    name: str | None = Form(default=None),
+    file: UploadFile = File(..., description="Demographic CSV file to validate and preview."),
+    name: str | None = Form(
+        default=None,
+        description="Optional logical import name. Defaults to the uploaded filename stem.",
+    ),
 ) -> ResponseEnvelope[ImportDemographicResponse]:
+    """Validate CSV structure and create a pending import with preview metadata."""
     service = DemographicService(session, settings)
     try:
         response = await service.upload_demographic_data(
@@ -43,9 +54,12 @@ async def upload_demographic_data(
             max_bytes=settings.MAX_UPLOAD_BYTES,
         )
     except UnprocessableError as exc:
-        return ResponseEnvelope[ImportDemographicResponse].fail(
-            error="UnprocessableError",
-            detail=str(exc),
+        return JSONResponse(
+            status_code=UnprocessableError.status_code,
+            content=ResponseEnvelope[ImportDemographicResponse].fail(
+                error="UnprocessableError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
         )
 
     return ResponseEnvelope[ImportDemographicResponse].ok(data=response)
@@ -55,14 +69,26 @@ async def upload_demographic_data(
     "/confirm",
     response_model=ResponseEnvelope[UploadDemographicConfirmResponse],
     status_code=201,
+    summary="Confirm or cancel pending demographic upload",
+    description=(
+        "Finalize a pending upload created by `/upload` and persist rows to the database, "
+        "or cancel and discard the pending file."
+    ),
 )
 async def confirm_demographic_upload(
     corpus_id: uuid.UUID,
-    import_id: uuid.UUID,
-    confirm: bool,
     settings: AppSettings,
     session: DbSession,
+    import_id: uuid.UUID = Query(
+        ...,
+        description="Import id returned by the upload endpoint.",
+    ),
+    confirm: bool = Query(
+        ...,
+        description="Set `true` to persist data, `false` to cancel and delete pending upload.",
+    ),
 ) -> ResponseEnvelope[UploadDemographicConfirmResponse]:
+    """Persist or cancel a previously uploaded demographic CSV."""
     service = DemographicService(session, settings)
     try:
         response = await service.confirm_demographic_upload(
@@ -71,9 +97,12 @@ async def confirm_demographic_upload(
             confirm=confirm,
         )
     except UnprocessableError as exc:
-        return ResponseEnvelope[UploadDemographicConfirmResponse].fail(
-            error="UnprocessableError",
-            detail=str(exc),
+        return JSONResponse(
+            status_code=UnprocessableError.status_code,
+            content=ResponseEnvelope[UploadDemographicConfirmResponse].fail(
+                error="UnprocessableError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
         )
 
     return ResponseEnvelope[UploadDemographicConfirmResponse].ok(data=response)
@@ -82,21 +111,27 @@ async def confirm_demographic_upload(
 @router.get(
     "/files",
     response_model=ResponseEnvelope[Page[DemographicFileSummary]],
+    summary="List demographic imports",
+    description="List confirmed demographic imports for a corpus, including row counts.",
 )
 async def list_demographic_files(
     corpus_id: uuid.UUID,
     session: DbSession,
     settings: AppSettings,
-    page: int = 1,
-    page_size: int = 20,
+    page: int = Query(default=1, ge=1, description="1-based page number."),
+    page_size: int = Query(default=20, ge=1, le=200, description="Number of items per page."),
 ) -> ResponseEnvelope[Page[DemographicFileSummary]]:
+    """Return paginated demographic import metadata for one corpus."""
     service = DemographicService(session, settings)
     try:
         items, total = await service.list_files(corpus_id=corpus_id, page=page, page_size=page_size)
     except UnprocessableError as exc:
-        return ResponseEnvelope[Page[DemographicFileSummary]].fail(
-            error="UnprocessableError",
-            detail=str(exc),
+        return JSONResponse(
+            status_code=UnprocessableError.status_code,
+            content=ResponseEnvelope[Page[DemographicFileSummary]].fail(
+                error="UnprocessableError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
         )
 
     return ResponseEnvelope[Page[DemographicFileSummary]].ok(
@@ -110,15 +145,24 @@ async def list_demographic_files(
 @router.get(
     "/rows",
     response_model=ResponseEnvelope[Page[DemographicRowSchema]],
+    summary="List demographic rows",
+    description=(
+        "List confirmed demographic rows for a corpus. "
+        "Optionally filter to one demographic file."
+    ),
 )
 async def list_demographic_rows(
     corpus_id: uuid.UUID,
     session: DbSession,
     settings: AppSettings,
-    demographic_file_id: uuid.UUID | None = None,
-    page: int = 1,
-    page_size: int = 20,
+    demographic_file_id: uuid.UUID | None = Query(
+        default=None,
+        description="Optional filter for one demographic import id.",
+    ),
+    page: int = Query(default=1, ge=1, description="1-based page number."),
+    page_size: int = Query(default=20, ge=1, le=200, description="Number of items per page."),
 ) -> ResponseEnvelope[Page[DemographicRowSchema]]:
+    """Return paginated demographic rows for one corpus."""
     service = DemographicService(session, settings)
     try:
         items, total = await service.list_rows(
@@ -128,9 +172,12 @@ async def list_demographic_rows(
             page_size=page_size,
         )
     except UnprocessableError as exc:
-        return ResponseEnvelope[Page[DemographicRowSchema]].fail(
-            error="UnprocessableError",
-            detail=str(exc),
+        return JSONResponse(
+            status_code=UnprocessableError.status_code,
+            content=ResponseEnvelope[Page[DemographicRowSchema]].fail(
+                error="UnprocessableError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
         )
 
     return ResponseEnvelope[Page[DemographicRowSchema]].ok(

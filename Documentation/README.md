@@ -8,3 +8,6 @@ Theme model reference:
 
 Ingestion pipeline reference:
 - `ingestion-pipeline.md` (data structures, chunking, upload format, API endpoints)
+
+Demographic import pipeline reference:
+- `demographic-pipeline.md` (data structures, CSV validation rules, preview/confirm flow, API endpoints)

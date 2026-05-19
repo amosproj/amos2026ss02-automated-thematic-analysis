@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
+import json
 
 import pytest
 from starlette.datastructures import UploadFile
@@ -26,8 +27,10 @@ async def test_confirm_demographic_upload_returns_fail_envelope_on_unprocessable
             settings=SimpleNamespace(MAX_UPLOAD_BYTES=10),
             session=AsyncMock(),
         )
-    assert response.success is False
-    assert response.error == "UnprocessableError"
+    assert response.status_code == 422
+    payload = json.loads(response.body)
+    assert payload["success"] is False
+    assert payload["error"] == "UnprocessableError"
 
 
 @pytest.mark.asyncio
@@ -44,8 +47,10 @@ async def test_list_files_returns_fail_envelope_on_unprocessable():
             page=1,
             page_size=20,
         )
-    assert response.success is False
-    assert response.error == "UnprocessableError"
+    assert response.status_code == 422
+    payload = json.loads(response.body)
+    assert payload["success"] is False
+    assert payload["error"] == "UnprocessableError"
 
 
 @pytest.mark.asyncio
@@ -63,8 +68,10 @@ async def test_list_rows_returns_fail_envelope_on_unprocessable():
             page=1,
             page_size=20,
         )
-    assert response.success is False
-    assert response.error == "UnprocessableError"
+    assert response.status_code == 422
+    payload = json.loads(response.body)
+    assert payload["success"] is False
+    assert payload["error"] == "UnprocessableError"
 
 
 @pytest.mark.asyncio
