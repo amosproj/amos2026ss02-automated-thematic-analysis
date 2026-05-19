@@ -48,7 +48,11 @@
   {% endif %}
 
   <div class="d-flex gap-2">
-    <a class="btn btn-primary" href="{{ url_for('ingestion.upload_form', corpus_id=corpus_id) }}">Upload more</a>
-    <a class="btn btn-outline-secondary" href="{{ url_for('ingestion.list_transcripts', corpus_id=corpus_id) }}">View all transcripts</a>
+    {% if corpus_id %}
+      <a class="btn btn-primary" href="{{ url_for('ingestion.upload_form', corpus_id=corpus_id) }}">Upload more</a>
+      <a class="btn btn-outline-secondary" href="{{ url_for('ingestion.list_transcripts', corpus_id=corpus_id) }}">View all transcripts</a>
+    {% else %}
+      <a class="btn btn-outline-secondary" href="{{ url_for('ingestion.upload_landing') }}">Back to upload</a>
+    {% endif %}
   </div>
 {% endblock %}
