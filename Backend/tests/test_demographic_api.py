@@ -30,8 +30,8 @@ async def test_demographic_csv_valid_dynamic_columns_and_confirm_persists_rows(c
     corpus_id = await _create_corpus(client, "Corpus A")
 
     csv_content = (
-        "username,age,gender,department\n"
-        "user_a,34,female,engineering\n"
+        "username;age;gender;department\n"
+        "user_a;34;female;engineering\n"
     ).encode("utf-8")
 
     upload = await _upload_csv(client, corpus_id, "demographics.csv", csv_content)
@@ -74,8 +74,8 @@ async def test_demographic_csv_missing_values_are_accepted(client, db_engine):
     corpus_id = await _create_corpus(client, "Corpus Missing Values")
 
     csv_content = (
-        "username,age,gender,income_band\n"
-        "user_b,,non-binary,\n"
+        "username;age;gender;income_band\n"
+        "user_b;;non-binary;\n"
     ).encode("utf-8")
     upload = await _upload_csv(client, corpus_id, "missing_values.csv", csv_content)
     assert upload.status_code == 201
@@ -119,8 +119,8 @@ async def test_demographic_upload_validates_malformed_csv_row_and_reports_clear_
     corpus_id = await _create_corpus(client, "Corpus Malformed")
 
     malformed = (
-        "username,age,gender\n"
-        "user_d,29,male,unexpected\n"
+        "username;age;gender\n"
+        "user_d;29;male;unexpected\n"
     ).encode("utf-8")
     response = await _upload_csv(client, corpus_id, "malformed.csv", malformed)
 
@@ -132,7 +132,7 @@ async def test_demographic_upload_validates_malformed_csv_row_and_reports_clear_
 
 async def test_demographic_upload_rejects_non_csv_extension_even_with_csv_mime_variants(client):
     corpus_id = await _create_corpus(client, "Corpus Extensions")
-    content = "username,segment\nuser_e,A\n".encode("utf-8")
+    content = "username;segment\nuser_e;A\n".encode("utf-8")
 
     ok_response = await _upload_csv(
         client,
@@ -158,8 +158,8 @@ async def test_demographic_upload_rejects_non_csv_extension_even_with_csv_mime_v
 
 async def test_demographic_upload_rejects_duplicate_username(client):
     corpus_id = await _create_corpus(client, "Corpus Dup Username")
-    first = "username,role\nuser_f,participant\n".encode("utf-8")
-    second = "username,role\nuser_f,participant\n".encode("utf-8")
+    first = "username;role\nuser_f;participant\n".encode("utf-8")
+    second = "username;role\nuser_f;participant\n".encode("utf-8")
 
     first_response = await _upload_csv(client, corpus_id, "first.csv", first)
     assert first_response.status_code == 201
@@ -181,7 +181,7 @@ async def test_demographic_upload_rejects_duplicate_username(client):
 async def test_demographic_upload_allows_same_username_in_different_corpora(client):
     corpus_a = await _create_corpus(client, "Corpus A")
     corpus_b = await _create_corpus(client, "Corpus B")
-    csv_same_user = "username,role\nshared_user,participant\n".encode("utf-8")
+    csv_same_user = "username;role\nshared_user;participant\n".encode("utf-8")
 
     upload_a = await _upload_csv(client, corpus_a, "a.csv", csv_same_user)
     assert upload_a.status_code == 201
@@ -206,7 +206,7 @@ async def test_demographic_upload_allows_same_username_in_different_corpora(clie
 
 async def test_demographic_confirm_second_attempt_fails_after_successful_confirm(client):
     corpus_id = await _create_corpus(client, "Corpus Confirm")
-    csv_content = "username,country\nuser_g,DE\n".encode("utf-8")
+    csv_content = "username;country\nuser_g;DE\n".encode("utf-8")
 
     upload = await _upload_csv(client, corpus_id, "confirm.csv", csv_content)
     import_id = upload.json()["data"]["import_id"]
@@ -229,8 +229,8 @@ async def test_demographic_confirm_second_attempt_fails_after_successful_confirm
 
 async def test_demographic_name_unique_within_corpus(client, db_engine):
     corpus_id = await _create_corpus(client, "Corpus Names")
-    csv_content_a = "username,country\nuser_h,DE\n".encode("utf-8")
-    csv_content_b = "username,country\nuser_i,AT\n".encode("utf-8")
+    csv_content_a = "username;country\nuser_h;DE\n".encode("utf-8")
+    csv_content_b = "username;country\nuser_i;AT\n".encode("utf-8")
 
     first_upload = await client.post(
         f"{DEMOGRAPHIC_API}/{corpus_id}/upload",
@@ -270,8 +270,8 @@ async def test_demographic_name_unique_within_corpus(client, db_engine):
 async def test_demographic_name_can_repeat_across_corpora(client):
     corpus_a = await _create_corpus(client, "Corpus A")
     corpus_b = await _create_corpus(client, "Corpus B")
-    csv_a = "username,age\nuser_j,31\n".encode("utf-8")
-    csv_b = "username,age\nuser_k,29\n".encode("utf-8")
+    csv_a = "username;age\nuser_j;31\n".encode("utf-8")
+    csv_b = "username;age\nuser_k;29\n".encode("utf-8")
 
     upload_a = await client.post(
         f"{DEMOGRAPHIC_API}/{corpus_a}/upload",
@@ -318,13 +318,13 @@ async def test_list_demographic_files_with_total_rows(client):
     corpus_id = await _create_corpus(client, "Corpus File List")
 
     csv_a = (
-        "username,group\n"
-        "user_l,A\n"
-        "user_m,B\n"
+        "username;group\n"
+        "user_l;A\n"
+        "user_m;B\n"
     ).encode("utf-8")
     csv_b = (
-        "username,group\n"
-        "user_n,C\n"
+        "username;group\n"
+        "user_n;C\n"
     ).encode("utf-8")
 
     await _upload_and_confirm_named_csv(client, corpus_id, "batch-a", csv_a)
@@ -345,11 +345,11 @@ async def test_list_demographic_rows_pagination_and_file_filter(client):
     corpus_id = await _create_corpus(client, "Corpus Row List")
 
     csv_a = (
-        "username,group\n"
-        "user_o,A\n"
-        "user_p,B\n"
+        "username;group\n"
+        "user_o;A\n"
+        "user_p;B\n"
     ).encode("utf-8")
-    csv_b = "username,group\nuser_q,C\n".encode("utf-8")
+    csv_b = "username;group\nuser_q;C\n".encode("utf-8")
 
     await _upload_and_confirm_named_csv(client, corpus_id, "batch-a", csv_a)
     await _upload_and_confirm_named_csv(client, corpus_id, "batch-b", csv_b)
@@ -374,7 +374,7 @@ async def test_list_demographic_rows_pagination_and_file_filter(client):
     assert all(row["demographic_file_id"] == file_a_id for row in filtered_body["items"])
 
     other_corpus = await _create_corpus(client, "Other Corpus")
-    other_csv = "username,group\nuser_r,Z\n".encode("utf-8")
+    other_csv = "username;group\nuser_r;Z\n".encode("utf-8")
     await _upload_and_confirm_named_csv(client, other_corpus, "other-batch", other_csv)
     other_files_resp = await client.get(f"{DEMOGRAPHIC_API}/{other_corpus}/files")
     other_file_id = other_files_resp.json()["data"]["items"][0]["id"]

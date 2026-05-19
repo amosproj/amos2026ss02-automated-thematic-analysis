@@ -106,7 +106,7 @@ class DemographicService:
 
     def _parse_demographic_csv(self, filename: str, content: bytes) -> ParsedDemographicCsv:
         text_stream = io.StringIO(self._decode_csv_bytes(filename, content))
-        reader = csv.DictReader(text_stream, restkey="__extra__")
+        reader = csv.DictReader(text_stream, delimiter=';', restkey="__extra__")
         rows = list(reader)
         fieldnames = list(reader.fieldnames or [])
 
