@@ -21,7 +21,7 @@ services:
       target: runtime
     env_file: ./Backend/.env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/appdb
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-appdb}
     ports:
       - "${APP_PORT:-8000}:8000"
     depends_on:
@@ -67,7 +67,7 @@ services:
       target: test
     env_file: ./Backend/.env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/appdb
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-appdb}
     volumes:
       - ./Backend/htmlcov:/app/htmlcov
     depends_on:
