@@ -436,7 +436,5 @@ class DemographicService:
         return LinkingSummary(
             total_transcripts=len(details),
             matched=matched_count,
-            unmatched=len(details) - matched_count,
-            unmatched_titles=[d.document_title for d in details if not d.matched],
             details=details,
         )

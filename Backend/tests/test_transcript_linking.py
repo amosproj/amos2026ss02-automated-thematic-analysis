@@ -75,8 +75,6 @@ async def test_link_summary_perfect_match(client):
 
     assert summary["total_transcripts"] == 3
     assert summary["matched"] == 3
-    assert summary["unmatched"] == 0
-    assert summary["unmatched_titles"] == []
     assert all(d["matched"] for d in summary["details"])
 
 
@@ -104,8 +102,6 @@ async def test_link_summary_partial_match(client):
 
     assert summary["total_transcripts"] == 3
     assert summary["matched"] == 2
-    assert summary["unmatched"] == 1
-    assert summary["unmatched_titles"] == ["participant_03"]
 
 
 # ---------------------------------------------------------------------------
@@ -133,10 +129,4 @@ async def test_link_summary_zero_match(client):
 
     assert summary["total_transcripts"] == 3
     assert summary["matched"] == 0
-    assert summary["unmatched"] == 3
-    assert set(summary["unmatched_titles"]) == {
-        "participant_01",
-        "participant_02",
-        "participant_03",
-    }
     assert all(not d["matched"] for d in summary["details"])

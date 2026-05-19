@@ -56,6 +56,4 @@ class TranscriptLinkStatus(BaseSchema):
 class LinkingSummary(BaseSchema):
     total_transcripts: int
     matched: int
-    unmatched: int
-    unmatched_titles: list[str]
     details: list[TranscriptLinkStatus]
