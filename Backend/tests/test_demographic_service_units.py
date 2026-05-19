@@ -28,21 +28,21 @@ async def test_parse_demographic_csv_rejects_invalid_utf8(tmp_path):
 async def test_parse_demographic_csv_requires_username_column(tmp_path):
     service = DemographicService(session=AsyncMock(), settings=_settings(tmp_path))
     with pytest.raises(UnprocessableError, match="must include 'username'"):
-        service._parse_demographic_csv("bad.csv", b"age;group\n20;a\n")
+        service._parse_demographic_csv("bad.csv", b"age,group\n20,a\n")
 
 
 @pytest.mark.asyncio
 async def test_parse_demographic_csv_rejects_empty_username(tmp_path):
     service = DemographicService(session=AsyncMock(), settings=_settings(tmp_path))
     with pytest.raises(UnprocessableError, match="invalid username"):
-        service._parse_demographic_csv("bad.csv", b"username;group\n;a\n")
+        service._parse_demographic_csv("bad.csv", b"username,group\n,a\n")
 
 
 @pytest.mark.asyncio
 async def test_validate_interviewee_ids_unique_rejects_duplicates_in_upload(tmp_path):
     session = AsyncMock()
     service = DemographicService(session=session, settings=_settings(tmp_path))
-    parsed = service._parse_demographic_csv("x.csv", b"username;group\nu1;a\nu1;b\n")
+    parsed = service._parse_demographic_csv("x.csv", b"username,group\nu1,a\nu1,b\n")
     with pytest.raises(UnprocessableError, match="duplicate username"):
         await service._validate_interviewee_ids_unique(uuid.uuid4(), parsed.parsed_rows)
 
@@ -54,7 +54,7 @@ async def test_validate_interviewee_ids_unique_rejects_existing_in_same_corpus(t
     session = AsyncMock()
     session.execute = AsyncMock(return_value=existing_result)
     service = DemographicService(session=session, settings=_settings(tmp_path))
-    parsed = service._parse_demographic_csv("x.csv", b"username;group\nu1;a\n")
+    parsed = service._parse_demographic_csv("x.csv", b"username,group\nu1,a\n")
     with pytest.raises(UnprocessableError, match="username already exists"):
         await service._validate_interviewee_ids_unique(uuid.uuid4(), parsed.parsed_rows)
 

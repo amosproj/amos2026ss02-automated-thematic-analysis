@@ -105,8 +105,9 @@ class DemographicService:
             raise UnprocessableError(f"Could not decode '{filename}' as UTF-8") from exc
 
     def _parse_demographic_csv(self, filename: str, content: bytes) -> ParsedDemographicCsv:
-        text_stream = io.StringIO(self._decode_csv_bytes(filename, content))
-        reader = csv.DictReader(text_stream, delimiter=';', restkey="__extra__")
+        csv_text = self._decode_csv_bytes(filename, content)
+        text_stream = io.StringIO(csv_text)
+        reader = csv.DictReader(text_stream, restkey="__extra__")
         rows = list(reader)
         fieldnames = list(reader.fieldnames or [])
 
@@ -176,12 +177,8 @@ class DemographicService:
             (
                 await self._session.execute(
                     select(DemographicRow.interviewee_id)
-                    .join(
-                        DemographicFiles,
-                        DemographicRow.demographic_file_id == DemographicFiles.id,
-                    )
                     .where(
-                        DemographicFiles.corpus_id == corpus_id,
+                        DemographicRow.corpus_id == corpus_id,
                         DemographicRow.interviewee_id.in_(set(ids_in_upload)),
                     )
                 )
@@ -384,6 +381,7 @@ class DemographicService:
             self._session.add(
                 DemographicRow(
                     demographic_file_id=import_id,
+                    corpus_id=corpus_id,
                     row_number=row_number,
                     interviewee_id=row.interviewee_id,
                     data=row.values,

@@ -13,7 +13,7 @@ from app.exceptions import register_exception_handlers
 from app.logging_config import configure_logging
 from app.middleware import register_middleware
 from app.routers import register_routers
-from app.services.upload_cleanup import purge_uploads_directory, run_upload_cleanup_loop
+from app.services.upload_cleanup import run_upload_cleanup_loop
 
 
 @asynccontextmanager
@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         raise RuntimeError("Database connection failed. Check DATABASE_URL and Postgres availability.")
     await init_db()
     uploads_dir = Path(settings.UPLOADS_DIR).resolve()
-    purge_uploads_directory(uploads_dir)
+    uploads_dir.mkdir(parents=True, exist_ok=True)
 
     cleanup_task = asyncio.create_task(
         run_upload_cleanup_loop(

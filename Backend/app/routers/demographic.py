@@ -2,6 +2,7 @@ import uuid
 import math
 
 from fastapi import APIRouter, File, Form, Query, UploadFile
+from fastapi.responses import JSONResponse
 
 from app.dependencies import AppSettings, DbSession
 from app.exceptions import UnprocessableError
@@ -51,9 +52,12 @@ async def upload_demographic_data(
             max_bytes=settings.MAX_UPLOAD_BYTES,
         )
     except UnprocessableError as exc:
-        return ResponseEnvelope[ImportDemographicResponse].fail(
-            error="UnprocessableError",
-            detail=str(exc),
+        return JSONResponse(
+            status_code=UnprocessableError.status_code,
+            content=ResponseEnvelope[ImportDemographicResponse].fail(
+                error="UnprocessableError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
         )
 
     return ResponseEnvelope[ImportDemographicResponse].ok(data=response)
@@ -91,9 +95,12 @@ async def confirm_demographic_upload(
             confirm=confirm,
         )
     except UnprocessableError as exc:
-        return ResponseEnvelope[UploadDemographicConfirmResponse].fail(
-            error="UnprocessableError",
-            detail=str(exc),
+        return JSONResponse(
+            status_code=UnprocessableError.status_code,
+            content=ResponseEnvelope[UploadDemographicConfirmResponse].fail(
+                error="UnprocessableError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
         )
 
     return ResponseEnvelope[UploadDemographicConfirmResponse].ok(data=response)
@@ -117,9 +124,12 @@ async def list_demographic_files(
     try:
         items, total = await service.list_files(corpus_id=corpus_id, page=page, page_size=page_size)
     except UnprocessableError as exc:
-        return ResponseEnvelope[Page[DemographicFileSummary]].fail(
-            error="UnprocessableError",
-            detail=str(exc),
+        return JSONResponse(
+            status_code=UnprocessableError.status_code,
+            content=ResponseEnvelope[Page[DemographicFileSummary]].fail(
+                error="UnprocessableError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
         )
 
     return ResponseEnvelope[Page[DemographicFileSummary]].ok(
@@ -160,9 +170,12 @@ async def list_demographic_rows(
             page_size=page_size,
         )
     except UnprocessableError as exc:
-        return ResponseEnvelope[Page[DemographicRowSchema]].fail(
-            error="UnprocessableError",
-            detail=str(exc),
+        return JSONResponse(
+            status_code=UnprocessableError.status_code,
+            content=ResponseEnvelope[Page[DemographicRowSchema]].fail(
+                error="UnprocessableError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
         )
 
     return ResponseEnvelope[Page[DemographicRowSchema]].ok(
