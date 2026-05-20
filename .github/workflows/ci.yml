@@ -72,28 +72,10 @@ jobs:
       - name: Build production runtime image
         run: docker build --target runtime -t backend-runtime:test .
 
-  lint-windows:
-    name: Lint on Windows
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run linting using setup.ps1
-        shell: pwsh
-        run: .\setup.ps1 -Lint
-
-      - name: Clean up Docker Compose
-        if: always()
-        working-directory: Backend
-        shell: pwsh
-        run: docker compose --profile test down -v
-
   build-windows:
     name: Build on Windows
     runs-on: windows-latest
-    needs: lint-windows
+    needs: lint-linux
 
     defaults:
       run:
