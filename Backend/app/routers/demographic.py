@@ -43,7 +43,7 @@ async def upload_demographic_data(
         default=None,
         description="Optional logical import name. Defaults to the uploaded filename stem.",
     ),
-) -> JSONResponse:
+) -> ResponseEnvelope[ImportDemographicResponse] | JSONResponse:
     """Validate CSV structure and create a pending import with preview metadata."""
     service = DemographicService(session, settings)
     try:
@@ -62,10 +62,7 @@ async def upload_demographic_data(
             ).model_dump(mode="json"),
         )
 
-    return JSONResponse(
-        status_code=201,
-        content=ResponseEnvelope[ImportDemographicResponse].ok(data=response).model_dump(mode="json"),
-    )
+    return ResponseEnvelope[ImportDemographicResponse].ok(data=response)
 
 
 @router.post(
@@ -90,7 +87,7 @@ async def confirm_demographic_upload(
         ...,
         description="Set `true` to persist data, `false` to cancel and delete pending upload.",
     ),
-) -> JSONResponse:
+) -> ResponseEnvelope[UploadDemographicConfirmResponse] | JSONResponse:
     """Persist or cancel a previously uploaded demographic CSV."""
     service = DemographicService(session, settings)
     try:
@@ -108,12 +105,7 @@ async def confirm_demographic_upload(
             ).model_dump(mode="json"),
         )
 
-    return JSONResponse(
-        status_code=201,
-        content=ResponseEnvelope[UploadDemographicConfirmResponse].ok(data=response).model_dump(
-            mode="json"
-        ),
-    )
+    return ResponseEnvelope[UploadDemographicConfirmResponse].ok(data=response)
 
 
 @router.get(
@@ -128,7 +120,7 @@ async def list_demographic_files(
     settings: AppSettings,
     page: int = Query(default=1, ge=1, description="1-based page number."),
     page_size: int = Query(default=20, ge=1, le=200, description="Number of items per page."),
-) -> JSONResponse:
+) -> ResponseEnvelope[Page[DemographicFileSummary]] | JSONResponse:
     """Return paginated demographic import metadata for one corpus."""
     service = DemographicService(session, settings)
     try:
@@ -142,15 +134,11 @@ async def list_demographic_files(
             ).model_dump(mode="json"),
         )
 
-    return JSONResponse(
-        content=ResponseEnvelope[Page[DemographicFileSummary]]
-        .ok(
-            data=Page(
-                items=items,
-                meta=PageMeta(total=total, page=page, page_size=page_size, pages=_pages(total, page_size)),
-            )
+    return ResponseEnvelope[Page[DemographicFileSummary]].ok(
+        data=Page(
+            items=items,
+            meta=PageMeta(total=total, page=page, page_size=page_size, pages=_pages(total, page_size)),
         )
-        .model_dump(mode="json")
     )
 
 
@@ -173,7 +161,7 @@ async def list_demographic_rows(
     ),
     page: int = Query(default=1, ge=1, description="1-based page number."),
     page_size: int = Query(default=20, ge=1, le=200, description="Number of items per page."),
-) -> JSONResponse:
+) -> ResponseEnvelope[Page[DemographicRowSchema]] | JSONResponse:
     """Return paginated demographic rows for one corpus."""
     service = DemographicService(session, settings)
     try:
@@ -192,15 +180,11 @@ async def list_demographic_rows(
             ).model_dump(mode="json"),
         )
 
-    return JSONResponse(
-        content=ResponseEnvelope[Page[DemographicRowSchema]]
-        .ok(
-            data=Page(
-                items=items,
-                meta=PageMeta(total=total, page=page, page_size=page_size, pages=_pages(total, page_size)),
-            )
+    return ResponseEnvelope[Page[DemographicRowSchema]].ok(
+        data=Page(
+            items=items,
+            meta=PageMeta(total=total, page=page, page_size=page_size, pages=_pages(total, page_size)),
         )
-        .model_dump(mode="json")
     )
 
 
