@@ -3,14 +3,20 @@ from functools import lru_cache
 
 from loguru import logger
 from sqlalchemy import inspect, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.config import get_settings
 from app.models import Base
 
 
 @lru_cache
-def _get_engine():
+def _get_engine() -> AsyncEngine:
     settings = get_settings() # Get the settings using the cached function to avoid reloading the configuration multiple times
     return create_async_engine(
         settings.DATABASE_URL,
@@ -55,7 +61,7 @@ async def init_db() -> None:
             await conn.run_sync(Base.metadata.create_all)
             expected_tables = set(Base.metadata.tables.keys())
 
-            def _existing_tables(sync_conn) -> set[str]:
+            def _existing_tables(sync_conn: Connection) -> set[str]:
                 return set(inspect(sync_conn).get_table_names())
 
             existing_tables = await conn.run_sync(_existing_tables)

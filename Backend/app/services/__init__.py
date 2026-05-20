@@ -1,15 +1,17 @@
 """Service layer exports."""
 
-from app.services.theme_frequency import ThemeFrequencyService
-from app.services.theme_graph import (
+from app.schemas.theme_graph import (
     ThemeDagValidation,
     ThemeDagView,
     ThemeEdgeView,
+    ThemeNodeView,
+    ThemeTreeNode,
+)
+from app.services.theme_frequency import ThemeFrequencyService
+from app.services.theme_graph import (
     ThemeGraphError,
     ThemeGraphService,
-    ThemeNodeView,
     ThemeNotFoundError,
-    ThemeTreeNode,
     ThemeValidationError,
 )
 from app.services.theme_read import ThemeReadService

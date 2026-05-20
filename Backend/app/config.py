@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
     @classmethod
-    def parse_cors_origins(cls, v: str | list) -> list[str]:
+    def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
