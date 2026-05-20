@@ -30,8 +30,8 @@ jobs:
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v4
 
-  trivy-secrets:
-    name: Secret scan (Trivy)
+  trufflehog:
+    name: Secret scan (TruffleHog OSS)
     runs-on: ubuntu-latest
 
     permissions:
@@ -42,11 +42,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Trivy secret scan
-        uses: aquasecurity/trivy-action@0.32.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: secret
-          exit-code: "1"
-          format: table
+      - name: Run TruffleHog secret scan
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/workdir" ghcr.io/trufflesecurity/trufflehog:latest \
+            git --fail --no-update file:///workdir
