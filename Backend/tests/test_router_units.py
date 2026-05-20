@@ -10,9 +10,9 @@ from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from starlette.requests import Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
+from starlette.requests import Request
 
 from app.exceptions import NotFoundError, UnprocessableError
 from app.models import Base, Codebook
@@ -22,7 +22,6 @@ from app.routers import themes as themes_router
 from app.schemas.theme_views import ThemeFrequencyItem
 from app.services.theme_frequency import ThemeFrequencyService
 from app.services.theme_graph import ThemeGraphService, ThemeNotFoundError, ThemeValidationError
-
 
 AIOSQLITE_AVAILABLE = importlib.util.find_spec("aiosqlite") is not None
 

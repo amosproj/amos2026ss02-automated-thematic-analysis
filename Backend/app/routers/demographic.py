@@ -1,5 +1,5 @@
-import uuid
 import math
+import uuid
 
 from fastapi import APIRouter, File, Form, Query, UploadFile
 from fastapi.responses import JSONResponse

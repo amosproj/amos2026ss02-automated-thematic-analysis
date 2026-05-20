@@ -6,6 +6,7 @@ from pydantic import Field
 
 from app.schemas import BaseSchema
 
+
 class ImportDemographicPreview(BaseSchema):
     rows_detected: int
     columns_detected: int

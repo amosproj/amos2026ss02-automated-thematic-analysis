@@ -1,3 +1,4 @@
+from app.schemas.codebook import CodebookSchema
 from app.schemas.common import (
     BaseSchema,
     HealthResponse,
@@ -6,7 +7,13 @@ from app.schemas.common import (
     PaginationParams,
     ResponseEnvelope,
 )
-from app.schemas.codebook import CodebookSchema
+from app.schemas.demographic import (
+    DemographicFileSummary,
+    DemographicRowSchema,
+    ImportDemographicPreview,
+    ImportDemographicResponse,
+    UploadDemographicConfirmResponse,
+)
 from app.schemas.ingestion import (
     BulkDocumentIngestRequest,
     CorpusChunkSchema,
@@ -16,13 +23,7 @@ from app.schemas.ingestion import (
     DocumentInput,
     IngestResultSchema,
 )
-from app.schemas.demographic import (
-    DemographicFileSummary,
-    DemographicRowSchema,
-    ImportDemographicPreview,
-    ImportDemographicResponse,
-    UploadDemographicConfirmResponse,
-)
+from app.schemas.interview import InterviewMessage, InterviewTranscript
 from app.schemas.theme import ThemeSchema
 from app.schemas.theme_graph import (
     ThemeDagValidation,
@@ -35,7 +36,6 @@ from app.schemas.theme_views import (
     ThemeFrequencyItem,
     ThemeTreeResponse,
 )
-from app.schemas.interview import InterviewMessage, InterviewTranscript
 
 __all__ = [
     "BaseSchema",

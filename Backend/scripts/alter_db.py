@@ -7,7 +7,9 @@ backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
 from sqlalchemy import text
+
 from app.database import _get_engine
+
 
 async def alter_db():
     engine = _get_engine()

@@ -1,7 +1,7 @@
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-import asyncio
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles

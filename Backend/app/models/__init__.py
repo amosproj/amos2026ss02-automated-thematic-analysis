@@ -1,5 +1,7 @@
+from app.models.analysis import DocumentAnalysis, ThemeOccurrence
 from app.models.base import Base, IdMixin, TimestampMixin
 from app.models.codebook import Codebook
+from app.models.demographic import DemographicFiles, DemographicRow
 from app.models.ingestion import (
     Corpus,
     CorpusChunk,
@@ -10,8 +12,6 @@ from app.models.themes import (
     Theme,
     ThemeHierarchyRelationship,
 )
-from app.models.analysis import DocumentAnalysis, ThemeOccurrence
-from app.models.demographic import DemographicFiles, DemographicRow
 
 __all__ = [
     "Base",

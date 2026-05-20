@@ -1,5 +1,6 @@
 """Service layer exports."""
 
+from app.services.theme_frequency import ThemeFrequencyService
 from app.services.theme_graph import (
     ThemeDagValidation,
     ThemeDagView,
@@ -12,7 +13,6 @@ from app.services.theme_graph import (
     ThemeValidationError,
 )
 from app.services.theme_read import ThemeReadService
-from app.services.theme_frequency import ThemeFrequencyService
 
 __all__ = [
     "ThemeDagValidation",

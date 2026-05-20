@@ -1,18 +1,16 @@
 from pathlib import Path
 
-import pytest
-
 API = "/api/v1/ingestion"
 
 # Synthesized content — long enough to substantively exercise the chunker.
 _LONG_TEXT = (
-    "The participant described their daily workflow in some detail. "
-    "They mentioned working with contracts, performing document review, "
-    "and using a variety of tools throughout the day. The interview "
-    "covered topics including efficiency, accuracy, ethical considerations, "
-    "training requirements, and the future of the profession. Overall the "
-    "conversation provided a substantive view of the participant's experience."
-).encode()
+    b"The participant described their daily workflow in some detail. "
+    b"They mentioned working with contracts, performing document review, "
+    b"and using a variety of tools throughout the day. The interview "
+    b"covered topics including efficiency, accuracy, ethical considerations, "
+    b"training requirements, and the future of the profession. Overall the "
+    b"conversation provided a substantive view of the participant's experience."
+)
 
 # Real-transcript fixtures for the *_real_fixture tests below.
 _DATA_DIR = Path(__file__).resolve().parent / "test-data"

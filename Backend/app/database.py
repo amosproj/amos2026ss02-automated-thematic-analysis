@@ -2,8 +2,7 @@ from collections.abc import AsyncGenerator
 from functools import lru_cache
 
 from loguru import logger
-from sqlalchemy import inspect
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_settings
