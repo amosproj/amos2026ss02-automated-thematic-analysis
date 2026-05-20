@@ -1,7 +1,7 @@
 """
 Prompt templates for LLM-assisted thematic analysis.
 
-The phrasing follows the prompt in Auto-TA paper: 
+The phrasing follows the prompt in Auto-TA paper:
 the model is asked to act as a qualitative coder,
 ground every code in a verbatim quote, and surface candidate themes.
 """

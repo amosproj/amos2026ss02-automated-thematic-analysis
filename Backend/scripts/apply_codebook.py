@@ -4,8 +4,7 @@ import sys
 from pathlib import Path
 
 # Add Backend root to path so we can import 'app' modules
-backend_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(backend_dir))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.llm.pipelines import apply_codebook_to_interview
 from app.schemas.llm import InterviewAnalysisResult

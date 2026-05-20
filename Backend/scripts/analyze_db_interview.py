@@ -6,8 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 
 # Add Backend root to path
-backend_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(backend_dir))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import select
 
@@ -246,7 +245,7 @@ async def analyze_corpus(corpus_id_str: str, codebook_id_str: str):
             .join(CorpusDocument, DocumentAnalysis.document_id == CorpusDocument.id)
             .where(DocumentAnalysis.codebook_id == codebook_id)
             .where(CorpusDocument.corpus_id == corpus_id)
-            .where(ThemeOccurrence.is_present == True)
+            .where(ThemeOccurrence.is_present)
         )
 
         results = await session.execute(stmt)
@@ -264,7 +263,7 @@ async def analyze_corpus(corpus_id_str: str, codebook_id_str: str):
         for label in theme_rels_result.scalars().all():
             all_theme_labels.add(label)
 
-        for occ, theme, doc in rows:
+        for _occ, theme, doc in rows:
             theme_to_docs[theme.label].append(doc.title)
 
         for label in sorted(all_theme_labels):

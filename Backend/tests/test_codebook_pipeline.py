@@ -188,7 +188,7 @@ class TestMultipleInterviews:
 
         theme_to_count = defaultdict(int)
 
-        for text, parsed_dict in interviews_and_responses:
+        for _text, parsed_dict in interviews_and_responses:
             result = InterviewAnalysisResult(**parsed_dict)
             for t in result.themes:
                 if t.present:
