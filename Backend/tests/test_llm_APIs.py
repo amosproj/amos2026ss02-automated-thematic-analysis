@@ -28,8 +28,21 @@ def _active_api_key() -> str | None:
     return cfg.LLM_API_KEY
 
 
+def _is_usable_key(value: str | None) -> bool:
+    """Return True only for non-placeholder API key values."""
+    if not value:
+        return False
+    stripped = value.strip()
+    if not stripped:
+        return False
+    # Treat template placeholders like <your_key_here> as unset.
+    if stripped.startswith("<") and stripped.endswith(">"):
+        return False
+    return True
+
+
 requires_llm_key = pytest.mark.skipif(
-    not _active_api_key(),
+    not _is_usable_key(_active_api_key()),
     reason=(
         f"No API key set for SELECTED_API='{get_settings().SELECTED_API}'. "
         "Set LLM_API_KEY_FAU (FAU) or LLM_API_KEY (ACADEMIC) to run live tests."
@@ -37,12 +50,12 @@ requires_llm_key = pytest.mark.skipif(
 )
 
 requires_academic_key = pytest.mark.skipif(
-    not get_settings().LLM_API_KEY,
+    not _is_usable_key(get_settings().LLM_API_KEY),
     reason="LLM_API_KEY not set; skipping live Academic Cloud call.",
 )
 
 requires_fau_key = pytest.mark.skipif(
-    not get_settings().LLM_API_KEY_FAU,
+    not _is_usable_key(get_settings().LLM_API_KEY_FAU),
     reason="LLM_API_KEY_FAU not set; skipping live NHR@FAU call.",
 )
 
