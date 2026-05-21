@@ -66,8 +66,10 @@ def _register_error_handlers(app: Flask) -> None:
         # 303 forces a GET on the redirect, so the browser doesn't try to re-POST.
         # Always redirect to home — never to a user-controlled value (e.g.
         # request.referrer) — to eliminate the open-redirect risk (CWE-601).
-        # CodeQL's py/url-redirection rule only recognises hardcoded targets
-        # or strict allowlists as sanitizers, not netloc/host comparisons.
+        # CodeQL's py/url-redirection rule recognises only a small set of
+        # sanitiser patterns (strict allowlist, empty-netloc-and-scheme
+        # relative URLs, Django's url_has_allowed_host_and_scheme). A
+        # hardcoded url_for() target sidesteps the dataflow entirely.
         return redirect(url_for("main.index")), 303
 
     @app.errorhandler(Exception)
