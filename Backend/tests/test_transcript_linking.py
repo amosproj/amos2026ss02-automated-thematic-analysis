@@ -1,5 +1,4 @@
 """Tests for automatic and on-demand transcript-to-demographic linking."""
-import pytest
 
 INGESTION_API = "/api/v1/ingestion"
 DEMOGRAPHIC_API = "/api/v1/demographic"

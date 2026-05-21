@@ -19,7 +19,6 @@ import pytest
 from app.config import Settings
 from app.llm.client import build_chat_model
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

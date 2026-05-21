@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import json
 from collections.abc import Callable
+from typing import Any
 
 from app.exceptions import UnprocessableError
 from app.schemas.ingestion import DocumentInput
@@ -33,7 +34,7 @@ def parse_txt_upload(filename: str, content: bytes) -> list[DocumentInput]:
 
 def parse_docx_upload(filename: str, content: bytes) -> list[DocumentInput]:
     """One document per .docx file. Concatenates all paragraph text."""
-    from docx import Document  # type: ignore[import-not-found]
+    from docx import Document
 
     try:
         doc = Document(io.BytesIO(content))
@@ -48,7 +49,7 @@ def parse_docx_upload(filename: str, content: bytes) -> list[DocumentInput]:
 
 def parse_pdf_upload(filename: str, content: bytes) -> list[DocumentInput]:
     """One document per .pdf file. Concatenates extracted text from each page."""
-    from pypdf import PdfReader  # type: ignore[import-not-found]
+    from pypdf import PdfReader
 
     try:
         reader = PdfReader(io.BytesIO(content))
@@ -67,7 +68,7 @@ def parse_jsonl_upload(filename: str, content: bytes) -> list[DocumentInput]:
     by `message_index`. Participants with no non-blank human turns are skipped."""
     text_content = _decode_utf8(filename, content)
 
-    participants: dict[str, list[dict]] = {}
+    participants: dict[str, list[dict[str, Any]]] = {}
     for line_no, raw in enumerate(text_content.splitlines(), start=1):
         raw = raw.strip()
         if not raw:

@@ -10,7 +10,6 @@ from app.models import Base
 from app.services.theme_read import ThemeReadService
 from tests.fixtures.theme_graph_fixtures import seed_unbalanced_dummy_tree
 
-
 AIOSQLITE_AVAILABLE = importlib.util.find_spec("aiosqlite") is not None
 
 

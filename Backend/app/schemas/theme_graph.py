@@ -42,7 +42,7 @@ class ThemeTreeNode(BaseSchema):
     """Recursive tree view used by API/read service."""
 
     theme: ThemeNodeView
-    children: list["ThemeTreeNode"] = Field(default_factory=list)
+    children: list[ThemeTreeNode] = Field(default_factory=list)
 
 
 # Resolve the forward reference for recursive children typing.

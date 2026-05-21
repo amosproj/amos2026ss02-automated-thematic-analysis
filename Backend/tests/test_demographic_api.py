@@ -2,8 +2,8 @@ import uuid
 
 import pytest
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.demographic import DemographicFiles, DemographicRow
 
@@ -110,7 +110,7 @@ async def test_demographic_upload_requires_interviewee_id_and_at_least_one_demog
     assert response_missing_id.json()["success"] is False
     assert "must include 'username' column" in response_missing_id.json()["meta"]["detail"]
 
-    only_id_column = "username\nuser_c\n".encode("utf-8")
+    only_id_column = b"username\nuser_c\n"
     response_only_id = await _upload_csv(client, corpus_id, "only_id.csv", only_id_column)
     assert response_only_id.status_code == 422
     assert response_only_id.json()["success"] is False

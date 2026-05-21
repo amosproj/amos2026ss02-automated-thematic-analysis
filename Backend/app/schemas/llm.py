@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+
 class ThemePresence(BaseModel):
     theme_label: str = Field(description="The name or label of the theme from the codebook.")
     present: bool = Field(description="True if the theme is present in the transcript, False otherwise.")

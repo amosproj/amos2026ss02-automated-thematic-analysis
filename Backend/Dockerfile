@@ -49,6 +49,8 @@ WORKDIR /app
 
 COPY --from=builder-test /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder-test /usr/local/bin/pytest /usr/local/bin/pytest
+COPY --from=builder-test /usr/local/bin/ruff /usr/local/bin/ruff
+COPY --from=builder-test /usr/local/bin/mypy /usr/local/bin/mypy
 COPY pyproject.toml .
 COPY app/ app/
 COPY tests/ tests/

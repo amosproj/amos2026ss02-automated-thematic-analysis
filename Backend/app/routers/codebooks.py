@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import desc, select
-
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from sqlalchemy import desc, select
 
 from app.dependencies import DbSession
 from app.models import Codebook

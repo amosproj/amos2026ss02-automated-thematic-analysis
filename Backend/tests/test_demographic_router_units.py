@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
-import json
 
 import pytest
 from starlette.datastructures import UploadFile
