@@ -75,14 +75,7 @@ All data is embedded server-side as JSON in `data-` attributes on `#theme-app`. 
 
 `web/services/backend_client.py` wraps every FastAPI call. HTTP and network errors are categorised into typed `BackendError` subclasses, each carrying a `user_message` attribute that controllers flash to the user.
 
-| Method | Backend endpoint |
-|---|---|
-| `ensure_corpus(project_id, name)` | `POST /corpora/` |
-| `upload_files(corpus_id, files)` | `POST /corpora/{id}/documents` |
-| `list_documents(corpus_id)` | `GET /corpora/{id}/documents` |
-| `list_codebooks()` | `GET /codebooks/` |
-| `get_theme_frequencies(codebook_id)` | `GET /codebooks/{id}/themes` |
-| `get_theme_tree(codebook_id)` | `GET /codebooks/{id}/themes/tree` |
+The set of endpoints the client targets is documented authoritatively by the backend itself — see [`Backend/README.md`](../Backend/README.md) or the live Swagger docs at `http://localhost:8000/docs`. To see exactly which endpoint each `BackendClient` method calls, read `web/services/backend_client.py` directly — kept as a single short file precisely so it stays the one place to look.
 
 ## Error handling
 
