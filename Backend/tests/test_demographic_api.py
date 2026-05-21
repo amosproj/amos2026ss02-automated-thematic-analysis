@@ -32,8 +32,8 @@ async def test_demographic_csv_valid_dynamic_columns_and_confirm_persists_rows(c
     corpus_id = await _create_corpus(client, "Corpus A")
 
     csv_content = (
-        b"username,age,gender,department\n"
-        b"user_a,34,female,engineering\n"
+        "username;age;gender;department\n"
+        "user_a;34;female;engineering\n"
     )
 
     upload = await _upload_csv(client, corpus_id, "demographics.csv", csv_content)
@@ -76,8 +76,8 @@ async def test_demographic_csv_missing_values_are_accepted(client, db_engine):
     corpus_id = await _create_corpus(client, "Corpus Missing Values")
 
     csv_content = (
-        b"username,age,gender,income_band\n"
-        b"user_b,,non-binary,\n"
+        "username;age;gender;income_band\n"
+        "user_b;;non-binary;\n"
     )
     upload = await _upload_csv(client, corpus_id, "missing_values.csv", csv_content)
     assert upload.status_code == 201
@@ -104,13 +104,13 @@ async def test_demographic_csv_missing_values_are_accepted(client, db_engine):
 async def test_demographic_upload_requires_interviewee_id_and_at_least_one_demographic_column(client):
     corpus_id = await _create_corpus(client, "Corpus Missing Columns")
 
-    missing_id_column = b"age,gender\n34,female\n"
+    missing_id_column = "age;gender\n34;female\n"
     response_missing_id = await _upload_csv(client, corpus_id, "missing_id.csv", missing_id_column)
     assert response_missing_id.status_code == 422
     assert response_missing_id.json()["success"] is False
     assert "must include 'username' column" in response_missing_id.json()["meta"]["detail"]
 
-    only_id_column = b"username\nuser_c\n"
+    only_id_column = "username\nuser_c\n"
     response_only_id = await _upload_csv(client, corpus_id, "only_id.csv", only_id_column)
     assert response_only_id.status_code == 422
     assert response_only_id.json()["success"] is False
@@ -121,8 +121,8 @@ async def test_demographic_upload_validates_malformed_csv_row_and_reports_clear_
     corpus_id = await _create_corpus(client, "Corpus Malformed")
 
     malformed = (
-        b"username,age,gender\n"
-        b"user_d,29,male,unexpected\n"
+        "username;age;gender\n"
+        "user_d;29;male;unexpected\n"
     )
     response = await _upload_csv(client, corpus_id, "malformed.csv", malformed)
 
@@ -134,7 +134,7 @@ async def test_demographic_upload_validates_malformed_csv_row_and_reports_clear_
 
 async def test_demographic_upload_rejects_non_csv_extension_even_with_csv_mime_variants(client):
     corpus_id = await _create_corpus(client, "Corpus Extensions")
-    content = b"username,segment\nuser_e,A\n"
+    content = "username;segment\nuser_e;A\n"
 
     ok_response = await _upload_csv(
         client,
@@ -158,9 +158,9 @@ async def test_demographic_upload_rejects_non_csv_extension_even_with_csv_mime_v
     assert "Unsupported file extension" in bad_response.json()["meta"]["detail"]
 
 
-async def test_demographic_upload_rejects_semicolon_delimited_csv(client):
+async def test_demographic_upload_rejects_comma_delimited_csv(client):
     corpus_id = await _create_corpus(client, "Corpus Delimiter")
-    content = b"username;segment\nuser_e;A\n"
+    content = "username,segment\nuser_e,A\n"
 
     response = await _upload_csv(client, corpus_id, "demo.csv", content, content_type="text/csv")
     assert response.status_code == 422
@@ -170,8 +170,8 @@ async def test_demographic_upload_rejects_semicolon_delimited_csv(client):
 
 async def test_demographic_upload_rejects_duplicate_username(client):
     corpus_id = await _create_corpus(client, "Corpus Dup Username")
-    first = b"username,role\nuser_f,participant\n"
-    second = b"username,role\nuser_f,participant\n"
+    first = "username;role\nuser_f;participant\n"
+    second = "username;role\nuser_f;participant\n"
 
     first_response = await _upload_csv(client, corpus_id, "first.csv", first)
     assert first_response.status_code == 201
@@ -193,7 +193,7 @@ async def test_demographic_upload_rejects_duplicate_username(client):
 async def test_demographic_upload_allows_same_username_in_different_corpora(client):
     corpus_a = await _create_corpus(client, "Corpus A")
     corpus_b = await _create_corpus(client, "Corpus B")
-    csv_same_user = b"username,role\nshared_user,participant\n"
+    csv_same_user = "username;role\nshared_user;participant\n"
 
     upload_a = await _upload_csv(client, corpus_a, "a.csv", csv_same_user)
     assert upload_a.status_code == 201
@@ -218,7 +218,7 @@ async def test_demographic_upload_allows_same_username_in_different_corpora(clie
 
 async def test_demographic_confirm_second_attempt_fails_after_successful_confirm(client):
     corpus_id = await _create_corpus(client, "Corpus Confirm")
-    csv_content = b"username,country\nuser_g,DE\n"
+    csv_content = "username;country\nuser_g;DE\n"
 
     upload = await _upload_csv(client, corpus_id, "confirm.csv", csv_content)
     import_id = upload.json()["data"]["import_id"]
@@ -241,8 +241,8 @@ async def test_demographic_confirm_second_attempt_fails_after_successful_confirm
 
 async def test_demographic_name_unique_within_corpus(client, db_engine):
     corpus_id = await _create_corpus(client, "Corpus Names")
-    csv_content_a = b"username,country\nuser_h,DE\n"
-    csv_content_b = b"username,country\nuser_i,AT\n"
+    csv_content_a = "username;country\nuser_h;DE\n"
+    csv_content_b = "username;country\nuser_i;AT\n"
 
     first_upload = await client.post(
         f"{DEMOGRAPHIC_API}/{corpus_id}/upload",
@@ -282,8 +282,8 @@ async def test_demographic_name_unique_within_corpus(client, db_engine):
 async def test_demographic_name_can_repeat_across_corpora(client):
     corpus_a = await _create_corpus(client, "Corpus A")
     corpus_b = await _create_corpus(client, "Corpus B")
-    csv_a = b"username,age\nuser_j,31\n"
-    csv_b = b"username,age\nuser_k,29\n"
+    csv_a = "username;age\nuser_j;31\n"
+    csv_b = "username;age\nuser_k;29\n"
 
     upload_a = await client.post(
         f"{DEMOGRAPHIC_API}/{corpus_a}/upload",
@@ -410,13 +410,13 @@ async def test_list_demographic_files_with_total_rows(client):
     corpus_id = await _create_corpus(client, "Corpus File List")
 
     csv_a = (
-        b"username,group\n"
-        b"user_l,A\n"
-        b"user_m,B\n"
+        "username;group\n"
+        "user_l;A\n"
+        "user_m;B\n"
     )
     csv_b = (
-        b"username,group\n"
-        b"user_n,C\n"
+        "username;group\n"
+        "user_n;C\n"
     )
 
     await _upload_and_confirm_named_csv(client, corpus_id, "batch-a", csv_a)
@@ -437,11 +437,11 @@ async def test_list_demographic_rows_pagination_and_file_filter(client):
     corpus_id = await _create_corpus(client, "Corpus Row List")
 
     csv_a = (
-        b"username,group\n"
-        b"user_o,A\n"
-        b"user_p,B\n"
+        "username;group\n"
+        "user_o;A\n"
+        "user_p;B\n"
     )
-    csv_b = b"username,group\nuser_q,C\n"
+    csv_b = "username;group\nuser_q;C\n"
 
     await _upload_and_confirm_named_csv(client, corpus_id, "batch-a", csv_a)
     await _upload_and_confirm_named_csv(client, corpus_id, "batch-b", csv_b)
@@ -466,7 +466,7 @@ async def test_list_demographic_rows_pagination_and_file_filter(client):
     assert all(row["demographic_file_id"] == file_a_id for row in filtered_body["items"])
 
     other_corpus = await _create_corpus(client, "Other Corpus")
-    other_csv = b"username,group\nuser_r,Z\n"
+    other_csv = "username;group\nuser_r;Z\n"
     await _upload_and_confirm_named_csv(client, other_corpus, "other-batch", other_csv)
     other_files_resp = await client.get(f"{DEMOGRAPHIC_API}/{other_corpus}/files")
     other_file_id = other_files_resp.json()["data"]["items"][0]["id"]

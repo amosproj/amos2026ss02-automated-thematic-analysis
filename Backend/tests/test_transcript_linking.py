@@ -24,9 +24,9 @@ async def _bulk_ingest(client, corpus_id: str, titles: list[str]) -> None:
 
 
 async def _upload_and_confirm_csv(client, corpus_id: str, usernames: list[str]) -> None:
-    header = "username,age"
-    rows = "\n".join(f"{u},30" for u in usernames)
-    csv_content = f"{header}\n{rows}\n".encode()
+    header = "username;age"
+    rows = "\n".join(f"{u};30" for u in usernames)
+    csv_content = f"{header}\n{rows}\n"
     upload = await client.post(
         f"{DEMOGRAPHIC_API}/{corpus_id}/upload",
         files={"file": ("demo.csv", csv_content, "application/octet-stream")},
