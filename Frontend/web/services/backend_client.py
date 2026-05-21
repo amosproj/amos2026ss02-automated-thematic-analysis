@@ -98,7 +98,7 @@ class BackendClient:
     # ---- Corpora ------------------------------------------------------------
 
     def list_corpora(self, project_id: str) -> list[dict]:
-        return self._get("/ingestion/corpora", params={"project_id": project_id})["items"]
+        return self._get("/ingestion/corpora", params={"project_id": project_id}, sub_key="items")
 
     def create_corpus(self, project_id: str, name: str) -> dict:
         return self._post("/ingestion/corpora", json={"project_id": project_id, "name": name})
@@ -129,7 +129,7 @@ class BackendClient:
         try:
             r = self._client.post(path, files=multipart)
             r.raise_for_status()
-            return r.json()["data"]["results"]
+            return self._unwrap(r, sub_key="results")
         except httpx.HTTPError as exc:
             self._handle_exc(exc, path, "POST", started_at)
         except (json.JSONDecodeError, KeyError) as exc:
@@ -139,7 +139,8 @@ class BackendClient:
         return self._get(
             f"/ingestion/corpora/{corpus_id}/documents",
             params={"page_size": page_size},
-        )["items"]
+            sub_key="items",
+        )
 
     # ---- Codebooks ----------------------------------------------------------
 
@@ -154,23 +155,35 @@ class BackendClient:
 
     # ---- Helpers ------------------------------------------------------------
 
-    def _get(self, path: str, **kwargs) -> dict:
+    def _unwrap(self, response: httpx.Response, *, sub_key: str | None = None):
+        """Peel the FastAPI envelope `{success, data, error, meta}`.
+
+        Returns `response.json()["data"]` by default, or
+        `response.json()["data"][sub_key]` when sub_key is given — used for
+        paginated responses (`items`) and the multipart upload (`results`).
+        Centralising this means the envelope shape lives in exactly one place;
+        if the backend ever changes it, only this helper needs updating.
+        """
+        payload = response.json()["data"]
+        return payload if sub_key is None else payload[sub_key]
+
+    def _get(self, path: str, *, sub_key: str | None = None, **kwargs):
         started_at = time.monotonic()
         try:
             r = self._client.get(path, **kwargs)
             r.raise_for_status()
-            return r.json()["data"]
+            return self._unwrap(r, sub_key=sub_key)
         except httpx.HTTPError as exc:
             self._handle_exc(exc, path, "GET", started_at)
         except (json.JSONDecodeError, KeyError) as exc:
             self._handle_exc(exc, path, "GET", started_at)
 
-    def _post(self, path: str, **kwargs) -> dict:
+    def _post(self, path: str, *, sub_key: str | None = None, **kwargs):
         started_at = time.monotonic()
         try:
             r = self._client.post(path, **kwargs)
             r.raise_for_status()
-            return r.json()["data"]
+            return self._unwrap(r, sub_key=sub_key)
         except httpx.HTTPError as exc:
             self._handle_exc(exc, path, "POST", started_at)
         except (json.JSONDecodeError, KeyError) as exc:
