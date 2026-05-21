@@ -1,6 +1,32 @@
 {% extends "base.html" %}
 {% block title %}Home{% endblock %}
 {% block content %}
-  <h1>Automated Thematic Analysis</h1>
-  <p>Researcher workspace. Use the navigation to upload transcripts and review your corpus.</p>
+  <div class="mb-4">
+    <h1 class="h3 mb-1">Automated Thematic Analysis</h1>
+    <p class="text-secondary mb-0">Researcher workspace for corpus ingestion and thematic coding.</p>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-md-4">
+      <div class="bg-white border rounded-2 p-3 h-100">
+        <h2 class="h6 mb-1">Transcripts</h2>
+        <p class="text-secondary small mb-3">View and upload your interview documents.</p>
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('ingestion.transcripts_landing') }}">View transcripts</a>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="bg-white border rounded-2 p-3 h-100">
+        <h2 class="h6 mb-1">Codebooks</h2>
+        <p class="text-secondary small mb-3">Browse available codebooks and explore theme hierarchies.</p>
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('codebooks.list_codebooks') }}">View codebooks</a>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="bg-white border rounded-2 p-3 h-100">
+        <h2 class="h6 mb-1">Analysis</h2>
+        <p class="text-secondary small mb-3">Run thematic analysis on your corpus and review results.</p>
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('analysis.index') }}">View analysis</a>
+      </div>
+    </div>
+  </div>
 {% endblock %}

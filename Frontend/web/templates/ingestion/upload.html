@@ -1,24 +1,149 @@
 {% extends "base.html" %}
-{% block title %}Upload Interview Transcripts{% endblock %}
+{% block title %}Upload Transcripts{% endblock %}
 {% block content %}
-  <h1>Upload Interview Transcripts</h1>
-  <p>
-    Accepted formats: {{ accepted_extensions | join(", ") }}.
-    Maximum size per file: {{ max_size_mb }} MB.
-  </p>
+  <div class="mb-4">
+    <h1 class="h3 mb-1">Upload Interview Transcripts</h1>
+    <p class="text-secondary mb-0">
+      Accepted:
+      {% for ext in accepted_extensions %}
+        <span class="badge text-bg-secondary me-1">{{ ext }}</span>
+      {% endfor %}.
+      Maximum {{ max_size_mb }} MB per file.
+    </p>
+  </div>
 
-  {% if error %}
-    <p class="error">{{ error }}</p>
-  {% endif %}
+  <div class="bg-white border rounded-2 p-4" style="max-width: 640px;">
+    <form id="upload-form"
+          method="post"
+          action="{{ url_for('ingestion.upload_submit', corpus_id=corpus_id) }}"
+          enctype="multipart/form-data">
+      <div class="mb-3">
+        <label for="files" class="form-label fw-semibold">Select files</label>
+        <input class="form-control"
+               type="file"
+               id="files"
+               name="files"
+               multiple
+               accept="{{ accepted_extensions | join(',') }}"
+               required>
+      </div>
 
-  <form method="post"
-        action="{{ url_for('ingestion.upload_submit') }}"
-        enctype="multipart/form-data">
-    <input type="file"
-           name="files"
-           multiple
-           accept="{{ accepted_extensions | join(',') }}"
-           required>
-    <button type="submit">Upload Interview Transcripts</button>
-  </form>
+      <div id="file-list-wrapper" class="mb-3 d-none">
+        <div class="d-flex justify-content-between align-items-baseline mb-2">
+          <span class="form-label fw-semibold mb-0">
+            Selected files (<span id="file-count">0</span>)
+          </span>
+          <span class="text-secondary small">
+            Total: <span id="file-total-size">0 B</span>
+          </span>
+        </div>
+        <ul id="file-list" class="list-group list-group-flush border rounded-2"></ul>
+        <div id="file-warnings" class="small text-danger mt-2"></div>
+      </div>
+
+      <button id="submit-btn" type="submit" class="btn btn-primary" disabled>
+        Upload Interview Transcripts
+      </button>
+    </form>
+  </div>
+
+  <script>
+    (() => {
+      const MAX_MB = {{ max_size_mb }};
+      const MAX_BYTES = MAX_MB * 1024 * 1024;
+
+      const input = document.getElementById("files");
+      const wrapper = document.getElementById("file-list-wrapper");
+      const list = document.getElementById("file-list");
+      const countEl = document.getElementById("file-count");
+      const totalSizeEl = document.getElementById("file-total-size");
+      const warningsEl = document.getElementById("file-warnings");
+      const submitBtn = document.getElementById("submit-btn");
+
+      // Backing store: we rebuild input.files from this on every change.
+      let selected = [];
+
+      function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+        return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+      }
+
+      function syncInput() {
+        const dt = new DataTransfer();
+        selected.forEach((f) => dt.items.add(f));
+        input.files = dt.files;
+      }
+
+      function render() {
+        list.innerHTML = "";
+        const oversize = [];
+        let total = 0;
+
+        selected.forEach((file, idx) => {
+          total += file.size;
+          const tooBig = file.size > MAX_BYTES;
+          if (tooBig) oversize.push(file.name);
+
+          const li = document.createElement("li");
+          li.className = "list-group-item d-flex justify-content-between align-items-center";
+          if (tooBig) li.classList.add("list-group-item-danger");
+
+          const left = document.createElement("div");
+          left.className = "text-truncate me-3";
+          left.style.minWidth = "0";
+          const name = document.createElement("span");
+          name.className = "fw-semibold";
+          name.textContent = file.name;
+          const size = document.createElement("span");
+          size.className = "text-secondary small ms-2";
+          size.textContent = formatBytes(file.size);
+          left.appendChild(name);
+          left.appendChild(size);
+
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "btn btn-sm btn-outline-secondary";
+          removeBtn.setAttribute("aria-label", "Remove " + file.name);
+          removeBtn.textContent = "Remove";
+          removeBtn.addEventListener("click", () => {
+            selected.splice(idx, 1);
+            syncInput();
+            render();
+          });
+
+          li.appendChild(left);
+          li.appendChild(removeBtn);
+          list.appendChild(li);
+        });
+
+        countEl.textContent = selected.length;
+        totalSizeEl.textContent = formatBytes(total);
+        wrapper.classList.toggle("d-none", selected.length === 0);
+        submitBtn.disabled = selected.length === 0 || oversize.length > 0;
+
+        if (oversize.length > 0) {
+          warningsEl.textContent =
+            "Each file must be at most " + MAX_MB + " MB. Remove or replace: " +
+            oversize.join(", ") + ".";
+        } else {
+          warningsEl.textContent = "";
+        }
+      }
+
+      input.addEventListener("change", () => {
+        // Append newly chosen files to the existing selection (de-duped by
+        // name+size) so the user can grow the list across multiple "Select"
+        // clicks instead of replacing it each time.
+        const incoming = Array.from(input.files);
+        const key = (f) => f.name + "|" + f.size;
+        const existing = new Set(selected.map(key));
+        incoming.forEach((f) => {
+          if (!existing.has(key(f))) selected.push(f);
+        });
+        syncInput();
+        render();
+      });
+    })();
+  </script>
 {% endblock %}

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Codebooks{% endblock %}
+{% block content %}
+  <h1 class="h3 mb-4">Codebooks</h1>
+
+  {% if error %}
+    <p class="text-secondary">Couldn't load codebooks right now.</p>
+  {% elif codebooks %}
+    <div class="bg-white border rounded-2">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Name</th>
+              <th>Version</th>
+              <th>Created by</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cb in codebooks %}
+              <tr>
+                <td>{{ cb.name }}</td>
+                <td><span class="badge text-bg-secondary">v{{ cb.version }}</span></td>
+                <td class="text-secondary">{{ cb.created_by }}</td>
+                <td>
+                  <a class="btn btn-sm btn-outline-primary"
+                     href="{{ url_for('codebooks.codebook_themes', codebook_id=cb.id, name=cb.name, version=cb.version) }}">
+                    View themes
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <p class="text-secondary">No codebooks found.</p>
+  {% endif %}
+{% endblock %}

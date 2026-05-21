@@ -4,20 +4,115 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Thematic Analysis{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/team-logo.svg') }}">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossorigin="anonymous">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
   {% block head_extra %}{% endblock %}
 </head>
-<body>
-  <header>
-    <nav>
-      <a href="{{ url_for('main.index') }}">Home</a>
-      <a href="{{ url_for('ingestion.list_transcripts') }}">Transcripts</a>
-      <a href="{{ url_for('ingestion.upload_form') }}">Upload Interview Transcripts</a>
-    </nav>
-  </header>
-  <main>
-    {% block content %}{% endblock %}
+<body class="bg-light site-body">
+
+  <nav class="navbar navbar-expand-md navbar-dark bg-dark">
+    <div class="container-xl">
+      <a class="navbar-brand fw-semibold d-flex align-items-center gap-2" href="{{ url_for('main.index') }}">
+        <img src="{{ url_for('static', filename='img/team-logo.svg') }}"
+             alt="NIM + AMOS"
+             class="navbar-brand-logo">
+        <span>Thematic Analysis</span>
+      </a>
+      <button class="navbar-toggler"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#mainNav"
+              aria-controls="mainNav"
+              aria-expanded="false"
+              aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="mainNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}"
+               href="{{ url_for('main.index') }}">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint in ('ingestion.upload_landing', 'ingestion.upload_form', 'ingestion.upload_submit') %}active{% endif %}"
+               href="{{ url_for('ingestion.upload_landing') }}">Upload</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint in ('ingestion.transcripts_landing', 'ingestion.list_transcripts') %}active{% endif %}"
+               href="{{ url_for('ingestion.transcripts_landing') }}">Transcripts</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint and request.endpoint.startswith('codebooks.') %}active{% endif %}"
+               href="{{ url_for('codebooks.list_codebooks') }}">Codebooks</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'analysis.index' %}active{% endif %}"
+               href="{{ url_for('analysis.index') }}">Analysis</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="py-4 site-main">
+    <div class="container-xl">
+      {% include "_flash.html" %}
+      {% block content %}{% endblock %}
+    </div>
   </main>
+
+  <footer class="site-footer">
+    <div class="container-xl py-3">
+      <div class="row g-3">
+
+        <div class="col-12 col-md-4 footer-project">
+          <img src="{{ url_for('static', filename='img/team-logo.svg') }}"
+               alt="NIM + AMOS"
+               class="footer-logo mb-1">
+          <p class="footer-project-name mb-0">Automated Thematic Analysis</p>
+          <p class="footer-project-sub mb-0">AMOS SS 2026 Project</p>
+        </div>
+
+        <div class="col-12 col-md-4 footer-partner">
+          <p class="footer-label mb-1">Industry Partner</p>
+          <p class="footer-partner-name mb-0">Nuremberg Institute for Market Decisions (NIM)</p>
+          <p class="footer-partner-tag mb-1">Gründer der GfK</p>
+          <a class="footer-link" href="https://www.nim.org" target="_blank" rel="noopener">nim.org &rarr;</a>
+        </div>
+
+        <div class="col-12 col-md-4 footer-partner">
+          <p class="footer-label mb-1">Academic Partner</p>
+          <p class="footer-partner-name mb-0">Professorship for Open-Source Software</p>
+          <p class="footer-partner-tag mb-1">Friedrich-Alexander University Erlangen-Nürnberg</p>
+          <a class="footer-link" href="https://oss.cs.fau.de" target="_blank" rel="noopener">oss.cs.fau.de &rarr;</a>
+        </div>
+
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="container-xl py-2 text-center">
+        <small>&copy; 2026 &middot; AMOS SS 2026 Project &middot; Automated Thematic Analysis</small>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+          crossorigin="anonymous"></script>
+  <script>
+    // Auto-dismiss low-severity flash alerts (success / info) after 5s so they
+    // don't accumulate. Warnings and errors stay until the user closes them.
+    document.querySelectorAll('.site-flash').forEach((el) => {
+      const cat = el.dataset.flashCategory;
+      if (cat === 'success' || cat === 'info') {
+        setTimeout(() => bootstrap.Alert.getOrCreateInstance(el).close(), 5000);
+      }
+    });
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
