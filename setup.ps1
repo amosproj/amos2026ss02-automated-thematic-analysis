@@ -13,6 +13,9 @@
 .PARAMETER Test
   Run the pytest test suite inside Docker.
 
+.PARAMETER Lint
+  Run linting checks (ruff and mypy) inside Docker.
+
 .PARAMETER Down
   Stop and remove containers (data volumes are preserved).
 
@@ -34,6 +37,7 @@
 .EXAMPLE
   .\setup.ps1
   .\setup.ps1 -Test
+  .\setup.ps1 -Lint
   .\setup.ps1 -Down
   .\setup.ps1 -DownVolumes -Yes
   .\setup.ps1 -Foreground
@@ -41,6 +45,7 @@
 [CmdletBinding()]
 param(
   [switch]$Test,
+  [switch]$Lint,
   [switch]$Down,
   [switch]$DownVolumes,
   [switch]$Foreground,
@@ -202,6 +207,19 @@ function Invoke-Test {
   Write-Ok "Tests complete. Open Backend\htmlcov\index.html for the coverage report."
 }
 
+# == Mode: lint ================================================================
+function Invoke-Lint {
+  Write-Info "Running lint checks inside Docker..."
+
+  $ruffArgs = @('--profile', 'test', 'run', '--rm', 'api-test', 'ruff', 'check', 'app', 'tests')
+  Invoke-Compose $ruffArgs
+
+  $mypyArgs = @('--profile', 'test', 'run', '--rm', 'api-test', 'mypy', 'app')
+  Invoke-Compose $mypyArgs
+
+  Write-Ok "Lint checks complete."
+}
+
 # == Mode: up ==================================================================
 function Invoke-Up {
   Write-Info "Starting the stack..."
@@ -236,6 +254,7 @@ function Invoke-Up {
     Write-Host "Next steps:"
     Write-Host "  Tail logs    docker compose logs -f api  (run from Backend\ directory)"
     Write-Host "  Run tests    .\setup.ps1 -Test"
+    Write-Host "  Run lint     .\setup.ps1 -Lint"
     Write-Host "  Stop stack   .\setup.ps1 -Down"
     Write-Host ""
   }
@@ -272,6 +291,9 @@ if ($DownVolumes) {
 }
 elseif ($Down) {
   Invoke-Down -RemoveVolumes $false
+}
+elseif ($Lint) {
+  Invoke-Lint
 }
 elseif ($Test) {
   Invoke-Test

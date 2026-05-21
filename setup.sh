@@ -36,6 +36,7 @@ OPTIONS
       --no-build       Skip image rebuild (use cached images)
       --rebuild        Force full image rebuild (--no-cache)
       --test           Run the pytest test suite inside Docker
+      --lint           Run lint checks (ruff and mypy) inside Docker
       --down           Stop and remove containers (keep data volumes)
       --down-volumes   Stop and remove containers AND data volumes
   -y, --yes            Skip confirmation prompts (use with --down-volumes)
@@ -48,6 +49,7 @@ EXAMPLES
   ./setup.sh --foreground          Start and tail logs in the terminal
   ./setup.sh --no-build            Start without rebuilding images
   ./setup.sh --test                Run the full pytest suite
+  ./setup.sh --lint                Run lint checks (ruff + mypy)
   ./setup.sh --test -- -k health   Run only tests matching 'health'
   ./setup.sh --down                Stop containers (keep data)
   ./setup.sh --down-volumes -y     Stop containers and delete Postgres data
@@ -65,6 +67,7 @@ for arg in "$@"; do
       --no-build)       BUILD=false ;;
       --rebuild)        REBUILD=true ;;
       --test)           MODE="test" ;;
+      --lint)           MODE="lint" ;;
       --down)           MODE="down" ;;
       --down-volumes)   MODE="down-volumes" ;;
       -y|--yes)         CONFIRM_YES=true ;;
@@ -112,6 +115,16 @@ mode_test() {
 
   run_compose --profile test run --rm api-test "${pytest_cmd[@]}"
   log_success "Tests complete. Open Backend/htmlcov/index.html for the coverage report."
+}
+
+# ── Mode: lint ────────────────────────────────────────────────────────────────
+mode_lint() {
+  log_info "Running lint checks inside Docker..."
+
+  run_compose --profile test run --rm api-test ruff check app tests
+  run_compose --profile test run --rm api-test mypy app
+
+  log_success "Lint checks complete."
 }
 
 # ── Mode: up ──────────────────────────────────────────────────────────────────
@@ -167,6 +180,7 @@ print_success_banner() {
   printf "Next steps:\n"
   printf "  Tail logs    ${BOLD}docker compose logs -f api${RESET}   (from Backend/ directory)\n"
   printf "  Run tests    ${BOLD}./setup.sh --test${RESET}\n"
+  printf "  Run lint     ${BOLD}./setup.sh --lint${RESET}\n"
   printf "  Stop stack   ${BOLD}./setup.sh --down${RESET}\n"
   printf "\n"
 }
@@ -188,6 +202,7 @@ main() {
   case "$MODE" in
     up)           mode_up ;;
     test)         mode_test ;;
+    lint)         mode_lint ;;
     down)         mode_down false ;;
     down-volumes) mode_down true ;;
   esac

@@ -1,5 +1,5 @@
-import uuid
 import math
+import uuid
 
 from fastapi import APIRouter, File, Form, Query, UploadFile
 from fastapi.responses import JSONResponse
@@ -43,7 +43,7 @@ async def upload_demographic_data(
         default=None,
         description="Optional logical import name. Defaults to the uploaded filename stem.",
     ),
-) -> ResponseEnvelope[ImportDemographicResponse]:
+) -> ResponseEnvelope[ImportDemographicResponse] | JSONResponse:
     """Validate CSV structure and create a pending import with preview metadata."""
     service = DemographicService(session, settings)
     try:
@@ -87,7 +87,7 @@ async def confirm_demographic_upload(
         ...,
         description="Set `true` to persist data, `false` to cancel and delete pending upload.",
     ),
-) -> ResponseEnvelope[UploadDemographicConfirmResponse]:
+) -> ResponseEnvelope[UploadDemographicConfirmResponse] | JSONResponse:
     """Persist or cancel a previously uploaded demographic CSV."""
     service = DemographicService(session, settings)
     try:
@@ -120,7 +120,7 @@ async def list_demographic_files(
     settings: AppSettings,
     page: int = Query(default=1, ge=1, description="1-based page number."),
     page_size: int = Query(default=20, ge=1, le=200, description="Number of items per page."),
-) -> ResponseEnvelope[Page[DemographicFileSummary]]:
+) -> ResponseEnvelope[Page[DemographicFileSummary]] | JSONResponse:
     """Return paginated demographic import metadata for one corpus."""
     service = DemographicService(session, settings)
     try:
@@ -161,7 +161,7 @@ async def list_demographic_rows(
     ),
     page: int = Query(default=1, ge=1, description="1-based page number."),
     page_size: int = Query(default=20, ge=1, le=200, description="Number of items per page."),
-) -> ResponseEnvelope[Page[DemographicRowSchema]]:
+) -> ResponseEnvelope[Page[DemographicRowSchema]] | JSONResponse:
     """Return paginated demographic rows for one corpus."""
     service = DemographicService(session, settings)
     try:

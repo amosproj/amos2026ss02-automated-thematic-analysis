@@ -1,8 +1,8 @@
 import asyncio
 import contextlib
+import shutil
 import time
 from pathlib import Path
-import shutil
 
 from loguru import logger
 

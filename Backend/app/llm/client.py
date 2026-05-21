@@ -35,6 +35,6 @@ def build_chat_model(
     )
 
 
-# TODO two options, invoke vs invoke_streaming: 
-# For a single-shot analysis, invoke should sufficient 
+# TODO two options, invoke vs invoke_streaming:
+# For a single-shot analysis, invoke should sufficient
 # Streaming is more relevant for corpus analysis or to provide real-time feedback to the user.

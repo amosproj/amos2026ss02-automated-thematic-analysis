@@ -1,9 +1,10 @@
 from langchain_core.language_models import BaseChatModel
-from langchain_core.output_parsers import StrOutputParser
+from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 
 from app.llm.client import build_chat_model
-from app.llm.prompts import build_thematic_analysis_prompt, build_codebook_application_prompt
+from app.llm.prompts import build_codebook_application_prompt, build_thematic_analysis_prompt
 from app.schemas.llm import InterviewAnalysisResult
+
 
 # Run a single-shot thematic analysis over a transcript.
 def analyze_interview(
@@ -18,7 +19,6 @@ def analyze_interview(
     chain = build_thematic_analysis_prompt() | (model or build_chat_model()) | StrOutputParser()
     return chain.invoke({"transcript": transcript})
 
-from langchain_core.output_parsers import JsonOutputParser
 
 # Apply a predefined codebook to an interview transcript.
 def apply_codebook_to_interview(

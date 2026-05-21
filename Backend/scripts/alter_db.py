@@ -3,11 +3,12 @@ import sys
 from pathlib import Path
 
 # Add Backend root to path
-backend_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(backend_dir))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import text
+
 from app.database import _get_engine
+
 
 async def alter_db():
     engine = _get_engine()

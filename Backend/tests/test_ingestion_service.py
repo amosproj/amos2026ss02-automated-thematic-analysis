@@ -85,7 +85,7 @@ async def test_chunk_order_correct(db_session, test_settings):
     corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
 
     text = " ".join(str(i) for i in range(15))
-    result = await svc.ingest_documents(
+    await svc.ingest_documents(
         corpus_id=corpus.id,
         documents=[DocumentInput(title="T", text=text)],
     )

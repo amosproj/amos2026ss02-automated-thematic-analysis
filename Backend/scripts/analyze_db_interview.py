@@ -1,13 +1,12 @@
-import asyncio
 import argparse
+import asyncio
 import sys
 import uuid
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
 # Add Backend root to path
-backend_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(backend_dir))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import select
 
@@ -42,10 +41,10 @@ Participant: The rollout was a disaster. No training, just a sudden switch. It's
 
 async def seed_db():
     print("Seeding database with sample interviews and codebook...")
-    
+
     # Initialize DB (creates tables if missing)
     await init_db()
-    
+
     factory = _get_session_factory()
     async with factory() as session:
         # Create Corpus
@@ -73,7 +72,7 @@ async def seed_db():
             theme = Theme(label=label, description=desc)
             session.add(theme)
             await session.flush()
-            
+
             rel = CodebookThemeRelationship(codebook_id=codebook.id, theme_id=theme.id)
             session.add(rel)
 
@@ -82,12 +81,12 @@ async def seed_db():
             doc = CorpusDocument(corpus_id=corpus.id, title=f"Participant {user}")
             session.add(doc)
             await session.flush()
-            
+
             chunk = CorpusChunk(document_id=doc.id, text=text.strip(), chunk_index=0)
             session.add(chunk)
 
         await session.commit()
-        
+
         print("\n--- SEED SUCCESSFUL ---")
         print(f"Corpus ID: {corpus.id}")
         print(f"Codebook ID: {codebook.id}")
@@ -119,11 +118,11 @@ async def _analyze_single_document(session, doc_id: uuid.UUID, codebook_id: uuid
         select(CorpusChunk).where(CorpusChunk.document_id == doc_id).order_by(CorpusChunk.chunk_index)
     )
     chunks = chunks_result.scalars().all()
-    
+
     if not chunks:
         print(f"Error: Document '{doc_id}' has no text chunks.")
         return False
-        
+
     transcript = "\n".join([c.text for c in chunks])
 
     # 3. Load Codebook Themes
@@ -131,7 +130,7 @@ async def _analyze_single_document(session, doc_id: uuid.UUID, codebook_id: uuid
         select(CodebookThemeRelationship).where(CodebookThemeRelationship.codebook_id == codebook_id)
     )
     theme_rels = theme_rels_result.scalars().all()
-    
+
     theme_ids = [rel.theme_id for rel in theme_rels]
     if not theme_ids:
         print("Error: Codebook has no themes.")
@@ -152,7 +151,7 @@ async def _analyze_single_document(session, doc_id: uuid.UUID, codebook_id: uuid
     for t in themes:
         codebook_lines.append(f"Theme: {t.label}\nDefinition: {t.description}\n")
         theme_map[t.label.lower()] = t.id
-    
+
     codebook_context = "\n".join(codebook_lines)
 
     print(f"Applying codebook '{codebook_id}' ({len(themes)} themes) to document '{doc_id}' ({len(transcript)} chars)...", flush=True)
@@ -182,7 +181,7 @@ async def _analyze_single_document(session, doc_id: uuid.UUID, codebook_id: uuid
                 if t_res.theme_label.lower() in db_label or db_label in t_res.theme_label.lower():
                     matched_theme_id = db_id
                     break
-        
+
         if matched_theme_id:
             occ = ThemeOccurrence(
                 analysis_id=analysis.id,
@@ -194,7 +193,7 @@ async def _analyze_single_document(session, doc_id: uuid.UUID, codebook_id: uuid
             session.add(occ)
 
     await session.commit()
-    
+
     print(f"\n--- ANALYSIS COMPLETE & SAVED TO DB FOR DOC {doc_id} ---")
     if result.summary:
         print(f"Summary: {result.summary}")
@@ -215,7 +214,7 @@ async def analyze_corpus(corpus_id_str: str, codebook_id_str: str):
 
     await init_db()
     factory = _get_session_factory()
-    
+
     async with factory() as session:
         # Get all documents in the corpus
         docs_result = await session.execute(
@@ -228,17 +227,17 @@ async def analyze_corpus(corpus_id_str: str, codebook_id_str: str):
             return
 
         print(f"Found {len(documents)} documents in corpus '{corpus_id}'. Starting batch analysis...")
-        
+
         # Analyze each document
         for doc in documents:
             print(f"\n[{doc.title}]")
             await _analyze_single_document(session, doc.id, codebook_id)
-            
+
         # Aggregate results
         print("\n" + "="*50)
         print("BATCH EXPERIMENT RESULTS: THEME FREQUENCIES")
         print("="*50)
-        
+
         stmt = (
             select(ThemeOccurrence, Theme, CorpusDocument)
             .join(Theme, ThemeOccurrence.theme_id == Theme.id)
@@ -246,15 +245,15 @@ async def analyze_corpus(corpus_id_str: str, codebook_id_str: str):
             .join(CorpusDocument, DocumentAnalysis.document_id == CorpusDocument.id)
             .where(DocumentAnalysis.codebook_id == codebook_id)
             .where(CorpusDocument.corpus_id == corpus_id)
-            .where(ThemeOccurrence.is_present == True)
+            .where(ThemeOccurrence.is_present)
         )
-        
+
         results = await session.execute(stmt)
         rows = results.all()
-        
+
         theme_to_docs = defaultdict(list)
         all_theme_labels = set()
-        
+
         # Fetch all themes for codebook to show 0 counts
         theme_rels_result = await session.execute(
             select(Theme.label)
@@ -264,9 +263,9 @@ async def analyze_corpus(corpus_id_str: str, codebook_id_str: str):
         for label in theme_rels_result.scalars().all():
             all_theme_labels.add(label)
 
-        for occ, theme, doc in rows:
+        for _occ, theme, doc in rows:
             theme_to_docs[theme.label].append(doc.title)
-            
+
         for label in sorted(all_theme_labels):
             docs = theme_to_docs.get(label, [])
             count = len(docs)
@@ -281,7 +280,7 @@ def main():
     parser.add_argument("--document-id", type=str, help="UUID of a single CorpusDocument to analyze.")
     parser.add_argument("--corpus-id", type=str, help="UUID of a Corpus to analyze in batch.")
     parser.add_argument("--codebook-id", type=str, help="UUID of the Codebook to apply.")
-    
+
     args = parser.parse_args()
 
     if args.seed:

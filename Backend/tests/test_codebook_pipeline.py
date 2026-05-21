@@ -11,7 +11,6 @@ from langchain_core.messages import AIMessage
 from app.llm.pipelines import apply_codebook_to_interview
 from app.schemas.llm import InterviewAnalysisResult
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -180,21 +179,21 @@ RESPONSE_C = json.dumps({
 class TestMultipleInterviews:
     def test_aggregate_frequencies_across_interviews(self) -> None:
         from collections import defaultdict
-        
+
         interviews_and_responses = [
             (INTERVIEW_A, json.loads(RESPONSE_A)),
             (INTERVIEW_B, json.loads(RESPONSE_B)),
             (INTERVIEW_C, json.loads(RESPONSE_C)),
         ]
-        
+
         theme_to_count = defaultdict(int)
-        
-        for text, parsed_dict in interviews_and_responses:
+
+        for _text, parsed_dict in interviews_and_responses:
             result = InterviewAnalysisResult(**parsed_dict)
             for t in result.themes:
                 if t.present:
                     theme_to_count[t.theme_label] += 1
-                    
+
         assert theme_to_count["System Instability"] == 3
         assert theme_to_count["Cost Concerns"] == 1
         assert theme_to_count["Performance & Efficiency"] == 1

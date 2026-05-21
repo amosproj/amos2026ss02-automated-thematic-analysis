@@ -65,6 +65,13 @@ line-length = 100
 select = ["E", "W", "F", "I", "B", "UP"]
 ignore = ["E501"]
 
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Query",
+    "fastapi.File",
+    "fastapi.Form",
+]
+
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
 
