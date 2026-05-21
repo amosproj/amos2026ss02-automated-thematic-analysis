@@ -171,60 +171,91 @@
     }
 
     // ------------------------------------------------------------------
-    // Tree with connector lines (file-explorer style, pure vanilla JS)
+    // Tree with connector lines (file-explorer style, pure vanilla JS).
+    //
+    // Built with the DOM API (createElement + textContent + setAttribute)
+    // — never innerHTML on user data — so a malicious theme label like
+    // `<img src=x onerror=alert(1)>` is rendered as literal text and cannot
+    // execute as JS.
+    //
+    // The recursive `buildNodeElement` handles arbitrary tree depth:
+    // any non-leaf node gets a toggle button and click-to-expand, regardless
+    // of how deeply nested it sits in the hierarchy.
     // ------------------------------------------------------------------
 
     function renderTree(treeData) {
         const container = document.getElementById("theme-tree");
         if (!container) return;
 
-        let html = '<ul class="tree-root" role="tree">';
+        container.replaceChildren();
+        const rootUl = document.createElement("ul");
+        rootUl.className = "tree-root";
+        rootUl.setAttribute("role", "tree");
+
         for (const rootNode of treeData) {
-            const rootId    = rootNode.theme.id;
-            const rootLabel = rootNode.theme.label;
-
-            const hasChildren = rootNode.children && rootNode.children.length > 0;
-            const toggleBtn   = hasChildren
-                ? `<button class="tree-toggle" aria-expanded="false" aria-label="Toggle ${rootLabel}" tabindex="-1"></button>`
-                : `<span class="tree-toggle-gap"></span>`;
-
-            html += `<li class="tree-group" role="none">`;
-            html += `<div class="tree-root-row" data-theme-id="${rootId}" role="treeitem" tabindex="0">${toggleBtn}${rootLabel}</div>`;
-
-            if (hasChildren) {
-                html += '<ul class="tree-children" role="group" style="display:none">';
-                for (const child of rootNode.children) {
-                    html += `<li class="tree-child-item" role="none">`;
-                    html += `<div class="tree-child-row" data-theme-id="${child.theme.id}" role="treeitem" tabindex="0">${child.theme.label}</div>`;
-                    html += `</li>`;
-                }
-                html += '</ul>';
-            }
-
-            html += '</li>';
+            rootUl.appendChild(buildNodeElement(rootNode, /*isRoot=*/ true));
         }
-        html += '</ul>';
+        container.appendChild(rootUl);
+    }
 
-        container.innerHTML = html;
+    function buildNodeElement(node, isRoot) {
+        const theme       = node.theme;
+        const children    = node.children ?? [];
+        const hasChildren = children.length > 0;
 
-        // Root row: clicking anywhere (including the arrow) selects the theme AND toggles children.
-        container.querySelectorAll(".tree-root-row").forEach((row) => {
-            row.addEventListener("click", () => {
-                showThemeDetails(row.dataset.themeId);
-                const toggleBtn = row.querySelector(".tree-toggle");
-                if (!toggleBtn) return;
-                const group    = row.closest(".tree-group");
-                const children = group.querySelector(".tree-children");
-                const expanded = toggleBtn.getAttribute("aria-expanded") === "true";
-                toggleBtn.setAttribute("aria-expanded", String(!expanded));
-                if (children) children.style.display = expanded ? "none" : "";
-            });
+        const li = document.createElement("li");
+        li.className = isRoot ? "tree-group" : "tree-child-item";
+        li.setAttribute("role", "none");
+
+        const row = document.createElement("div");
+        row.className = isRoot ? "tree-root-row" : "tree-child-row";
+        row.setAttribute("role", "treeitem");
+        row.setAttribute("tabindex", "0");
+        row.dataset.themeId = theme.id;
+
+        if (hasChildren) {
+            const toggle = document.createElement("button");
+            toggle.className = "tree-toggle";
+            toggle.setAttribute("aria-expanded", "false");
+            toggle.setAttribute("aria-label", "Toggle " + theme.label);
+            toggle.setAttribute("tabindex", "-1");
+            row.appendChild(toggle);
+        } else if (isRoot) {
+            // Keep root rows aligned when they have no children.
+            const gap = document.createElement("span");
+            gap.className = "tree-toggle-gap";
+            row.appendChild(gap);
+        }
+
+        // Label rendered via textContent — auto-escapes any HTML in the label.
+        row.appendChild(document.createTextNode(theme.label));
+        li.appendChild(row);
+
+        let childrenUl = null;
+        if (hasChildren) {
+            childrenUl = document.createElement("ul");
+            childrenUl.className = "tree-children";
+            childrenUl.setAttribute("role", "group");
+            childrenUl.style.display = "none";
+            for (const child of children) {
+                childrenUl.appendChild(buildNodeElement(child, /*isRoot=*/ false));
+            }
+            li.appendChild(childrenUl);
+        }
+
+        // Click handler: every row selects; rows with children also toggle.
+        // Uses the closure-captured `li` / `childrenUl` so it works at any depth
+        // (the old code's `row.closest(".tree-group")` only worked at root level).
+        row.addEventListener("click", () => {
+            showThemeDetails(row.dataset.themeId);
+            if (!hasChildren) return;
+            const toggle  = row.querySelector(".tree-toggle");
+            const expanded = toggle.getAttribute("aria-expanded") === "true";
+            toggle.setAttribute("aria-expanded", String(!expanded));
+            childrenUl.style.display = expanded ? "none" : "";
         });
 
-        // Child row: clicking selects the theme only (no collapse behaviour).
-        container.querySelectorAll(".tree-child-row").forEach((el) => {
-            el.addEventListener("click", () => showThemeDetails(el.dataset.themeId));
-        });
+        return li;
     }
 
     // ------------------------------------------------------------------
