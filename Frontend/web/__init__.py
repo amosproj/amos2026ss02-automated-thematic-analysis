@@ -1,3 +1,4 @@
+import atexit
 import logging
 
 from flask import Flask, current_app, flash, redirect, render_template, request, url_for
@@ -22,9 +23,13 @@ def create_app(config: Config | None = None) -> Flask:
     app.logger.setLevel(log_level)
 
     # Shared across requests: pooled connections + memoised corpus id.
-    app.extensions["backend_client"] = BackendClient(
+    # `atexit` (not `teardown_appcontext`) is the right hook here — the latter
+    # fires on every request and would close the pooled client we want to reuse.
+    backend_client = BackendClient(
         cfg.BACKEND_API_URL, timeout=cfg.BACKEND_TIMEOUT_S
     )
+    app.extensions["backend_client"] = backend_client
+    atexit.register(backend_client.close)
 
     from web.controllers.analysis import bp as analysis_bp
     from web.controllers.codebooks import bp as codebooks_bp
