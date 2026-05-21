@@ -40,9 +40,13 @@ def test_413_when_request_body_exceeds_max_content_length(client, fake_backend, 
     assert resp.status_code == 303
 
 
-def test_413_does_not_open_redirect_to_external_referrer(client, fake_backend, app):
-    """Open Redirect guard: an external Referer header must NOT be followed
-    after a 413; the handler must fall back to the home page (CWE-601)."""
+def test_413_always_redirects_to_home_ignoring_referrer(client, fake_backend, app):
+    """Open Redirect guard (CWE-601): the 413 handler must redirect to the
+    application home page regardless of any Referer header the request carried.
+    We never pass user-controlled values to redirect() so the dataflow CodeQL
+    looks for (request.referrer / Host → redirect) doesn't exist."""
+    from flask import url_for
+
     max_bytes = app.config["MAX_CONTENT_LENGTH"]
     body = b"x" * (max_bytes + 1024)
     resp = client.post(
@@ -53,9 +57,14 @@ def test_413_does_not_open_redirect_to_external_referrer(client, fake_backend, a
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    # Redirect target must be our home page, NOT the attacker's domain.
-    assert "attacker.example.com" not in resp.headers["Location"]
-    assert resp.headers["Location"].endswith("/")
+
+    # Derive the expected target from url_for so the test stays correct if
+    # the home route ever moves or APPLICATION_ROOT changes. Werkzeug may
+    # emit either the relative or absolute form, so accept both.
+    with app.test_request_context():
+        expected_relative = url_for("main.index")
+        expected_absolute = url_for("main.index", _external=True)
+    assert resp.headers["Location"] in {expected_relative, expected_absolute}
 
 
 # Generic Exception handler
