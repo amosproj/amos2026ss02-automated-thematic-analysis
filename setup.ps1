@@ -191,6 +191,15 @@ function Invoke-Down {
 function Invoke-Test {
   Write-Info "Running test suite inside Docker..."
 
+  if ($Rebuild) {
+    Write-Info "Rebuilding api-test image with --no-cache..."
+    Invoke-Compose @('--profile', 'test', 'build', '--no-cache', 'api-test')
+  }
+  elseif (-not $NoBuild) {
+    Write-Info "Ensuring api-test image is up to date..."
+    Invoke-Compose @('--profile', 'test', 'build', 'api-test')
+  }
+
   $pytestArgs = @(
     '--profile', 'test', 'run', '--rm', 'api-test',
     'pytest', '--cov=app', '--cov-report=term-missing', '--cov-report=html'
