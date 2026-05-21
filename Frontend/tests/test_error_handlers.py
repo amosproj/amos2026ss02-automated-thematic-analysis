@@ -56,11 +56,10 @@ def test_413_always_redirects_to_home_ignoring_referrer(client, fake_backend, ap
     )
     assert resp.status_code == 303
     location = resp.headers["Location"]
-    # Target must be our home page, never the attacker's domain.
-    assert "attacker.example.com" not in location
-    # Location should point at the index route ("/") — either absolute on our
-    # test host or relative depending on Werkzeug version.
-    assert location.endswith("/") or location.rstrip("/").endswith("localhost")
+    # Strict check: the target must equal the home page URL — `endswith("/")`
+    # would also accept e.g. "/transcripts/", silently hiding a regression
+    # where the handler started redirecting somewhere unexpected.
+    assert location in {"/", "http://localhost/"}
 
 
 # Generic Exception handler
