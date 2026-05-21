@@ -15,7 +15,6 @@ from app.config import Settings
 from app.exceptions import NotFoundError, UnprocessableError
 from app.models.demographic import DemographicFiles, DemographicRow
 from app.models.ingestion import CorpusDocument
-from app.services.linking import auto_link_demographics
 from app.schemas.demographic import (
     DemographicFileSummary,
     DemographicRowSchema,
@@ -26,8 +25,8 @@ from app.schemas.demographic import (
     UploadDemographicConfirmResponse,
 )
 from app.services.ingestion import IngestionService
+from app.services.linking import auto_link_demographics
 from app.services.upload_parsers import get_extension
-
 
 SUPPORTED_DEMOGRAPHIC_UPLOAD_EXTENSIONS = frozenset({".csv"})
 
