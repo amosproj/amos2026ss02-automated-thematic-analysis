@@ -1,16 +1,12 @@
-from flask import Blueprint, current_app, flash, render_template, request
+from flask import Blueprint, flash, render_template, request
 
 from web.services.backend_client import (
-    BackendClient,
     BackendError,
     BackendNotFoundError,
+    get_backend_client as _backend,
 )
 
 bp = Blueprint("codebooks", __name__)
-
-
-def _backend() -> BackendClient:
-    return current_app.extensions["backend_client"]
 
 
 @bp.get("/")

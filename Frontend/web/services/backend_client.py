@@ -15,6 +15,16 @@ from flask import current_app, has_app_context
 from werkzeug.datastructures import FileStorage
 
 
+def get_backend_client() -> "BackendClient":
+    """Return the shared BackendClient instance attached to the current Flask app.
+
+    Centralised so controllers don't each redefine a `_backend()` helper —
+    if we ever change where the client lives (e.g. move it out of
+    `app.extensions`), there's exactly one place to update.
+    """
+    return current_app.extensions["backend_client"]
+
+
 # Exception taxonomy
 
 
