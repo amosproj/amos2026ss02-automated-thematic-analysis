@@ -40,6 +40,24 @@ def test_413_when_request_body_exceeds_max_content_length(client, fake_backend, 
     assert resp.status_code == 303
 
 
+def test_413_does_not_open_redirect_to_external_referrer(client, fake_backend, app):
+    """Open Redirect guard: an external Referer header must NOT be followed
+    after a 413; the handler must fall back to the home page (CWE-601)."""
+    max_bytes = app.config["MAX_CONTENT_LENGTH"]
+    body = b"x" * (max_bytes + 1024)
+    resp = client.post(
+        "/transcripts/test-corpus-id/upload",
+        data={"files": [(io.BytesIO(body), "huge.txt")]},
+        content_type="multipart/form-data",
+        headers={"Referer": "https://attacker.example.com/phish"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    # Redirect target must be our home page, NOT the attacker's domain.
+    assert "attacker.example.com" not in resp.headers["Location"]
+    assert resp.headers["Location"].endswith("/")
+
+
 # Generic Exception handler
 
 

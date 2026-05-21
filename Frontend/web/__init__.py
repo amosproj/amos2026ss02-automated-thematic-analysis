@@ -1,10 +1,28 @@
 import atexit
 import logging
+from urllib.parse import urlparse
 
 from flask import Flask, current_app, flash, redirect, render_template, request, url_for
 
 from web.config import Config, get_config
 from web.services.backend_client import BackendClient
+
+
+def _safe_referrer() -> str | None:
+    """Return `request.referrer` only when it points back to our own host.
+
+    The Referer header is browser-supplied and attacker-controllable, so
+    redirecting to it unconditionally creates an Open Redirect (CWE-601)
+    — a phishing primitive. Same-origin referrers are safe because they
+    can only target our own routes.
+    """
+    ref = request.referrer
+    if not ref:
+        return None
+    parsed = urlparse(ref)
+    if parsed.netloc and parsed.netloc != request.host:
+        return None
+    return ref
 
 
 def create_app(config: Config | None = None) -> Flask:
@@ -64,7 +82,8 @@ def _register_error_handlers(app: Flask) -> None:
             "danger",
         )
         # 303 forces a GET on the redirect, so the browser doesn't try to re-POST.
-        return redirect(request.referrer or url_for("main.index")), 303
+        # `_safe_referrer()` blocks open-redirects via the Referer header.
+        return redirect(_safe_referrer() or url_for("main.index")), 303
 
     @app.errorhandler(Exception)
     def unhandled(exc):
