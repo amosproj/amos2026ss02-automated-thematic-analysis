@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.models import Codebook, CodebookThemeRelationship, Theme, ThemeHierarchyRelationship
 
-
 # ============================================================================
 # PYTEST FIXTURE BUILDERS (safe for test DB sessions)
 # ============================================================================
@@ -76,7 +75,7 @@ async def _seed_codebook_with_theme_graph(
 
     await session.flush()
 
-    for label, theme_id in theme_ids_by_label.items():
+    for _label, theme_id in theme_ids_by_label.items():
         session.add(
             CodebookThemeRelationship(
                 id=uuid4(),

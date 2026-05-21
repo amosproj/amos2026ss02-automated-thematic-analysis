@@ -8,7 +8,6 @@ from pydantic import ValidationError
 
 from app.schemas.llm import InterviewAnalysisResult, ThemePresence
 
-
 # ---------------------------------------------------------------------------
 # ThemePresence
 # ---------------------------------------------------------------------------

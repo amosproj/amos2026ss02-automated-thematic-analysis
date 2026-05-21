@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.config import Settings
-from app.routers import codebooks, demographic, demo, health, ingestion, themes
+from app.routers import codebooks, demo, demographic, health, ingestion, themes
 
 
 def register_routers(app: FastAPI, settings: Settings) -> None:

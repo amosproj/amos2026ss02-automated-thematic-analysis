@@ -1,10 +1,6 @@
 import pytest
 
-from app.services.text_chunking import (
-    ChunkSpan,
-    chunk_text_by_words
-)
-
+from app.services.text_chunking import chunk_text_by_words
 
 # ---------------------------------------------------------------------------
 # chunk_text_by_words — validation

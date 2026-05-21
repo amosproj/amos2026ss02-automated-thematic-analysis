@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
     @classmethod
-    def parse_cors_origins(cls, v: str | list) -> list[str]:
+    def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     LLM_PROVIDER: str = "academic_cloud"  # "academic_cloud" | "litellm"
     LLM_BASE_URL: str = "https://chat-ai.academiccloud.de/v1"
-    LLM_API_KEY: str | None = None  
+    LLM_API_KEY: str | None = None
     LLM_MODEL: str = "gemma-3-27b-it"  # "mistral-large-3-675b-instruct-2512" or qwen variants
     LLM_TEMPERATURE: float = 0.2
     LLM_REQUEST_TIMEOUT_S: float = 120.0  # too generous for the current test with a single interview file

@@ -139,7 +139,6 @@ def test_live_api_call_selected_provider() -> None:
 def test_live_api_call_academic_cloud() -> None:
     log = _AssertionLog()
     get_settings.cache_clear()
-    settings = get_settings()
 
     import os
     original = os.environ.get("SELECTED_API")
