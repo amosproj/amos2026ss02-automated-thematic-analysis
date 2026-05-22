@@ -125,23 +125,23 @@ Rules:
 - If nothing meaningful is present, return empty arrays for both themes and codes.
 
 Return JSON with this exact shape:
-{
+{{
   "themes": [
-    {
+    {{
       "path": [
-        {"label": "Theme label", "description": "Optional short description"},
-        {"label": "Subtheme label", "description": "Optional short description"}
+        {{"label": "Theme label", "description": "Optional short description"}},
+        {{"label": "Subtheme label", "description": "Optional short description"}}
       ]
-    }
+    }}
   ],
   "codes": [
-    {
+    {{
       "label": "Code label",
       "description": "Optional short description",
       "theme_path": ["Theme label", "Subtheme label"]
-    }
+    }}
   ]
-}"""
+}}"""
 
 GENERATE_CODEBOOK_USER_INSTRUCTION = """Generate candidate themes, subthemes, and codes for this passage.
 
