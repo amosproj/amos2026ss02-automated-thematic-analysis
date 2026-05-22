@@ -68,7 +68,10 @@ class ThemeFrequencyService:
                     CodebookThemeRelationship.is_active.is_(True),
                 ),
             )
-            .where(Theme.is_active.is_(True))
+            .where(
+                Theme.is_active.is_(True),
+                Theme.codebook_id == codebook_id,
+            )
             .distinct()
         )
         return list((await self._session.scalars(stmt)).all())

@@ -1,4 +1,8 @@
-from app.schemas.codebook import CodebookSchema
+from app.schemas.codebook import (
+    CodebookGenerateRequest,
+    CodebookSchema,
+    GeneratedCodebookResponse,
+)
 from app.schemas.common import (
     BaseSchema,
     HealthResponse,
@@ -41,6 +45,7 @@ __all__ = [
     "BaseSchema",
     "BulkDocumentIngestRequest",
     "CodebookSchema",
+    "CodebookGenerateRequest",
     "CorpusChunkSchema",
     "CorpusCreate",
     "CorpusDocumentSchema",
@@ -54,6 +59,7 @@ __all__ = [
     "ImportDemographicResponse",
     "InterviewMessage",
     "InterviewTranscript",
+    "GeneratedCodebookResponse",
     "Page",
     "PageMeta",
     "PaginationParams",

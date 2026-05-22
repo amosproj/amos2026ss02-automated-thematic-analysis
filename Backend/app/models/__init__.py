@@ -1,5 +1,6 @@
 from app.models.analysis import DocumentAnalysis, ThemeOccurrence
 from app.models.base import Base, IdMixin, TimestampMixin
+from app.models.code import Code, CodebookCodeRelationship
 from app.models.codebook import Codebook
 from app.models.demographic import DemographicFiles, DemographicRow
 from app.models.ingestion import (
@@ -17,7 +18,9 @@ __all__ = [
     "Base",
     "IdMixin",
     "TimestampMixin",
+    "Code",
     "Codebook",
+    "CodebookCodeRelationship",
     "CodebookThemeRelationship",
     "Theme",
     "ThemeHierarchyRelationship",

@@ -6,8 +6,13 @@ from sqlalchemy import desc, select
 
 from app.dependencies import DbSession
 from app.models import Codebook
-from app.schemas.codebook import CodebookSchema
+from app.schemas.codebook import (
+    CodebookGenerateRequest,
+    CodebookSchema,
+    GeneratedCodebookResponse,
+)
 from app.schemas.common import ResponseEnvelope
+from app.services.codebook_generation import CodebookGenerationService
 
 router = APIRouter(prefix="/codebooks", tags=["codebooks"])
 
@@ -23,3 +28,24 @@ async def get_codebooks(
     codebooks = list((await session.scalars(stmt)).all())
     payload = [CodebookSchema.model_validate(codebook) for codebook in codebooks]
     return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))
+
+
+@router.post(
+    "/generate",
+    response_model=ResponseEnvelope[GeneratedCodebookResponse],
+    status_code=201,
+)
+async def generate_codebook(
+    payload: CodebookGenerateRequest,
+    session: DbSession,
+) -> JSONResponse:
+    service = CodebookGenerationService(session)
+    generated_codebook = await service.generate_codebook(
+        codebook_name=payload.codebook_name,
+        corpus_id=payload.corpus_id,
+        transcript_document_ids=payload.transcript_document_ids,
+    )
+    return JSONResponse(
+        status_code=201,
+        content=ResponseEnvelope.ok(generated_codebook).model_dump(mode="json"),
+    )
