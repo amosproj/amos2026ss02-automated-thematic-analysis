@@ -110,6 +110,14 @@ mode_down() {
 mode_test() {
   log_info "Running test suite inside Docker..."
 
+  if $REBUILD; then
+    log_info "Rebuilding api-test image with --no-cache..."
+    run_compose --profile test build --no-cache api-test
+  elif $BUILD; then
+    log_info "Ensuring api-test image is up to date..."
+    run_compose --profile test build api-test
+  fi
+
   local pytest_cmd=(pytest --cov=app --cov-report=term-missing --cov-report=html)
   (( ${#EXTRA_ARGS[@]} > 0 )) && pytest_cmd+=("${EXTRA_ARGS[@]}")
 
