@@ -12,7 +12,6 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
   {% block head_extra %}{% endblock %}
 </head>
-<<<<<<< HEAD
 <body class="bg-light site-body">
 
   <nav class="navbar navbar-expand-md navbar-dark bg-dark">
@@ -51,11 +50,11 @@
                href="{{ url_for('demographic.demographic_landing') }}">Demographic Data</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint and request.endpoint.startswith('codebooks.') %}active{% endif %}"
+            <a class="nav-link {% if request.endpoint in ('codebooks.list_codebooks', 'codebooks.codebook_themes', 'codebooks.export_codebook', 'codebooks.success') %}active{% endif %}"
                href="{{ url_for('codebooks.list_codebooks') }}">Codebooks</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint and request.endpoint.startswith('codebooks.') %}active{% endif %}"
+            <a class="nav-link {% if request.endpoint in ('codebooks.upload_form', 'codebooks.upload_submit', 'codebooks.manual_form', 'codebooks.confirm_submit') %}active{% endif %}"
                href="{{ url_for('codebooks.upload_form') }}">Upload Codebook</a>
           </li>
           <li class="nav-item">
