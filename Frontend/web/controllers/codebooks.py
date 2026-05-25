@@ -134,12 +134,25 @@ def confirm_submit() -> str:
 
     # Frontend validation
     error = None
+    theme_names_set = {t["name"] for t in themes if t["name"]}
+
     if not codebook_name:
         error = "Codebook Name must not be blank."
     elif not themes:
         error = "A codebook must contain at least one theme."
     elif any(not t["name"] for t in themes):
         error = "All themes must have a name."
+    else:
+        for t in themes:
+            if t["node_type"] in ["SUBTHEME", "CODE"] and not t["parent_name"]:
+                error = f"Theme '{t['name']}' of type {t['node_type']} must have a Parent Name."
+                break
+            if t["node_type"] == "THEME" and t["parent_name"]:
+                error = f"Theme '{t['name']}' is a root THEME and must not have a Parent Name."
+                break
+            if t["parent_name"] and t["parent_name"] not in theme_names_set:
+                error = f"Parent '{t['parent_name']}' for theme '{t['name']}' does not exist in this codebook."
+                break
 
     if error:
         return render_template(
