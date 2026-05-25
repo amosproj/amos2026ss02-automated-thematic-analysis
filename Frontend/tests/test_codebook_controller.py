@@ -50,7 +50,7 @@ class FakeCodebookBackend:
 @pytest.fixture
 def fake_codebook_backend(monkeypatch) -> FakeCodebookBackend:
     fake = FakeCodebookBackend()
-    monkeypatch.setattr("web.controllers.codebook._backend", lambda: fake)
+    monkeypatch.setattr("web.controllers.codebooks._backend", lambda: fake)
     return fake
 
 
@@ -63,7 +63,7 @@ def test_list_codebooks_renders_empty_state(client, fake_codebook_backend):
     fake_codebook_backend.list_codebooks_result = []
     resp = client.get("/codebooks/")
     assert resp.status_code == 200
-    assert b"No codebooks yet" in resp.data
+    assert b"No codebooks found" in resp.data
 
 
 def test_list_codebooks_renders_saved_entries(client, fake_codebook_backend):
@@ -77,7 +77,7 @@ def test_list_codebooks_renders_saved_entries(client, fake_codebook_backend):
     assert resp.status_code == 200
     assert b"Interview Framework" in resp.data
     assert b"Health Study" in resp.data
-    assert b"No codebooks yet" not in resp.data
+    assert b"No codebooks found" not in resp.data
 
 
 def test_list_codebooks_surfaces_backend_error(client, fake_codebook_backend):

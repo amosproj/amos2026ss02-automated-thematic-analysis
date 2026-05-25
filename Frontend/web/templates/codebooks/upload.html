@@ -220,7 +220,7 @@
         </div>
       </div>
 
-      <form method="post" action="{{ url_for('codebook.upload_submit') }}" enctype="multipart/form-data">
+      <form method="post" action="{{ url_for('codebooks.upload_submit') }}" enctype="multipart/form-data">
         <input type="hidden" name="action" value="upload">
         <div class="form-group">
           <label class="file-drop-area" id="drop-area">
@@ -244,7 +244,7 @@
       </div>
 
       <div style="margin-top: auto;">
-        <a href="{{ url_for('codebook.manual_form') }}" class="btn btn-outline" style="display: block;">Create Manually</a>
+        <a href="{{ url_for('codebooks.manual_form') }}" class="btn btn-outline" style="display: block;">Create Manually</a>
       </div>
     </div>
   </div>

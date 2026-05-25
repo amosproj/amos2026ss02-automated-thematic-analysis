@@ -18,7 +18,10 @@
     </div>
   {% endif %}
 
-  <h1 class="h3 mb-4">Codebooks</h1>
+  <div class="d-flex justify-content-between align-items-baseline mb-4">
+    <h1 class="h3 mb-0">Codebooks</h1>
+    <a href="{{ url_for('codebooks.upload_form') }}" class="btn btn-primary" id="new-codebook-btn">New Codebook</a>
+  </div>
 
   {% if error %}
     <p class="text-secondary">Couldn't load codebooks right now.</p>
