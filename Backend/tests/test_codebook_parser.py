@@ -10,7 +10,6 @@ import pytest
 from app.exceptions import UnprocessableError
 from app.services.codebook_parser import parse_codebook_csv
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -27,8 +26,8 @@ def _csv(rows: list[dict], header: list[str] | None = None) -> bytes:
 
 def _valid_row(n: int = 1) -> dict:
     return {
-        "node type": "THEME", 
-        "name": f"Theme {n}", 
+        "node type": "THEME",
+        "name": f"Theme {n}",
         "description": f"Description of theme {n}",
         "parent name": ""
     }

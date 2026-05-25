@@ -182,7 +182,7 @@ class CodebookService:
 
         Imported inline to avoid circular imports at module level.
         """
-        from app.schemas.codebook import CodebookDetailSchema, ThemeInCodebookSchema
+        from app.schemas.codebook import CodebookDetailSchema
 
         edges = edges or []
         schema_by_id = {

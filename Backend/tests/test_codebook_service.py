@@ -8,7 +8,7 @@ import uuid
 
 import pytest
 
-from app.exceptions import NotFoundError, UnprocessableError
+from app.exceptions import NotFoundError
 from app.schemas.codebook import CodebookCreateRequest, ThemeInput
 from app.services.codebook import CodebookService
 
