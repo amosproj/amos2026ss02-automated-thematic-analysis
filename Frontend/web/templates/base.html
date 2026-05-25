@@ -12,7 +12,6 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
   {% block head_extra %}{% endblock %}
 </head>
-<<<<<<< HEAD
 <body class="bg-light site-body">
 
   <nav class="navbar navbar-expand-md navbar-dark bg-dark">
@@ -39,19 +38,19 @@
                href="{{ url_for('main.index') }}">Home</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint in ('ingestion.upload_landing', 'ingestion.upload_form', 'ingestion.upload_submit') %}active{% endif %}"
-               href="{{ url_for('ingestion.upload_landing') }}">Upload</a>
-          </li>
-          <li class="nav-item">
             <a class="nav-link {% if request.endpoint in ('ingestion.transcripts_landing', 'ingestion.list_transcripts') %}active{% endif %}"
                href="{{ url_for('ingestion.transcripts_landing') }}">Transcripts</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint and request.endpoint.startswith('codebooks.') %}active{% endif %}"
-               href="{{ url_for('codebooks.list_codebooks') }}">Codebooks</a>
+            <a class="nav-link {% if request.endpoint in ('ingestion.upload_landing', 'ingestion.upload_form', 'ingestion.upload_submit') %}active{% endif %}"
+               href="{{ url_for('ingestion.upload_landing') }}">Upload Transcripts</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint and request.endpoint.startswith('codebook.') %}active{% endif %}"
+            <a class="nav-link {% if request.endpoint in ('codebook.list_codebooks', 'codebooks.codebook_themes') %}active{% endif %}"
+               href="{{ url_for('codebook.list_codebooks') }}">Codebooks</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint in ('codebook.upload_form', 'codebook.upload_submit', 'codebook.manual_form', 'codebook.confirm_submit', 'codebook.success') %}active{% endif %}"
                href="{{ url_for('codebook.upload_form') }}">Upload Codebook</a>
           </li>
           <li class="nav-item">

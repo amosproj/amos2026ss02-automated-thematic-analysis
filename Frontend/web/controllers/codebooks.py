@@ -9,14 +9,7 @@ from web.services.backend_client import (
 bp = Blueprint("codebooks", __name__)
 
 
-@bp.get("/")
-def list_codebooks() -> str:
-    try:
-        codebooks = _backend().list_codebooks()
-    except BackendError as exc:
-        flash(exc.user_message, "danger")
-        return render_template("codebooks/list.html", codebooks=[], error=True)
-    return render_template("codebooks/list.html", codebooks=codebooks)
+
 
 
 @bp.get("/<codebook_id>/themes")

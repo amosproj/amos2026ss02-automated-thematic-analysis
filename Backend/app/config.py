@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     CORS_ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"] # Default allowed origin for development
     API_V1_PREFIX: str = "/api/v1"  # Default API prefix
 
+    # Workspace (single-corpus MVP; syncs with frontend defaults)
+    DEFAULT_PROJECT_ID: str = "00000000-0000-0000-0000-000000000001"
+    DEFAULT_CORPUS_NAME: str = "Interview Transcripts"
+
     INGESTION_CHUNK_SIZE_WORDS: int = 2048
     INGESTION_CHUNK_OVERLAP_WORDS: int = 200
     MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024 # 10 MB limit for uploaded interview files

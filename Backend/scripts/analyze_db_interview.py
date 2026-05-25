@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.database import _get_session_factory, init_db
 from app.llm.pipelines import apply_codebook_to_interview
 from app.models import (
@@ -47,11 +48,23 @@ async def seed_db():
 
     factory = _get_session_factory()
     async with factory() as session:
-        # Create Corpus
-        project_id = uuid.uuid4()
-        corpus = Corpus(project_id=project_id, name="Deployment Feedback Interviews (Batch)")
-        session.add(corpus)
-        await session.flush()
+        # Use MVP defaults so it shows up in UI
+        settings = get_settings()
+        project_id = uuid.UUID(settings.DEFAULT_PROJECT_ID)
+        corpus_name = settings.DEFAULT_CORPUS_NAME
+        
+        corpus_res = await session.execute(
+            select(Corpus).where(
+                Corpus.project_id == project_id,
+                Corpus.name == corpus_name
+            )
+        )
+        corpus = corpus_res.scalar_one_or_none()
+        
+        if not corpus:
+            corpus = Corpus(project_id=project_id, name=corpus_name)
+            session.add(corpus)
+            await session.flush()
 
         # Create Codebook
         codebook = Codebook(project_id=str(project_id), name="Software Deployment Evaluation", version=1, created_by="admin")
