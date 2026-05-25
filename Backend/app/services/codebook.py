@@ -17,6 +17,10 @@ from app.schemas.codebook import (
 )
 
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.schemas.codebook import CodebookDetailSchema
+
 class CodebookService:
     """All database operations for Codebook, Theme, and CodebookThemeRelationship."""
 
@@ -177,7 +181,7 @@ class CodebookService:
     @staticmethod
     def build_detail_schema(
         codebook: Codebook, themes: list[Theme], edges: list[ThemeHierarchyRelationship] | None = None
-    ):
+    ) -> "CodebookDetailSchema":
         """Build a CodebookDetailSchema from ORM objects.
 
         Imported inline to avoid circular imports at module level.

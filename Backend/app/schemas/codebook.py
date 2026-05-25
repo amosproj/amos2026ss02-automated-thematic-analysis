@@ -1,10 +1,13 @@
-from typing import Self
+from typing import TYPE_CHECKING, Self
 from uuid import UUID
 
 from pydantic import Field, field_validator
 
 from app.models.themes import NodeType
 from app.schemas.common import BaseSchema
+
+if TYPE_CHECKING:
+    from app.models.themes import Theme
 
 # ---------------------------------------------------------------------------
 # Request schemas
@@ -67,7 +70,7 @@ class ThemeInCodebookSchema(BaseSchema):
     children: list[Self] = Field(default_factory=list)
 
     @classmethod
-    def from_theme(cls, theme) -> "ThemeInCodebookSchema":
+    def from_theme(cls, theme: "Theme") -> "ThemeInCodebookSchema":
         return cls(
             id=theme.id,
             node_type=theme.node_type,
