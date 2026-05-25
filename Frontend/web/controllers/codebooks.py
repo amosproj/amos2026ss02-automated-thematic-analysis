@@ -1,4 +1,6 @@
-from flask import Blueprint, flash, render_template, request, redirect, url_for, current_app
+import csv
+import io
+from flask import Blueprint, flash, render_template, request, redirect, url_for, current_app, Response
 
 from web.services.backend_client import (
     BackendError,
@@ -60,6 +62,50 @@ def codebook_themes(codebook_id: str) -> str:
         frequencies=frequencies,
         tree=tree,
     )
+
+@bp.get("/<codebook_id>/export")
+def export_codebook(codebook_id: str) -> Response | str:
+    """Export a codebook and its hierarchical themes as a CSV file."""
+    try:
+        client = _backend()
+        codebook = client.get_codebook(codebook_id)
+        themes = codebook.get("themes", [])
+
+        flat_rows = []
+
+        def traverse(node: dict, parent_name: str) -> None:
+            flat_rows.append({
+                "Node Type": node.get("node_type", "THEME"),
+                "Name": node.get("name", ""),
+                "Description": node.get("description", ""),
+                "Parent Name": parent_name,
+            })
+            for child in node.get("children", []):
+                traverse(child, node.get("name", ""))
+
+        for t in themes:
+            traverse(t, "")
+
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=["Node Type", "Name", "Description", "Parent Name"])
+        writer.writeheader()
+        writer.writerows(flat_rows)
+
+        csv_data = output.getvalue()
+        filename = f"{codebook.get('name', 'codebook').replace(' ', '_')}_v{codebook.get('version', 1)}.csv"
+
+        return Response(
+            csv_data,
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except BackendNotFoundError:
+        flash("That codebook couldn't be found. It may have been deleted.", "danger")
+        return redirect(url_for("codebooks.list_codebooks"))
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return redirect(url_for("codebooks.list_codebooks"))
+
 
 @bp.get("/upload")
 def upload_form() -> str:

@@ -328,3 +328,47 @@ def test_success_renders_saved_details(client, fake_codebook_backend):
     assert b"Success Codebook" in resp.data
     assert b"Theme A" in resp.data
     assert fake_codebook_backend.last_fetched_id == "e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002"
+
+# ---------------------------------------------------------------------------
+# GET /codebooks/<codebook_id>/export
+# ---------------------------------------------------------------------------
+
+def test_export_codebook_success(client, fake_codebook_backend):
+    fake_codebook_backend.get_codebook_result = {
+        "id": "e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002",
+        "name": "Export Codebook",
+        "version": 1,
+        "themes": [
+            {
+                "node_type": "THEME",
+                "name": "Theme A",
+                "description": "Desc A",
+                "children": [
+                    {
+                        "node_type": "SUBTHEME",
+                        "name": "Sub A1",
+                        "description": "Desc A1",
+                        "children": []
+                    }
+                ]
+            }
+        ]
+    }
+
+    resp = client.get("/codebooks/e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002/export")
+
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/csv"
+    assert "attachment; filename=Export_Codebook_v1.csv" in resp.headers["Content-Disposition"]
+    
+    # Check CSV contents
+    csv_data = resp.data.decode("utf-8")
+    assert "Node Type,Name,Description,Parent Name" in csv_data
+    assert "THEME,Theme A,Desc A," in csv_data
+    assert "SUBTHEME,Sub A1,Desc A1,Theme A" in csv_data
+
+def test_export_codebook_not_found(client, fake_codebook_backend):
+    fake_codebook_backend.raise_on = "get_codebook"
+    resp = client.get("/codebooks/unknown-id/export")
+    assert resp.status_code == 302
+    assert "/codebooks/" in resp.headers["Location"]
