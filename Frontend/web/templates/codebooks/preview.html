@@ -217,11 +217,13 @@
         <div class="theme-inputs">
           <div>
             <label class="theme-label">Type</label>
-            <input type="text"
-                   name="node_types[]"
-                   value="{{ theme.node_type or theme.node_type.value or 'THEME' }}"
-                   class="form-control"
-                   readonly>
+            <select name="node_types[]" class="form-control" onchange="handleTypeChange(this)">
+              {% set nt = theme.node_type or theme.get('node_type', '') %}
+              {% set nt = nt.value if nt.__class__.__name__ == 'NodeType' else nt %}
+              <option value="THEME" {% if nt == 'THEME' or not nt %}selected{% endif %}>THEME</option>
+              <option value="SUBTHEME" {% if nt == 'SUBTHEME' %}selected{% endif %}>SUBTHEME</option>
+              <option value="CODE" {% if nt == 'CODE' %}selected{% endif %}>CODE</option>
+            </select>
           </div>
           <div>
             <label class="theme-label">Parent Name</label>
@@ -229,7 +231,7 @@
                    name="parent_names[]"
                    value="{{ theme.parent_name or '' }}"
                    class="form-control"
-                   readonly>
+                   {% if not theme.parent_name and (theme.node_type == 'THEME' or not theme.node_type) %}readonly style="background-color: #f8fafc;"{% endif %}>
           </div>
           <div>
             <label class="theme-label">Name</label>
@@ -254,14 +256,27 @@
   </div>
 
   <div class="action-bar">
-    <button type="button" class="btn btn-outline" onclick="addRow()">+ Add Theme</button>
+    <button type="button" class="btn btn-outline" onclick="addThemeRow()">+ Add Theme</button>
     <button type="submit" class="btn btn-primary">Confirm &amp; Save Codebook</button>
   </div>
   </form>
 </div>
 
 <script>
-  function addRow() {
+    function handleTypeChange(selectElement) {
+      const row = selectElement.closest('.theme-inputs');
+      const parentInput = row.querySelector('input[name="parent_names[]"]');
+      if (selectElement.value === 'THEME') {
+        parentInput.value = '';
+        parentInput.readOnly = true;
+        parentInput.style.backgroundColor = '#f8fafc';
+      } else {
+        parentInput.readOnly = false;
+        parentInput.style.backgroundColor = '';
+      }
+    }
+
+    function addThemeRow() {
     const rows = document.querySelectorAll('.theme-row');
     if (rows.length >= 50) {
       alert("A codebook cannot contain more than 50 themes.");
@@ -274,11 +289,15 @@
       <div class="theme-inputs">
         <div>
           <label class="theme-label">Type</label>
-          <input type="text" name="node_types[]" value="THEME" class="form-control" readonly>
+          <select name="node_types[]" class="form-control" onchange="handleTypeChange(this)">
+            <option value="THEME" selected>THEME</option>
+            <option value="SUBTHEME">SUBTHEME</option>
+            <option value="CODE">CODE</option>
+          </select>
         </div>
         <div>
           <label class="theme-label">Parent Name</label>
-          <input type="text" name="parent_names[]" class="form-control" readonly>
+          <input type="text" name="parent_names[]" class="form-control" readonly style="background-color: #f8fafc;">
         </div>
         <div>
           <label class="theme-label">Name</label>
@@ -286,7 +305,7 @@
         </div>
         <div>
           <label class="theme-label">Description</label>
-          <textarea name="theme_descriptions[]" class="form-control" rows="1" placeholder="Theme definition/instructions..." style="resize: vertical; min-height: 42px;" required></textarea>
+          <textarea name="theme_descriptions[]" class="form-control" rows="1" style="resize: vertical; min-height: 42px;" required></textarea>
         </div>
       </div>
       <div class="remove-btn" onclick="removeRow(this)" title="Remove Theme">✕</div>

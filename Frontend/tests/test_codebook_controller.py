@@ -261,6 +261,48 @@ def test_confirm_submit_surfaces_backend_error(client, fake_codebook_backend):
     assert resp.status_code == 200
     assert b"simulated create_codebook failure" in resp.data
 
+def test_confirm_submit_validation_missing_parent(client):
+    resp = client.post(
+        "/codebooks/confirm",
+        data={
+            "codebook_name": "Tst",
+            "node_types[]": ["THEME", "SUBTHEME"],
+            "theme_names[]": ["Theme A", "Sub A"],
+            "theme_descriptions[]": ["Desc A", "Desc Sub A"],
+            "parent_names[]": ["", ""],
+        },
+    )
+    assert resp.status_code == 200
+    assert b"must have a Parent Name" in resp.data
+
+def test_confirm_submit_validation_theme_has_parent(client):
+    resp = client.post(
+        "/codebooks/confirm",
+        data={
+            "codebook_name": "Tst",
+            "node_types[]": ["THEME", "THEME"],
+            "theme_names[]": ["Theme A", "Theme B"],
+            "theme_descriptions[]": ["Desc A", "Desc B"],
+            "parent_names[]": ["", "Theme A"],
+        },
+    )
+    assert resp.status_code == 200
+    assert b"is a root THEME and must not have a Parent Name" in resp.data
+
+def test_confirm_submit_validation_parent_does_not_exist(client):
+    resp = client.post(
+        "/codebooks/confirm",
+        data={
+            "codebook_name": "Tst",
+            "node_types[]": ["THEME", "SUBTHEME"],
+            "theme_names[]": ["Theme A", "Sub A"],
+            "theme_descriptions[]": ["Desc A", "Desc Sub A"],
+            "parent_names[]": ["", "Unknown Theme"],
+        },
+    )
+    assert resp.status_code == 200
+    assert b"does not exist in this codebook" in resp.data
+
 
 # ---------------------------------------------------------------------------
 # GET /codebooks/success
