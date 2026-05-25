@@ -6,7 +6,6 @@ tested endpoints over HTTP/REST on an in-memory SQLite database.
 from __future__ import annotations
 
 import uuid
-import pytest
 
 API = "/api/v1/codebooks"
 PROJECT_ID = "project-xyz-123"
@@ -28,8 +27,8 @@ def _csv(rows: list[dict], header: list[str] | None = None) -> bytes:
 
 def _valid_row(n: int = 1) -> dict:
     return {
-        "node type": "THEME", 
-        "name": f"Theme {n}", 
+        "node type": "THEME",
+        "name": f"Theme {n}",
         "description": f"Description of theme {n}",
         "parent name": ""
     }

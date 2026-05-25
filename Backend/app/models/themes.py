@@ -10,7 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TimestampMixin
 
 
-class NodeType(str, enum.Enum):
+class NodeType(enum.StrEnum):
     THEME = "THEME"
     SUBTHEME = "SUBTHEME"
     CODE = "CODE"

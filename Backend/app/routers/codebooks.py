@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import desc, select
 
 from app.dependencies import DbSession
-from app.exceptions import NotFoundError, UnprocessableError
+from app.exceptions import UnprocessableError
 from app.models import Codebook
 from app.schemas.codebook import (
     CodebookCreateRequest,
