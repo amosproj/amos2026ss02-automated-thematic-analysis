@@ -80,7 +80,7 @@
 
   .theme-inputs {
     display: grid;
-    grid-template-columns: 1fr 2fr;
+    grid-template-columns: 1fr 1fr 2fr 3fr;
     gap: 1rem;
   }
 
@@ -216,12 +216,27 @@
       <div class="theme-row">
         <div class="theme-inputs">
           <div>
-            <label class="theme-label">Theme Name</label>
+            <label class="theme-label">Type</label>
+            <input type="text"
+                   name="node_types[]"
+                   value="{{ theme.node_type or theme.node_type.value or 'THEME' }}"
+                   class="form-control"
+                   readonly>
+          </div>
+          <div>
+            <label class="theme-label">Parent Name</label>
+            <input type="text"
+                   name="parent_names[]"
+                   value="{{ theme.parent_name or '' }}"
+                   class="form-control"
+                   readonly>
+          </div>
+          <div>
+            <label class="theme-label">Name</label>
             <input type="text"
                    name="theme_names[]"
                    value="{{ theme.name }}"
                    class="form-control"
-                   placeholder="e.g. Safety"
                    required>
           </div>
           <div>
@@ -229,7 +244,6 @@
             <textarea name="theme_descriptions[]"
                       class="form-control"
                       rows="1"
-                      placeholder="Theme definition/instructions..."
                       style="resize: vertical; min-height: 42px;"
                       required>{{ theme.description or '' }}</textarea>
           </div>
@@ -259,7 +273,15 @@
     newRow.innerHTML = `
       <div class="theme-inputs">
         <div>
-          <label class="theme-label">Theme Name</label>
+          <label class="theme-label">Type</label>
+          <input type="text" name="node_types[]" value="THEME" class="form-control" readonly>
+        </div>
+        <div>
+          <label class="theme-label">Parent Name</label>
+          <input type="text" name="parent_names[]" class="form-control" readonly>
+        </div>
+        <div>
+          <label class="theme-label">Name</label>
           <input type="text" name="theme_names[]" class="form-control" placeholder="e.g. Efficiency" required>
         </div>
         <div>

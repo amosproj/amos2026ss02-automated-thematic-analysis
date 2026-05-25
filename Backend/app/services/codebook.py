@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import NotFoundError, UnprocessableError
 from app.models.codebook import Codebook
-from app.models.themes import CodebookThemeRelationship, Theme
+from app.models.themes import CodebookThemeRelationship, Theme, ThemeHierarchyRelationship
 from app.schemas.codebook import (
     MAX_THEMES,
     MIN_THEMES,
@@ -32,7 +32,7 @@ class CodebookService:
 
     async def create_codebook(
         self, payload: CodebookCreateRequest
-    ) -> tuple[Codebook, list[Theme]]:
+    ) -> tuple[Codebook, list[Theme], list[ThemeHierarchyRelationship]]:
         """Persist a new codebook and all its themes atomically.
 
         Version is auto-incremented per project_id (starts at 1).
@@ -71,22 +71,42 @@ class CodebookService:
 
             # Insert each theme + membership link.
             themes: list[Theme] = []
+            edges: list[ThemeHierarchyRelationship] = []
+            theme_by_name: dict[str, Theme] = {}
+
             for theme_input in payload.themes:
                 theme = Theme(
+                    node_type=theme_input.node_type,
                     label=theme_input.name,
                     description=theme_input.description,
                     is_active=True,
                 )
                 self._session.add(theme)
-                await self._session.flush()  # get theme.id
+                themes.append(theme)
+                theme_by_name[theme_input.name] = theme
 
+            await self._session.flush()  # get theme.id for all themes
+
+            for theme_input in payload.themes:
+                theme = theme_by_name[theme_input.name]
                 link = CodebookThemeRelationship(
                     codebook_id=codebook.id,
                     theme_id=theme.id,
                     is_active=True,
                 )
                 self._session.add(link)
-                themes.append(theme)
+
+                if theme_input.parent_name:
+                    parent_theme = theme_by_name.get(theme_input.parent_name)
+                    if parent_theme:
+                        hierarchy_link = ThemeHierarchyRelationship(
+                            codebook_id=codebook.id,
+                            parent_theme_id=parent_theme.id,
+                            child_theme_id=theme.id,
+                            is_active=True,
+                        )
+                        self._session.add(hierarchy_link)
+                        edges.append(hierarchy_link)
 
             await self._session.commit()
             await self._session.refresh(codebook)
@@ -102,7 +122,7 @@ class CodebookService:
                 f"Failed to create codebook: {exc}"
             ) from exc
 
-        return codebook, themes
+        return codebook, themes, edges
 
     # ------------------------------------------------------------------
     # Read
@@ -110,7 +130,7 @@ class CodebookService:
 
     async def get_codebook_detail(
         self, codebook_id: uuid.UUID
-    ) -> tuple[Codebook, list[Theme]]:
+    ) -> tuple[Codebook, list[Theme], list[ThemeHierarchyRelationship]]:
         """Fetch a codebook and its active themes.
 
         Raises:
@@ -138,7 +158,17 @@ class CodebookService:
         )
         themes = list(themes_result.scalars().all())
 
-        return codebook, themes
+        # Also fetch the hierarchy edges for this codebook
+        edges_result = await self._session.execute(
+            select(ThemeHierarchyRelationship)
+            .where(
+                ThemeHierarchyRelationship.codebook_id == codebook_id,
+                ThemeHierarchyRelationship.is_active.is_(True),
+            )
+        )
+        edges = list(edges_result.scalars().all())
+
+        return codebook, themes, edges
 
     # ------------------------------------------------------------------
     # Helpers
@@ -146,13 +176,31 @@ class CodebookService:
 
     @staticmethod
     def build_detail_schema(
-        codebook: Codebook, themes: list[Theme]
+        codebook: Codebook, themes: list[Theme], edges: list[ThemeHierarchyRelationship] | None = None
     ):
         """Build a CodebookDetailSchema from ORM objects.
 
         Imported inline to avoid circular imports at module level.
         """
-        from app.schemas.codebook import CodebookDetailSchema
+        from app.schemas.codebook import CodebookDetailSchema, ThemeInCodebookSchema
+
+        edges = edges or []
+        schema_by_id = {
+            t.id: ThemeInCodebookSchema.from_theme(t) for t in themes
+        }
+
+        # Build tree: assign children to parents
+        for edge in edges:
+            parent = schema_by_id.get(edge.parent_theme_id)
+            child = schema_by_id.get(edge.child_theme_id)
+            if parent and child:
+                parent.children.append(child)
+
+        # Roots are those without any parent edge pointing to them
+        child_ids = {edge.child_theme_id for edge in edges}
+        root_themes = [
+            schema for t_id, schema in schema_by_id.items() if t_id not in child_ids
+        ]
 
         return CodebookDetailSchema(
             id=codebook.id,
@@ -161,5 +209,5 @@ class CodebookService:
             description=codebook.description,
             version=codebook.version,
             created_by=codebook.created_by,
-            themes=[ThemeInCodebookSchema.from_theme(t) for t in themes],
+            themes=root_themes,
         )

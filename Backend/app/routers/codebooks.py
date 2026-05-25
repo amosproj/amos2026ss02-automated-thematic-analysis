@@ -61,8 +61,8 @@ async def create_codebook(
 ) -> JSONResponse:
     """Create a new codebook and persist its themes atomically in the database."""
     service = CodebookService(session)
-    codebook, themes = await service.create_codebook(payload)
-    detail = CodebookService.build_detail_schema(codebook, themes)
+    codebook, themes, edges = await service.create_codebook(payload)
+    detail = CodebookService.build_detail_schema(codebook, themes, edges)
     return JSONResponse(
         status_code=201,
         content=ResponseEnvelope.ok(detail).model_dump(mode="json"),
@@ -76,7 +76,7 @@ async def get_codebook_detail(
 ) -> JSONResponse:
     """Fetch details of a specific codebook, including all associated themes."""
     service = CodebookService(session)
-    codebook, themes = await service.get_codebook_detail(codebook_id)
-    detail = CodebookService.build_detail_schema(codebook, themes)
+    codebook, themes, edges = await service.get_codebook_detail(codebook_id)
+    detail = CodebookService.build_detail_schema(codebook, themes, edges)
     return JSONResponse(content=ResponseEnvelope.ok(detail).model_dump(mode="json"))
 

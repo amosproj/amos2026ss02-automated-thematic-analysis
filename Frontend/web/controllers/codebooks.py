@@ -105,7 +105,7 @@ def upload_submit() -> str:
 @bp.get("/manual")
 def manual_form() -> str:
     """Render the preview editor pre-filled with one blank theme row."""
-    empty_themes = [{"name": "", "description": ""}]
+    empty_themes = [{"node_type": "THEME", "name": "", "description": "", "parent_name": ""}]
     return render_template(
         "codebooks/preview.html",
         codebook_name="New Codebook",
@@ -117,13 +117,20 @@ def manual_form() -> str:
 def confirm_submit() -> str:
     """Validate, customise, and confirm a codebook and its themes."""
     codebook_name = (request.form.get("codebook_name") or "").strip()
+    node_types = request.form.getlist("node_types[]")
     theme_names = request.form.getlist("theme_names[]")
     theme_descriptions = request.form.getlist("theme_descriptions[]")
+    parent_names = request.form.getlist("parent_names[]")
 
     # Assemble themes back into expected structure
     themes = []
-    for name, desc in zip(theme_names, theme_descriptions):
-        themes.append({"name": name.strip(), "description": desc.strip()})
+    for nt, name, desc, parent in zip(node_types, theme_names, theme_descriptions, parent_names):
+        themes.append({
+            "node_type": nt,
+            "name": name.strip(),
+            "description": desc.strip(),
+            "parent_name": parent.strip() if parent.strip() else None
+        })
 
     # Frontend validation
     error = None

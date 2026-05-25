@@ -81,8 +81,9 @@ def test_pydantic_models_validate_from_sqlalchemy_objects() -> None:
     assert codebook_schema.project_id == codebook.project_id
     assert codebook_schema.name == codebook.name
 
-    theme = Theme(id=uuid.uuid4(), label="Trust", is_active=True)
+    theme = Theme(id=uuid.uuid4(), node_type="THEME", label="Trust", is_active=True)
     theme_schema = ThemeSchema.model_validate(theme)
     assert theme_schema.id == theme.id
+    assert theme_schema.node_type == theme.node_type
     assert theme_schema.label == theme.label
     assert theme_schema.is_active is True
