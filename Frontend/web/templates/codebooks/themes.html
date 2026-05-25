@@ -40,9 +40,14 @@
         <p class="text-white-50 small mb-1 text-uppercase fw-semibold" style="letter-spacing:.07em">Theme Browser</p>
         <h1 class="h3 text-white mb-0">{{ name or 'Codebook Themes' }}</h1>
       </div>
-      {% if version %}
-        <span class="theme-version-badge align-self-start">v{{ version }}</span>
-      {% endif %}
+      <div class="d-flex align-items-center gap-2">
+        {% if version %}
+          <span class="theme-version-badge">v{{ version }}</span>
+        {% endif %}
+        <a href="{{ url_for('codebooks.export_codebook', codebook_id=codebook_id) }}" class="btn btn-sm btn-outline-light ms-2">
+          Export CSV
+        </a>
+      </div>
     </div>
   </div>
 

@@ -48,6 +48,10 @@
                      href="{{ url_for('codebooks.codebook_themes_for_corpus', corpus_id=corpus_id, codebook_id=cb.id, name=cb.name, version=cb.version) }}">
                     View themes
                   </a>
+                  <a class="btn btn-sm btn-outline-secondary ms-1"
+                     href="{{ url_for('codebooks.export_codebook', codebook_id=cb.id) }}">
+                    Export
+                  </a>
                 </td>
               </tr>
             {% endfor %}
