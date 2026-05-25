@@ -119,8 +119,8 @@ def test_manual_form_renders_blank_row(client, fake_codebook_backend):
 
 def test_upload_submit_csv_success(client, fake_codebook_backend):
     fake_codebook_backend.parse_csv_results = [
-        {"name": "Theme A", "description": "Desc A"},
-        {"name": "Theme B", "description": "Desc B"},
+        {"node_type": "THEME", "name": "Theme A", "description": "Desc A", "parent_name": ""},
+        {"node_type": "THEME", "name": "Theme B", "description": "Desc B", "parent_name": ""},
     ]
 
     resp = client.post(
@@ -201,8 +201,10 @@ def test_confirm_submit_success(client, fake_codebook_backend):
         "/codebooks/confirm",
         data={
             "codebook_name": "Verified Codebook",
+            "node_types[]": ["THEME", "THEME"],
             "theme_names[]": ["Theme 1", "Theme 2"],
             "theme_descriptions[]": ["Desc 1", "Desc 2"],
+            "parent_names[]": ["", ""],
         },
     )
 
@@ -219,8 +221,10 @@ def test_confirm_submit_validation_missing_name(client):
         "/codebooks/confirm",
         data={
             "codebook_name": "",
+            "node_types[]": ["THEME"],
             "theme_names[]": ["T1"],
             "theme_descriptions[]": ["D1"],
+            "parent_names[]": [""],
         },
     )
     assert resp.status_code == 200
@@ -232,8 +236,10 @@ def test_confirm_submit_validation_blank_theme_names(client):
         "/codebooks/confirm",
         data={
             "codebook_name": "Tst",
+            "node_types[]": ["THEME", "THEME"],
             "theme_names[]": ["", "Valid"],
             "theme_descriptions[]": ["D1", "D2"],
+            "parent_names[]": ["", ""],
         },
     )
     assert resp.status_code == 200
@@ -246,8 +252,10 @@ def test_confirm_submit_surfaces_backend_error(client, fake_codebook_backend):
         "/codebooks/confirm",
         data={
             "codebook_name": "Tst",
+            "node_types[]": ["THEME"],
             "theme_names[]": ["Theme A"],
             "theme_descriptions[]": ["Desc A"],
+            "parent_names[]": [""],
         },
     )
     assert resp.status_code == 200

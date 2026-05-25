@@ -19,7 +19,7 @@ PROJECT_ID = "project-xyz-123"
 
 def _csv(rows: list[dict], header: list[str] | None = None) -> bytes:
     """Build a minimal CSV byte string from a list of dicts."""
-    cols = header or list(rows[0].keys()) if rows else ["name", "description"]
+    cols = header or list(rows[0].keys()) if rows else ["node type", "name", "description", "parent name"]
     lines = [",".join(cols)]
     for row in rows:
         lines.append(",".join(str(row.get(c, "")) for c in cols))
@@ -27,7 +27,12 @@ def _csv(rows: list[dict], header: list[str] | None = None) -> bytes:
 
 
 def _valid_row(n: int = 1) -> dict:
-    return {"name": f"Theme {n}", "description": f"Description of theme {n}"}
+    return {
+        "node type": "THEME", 
+        "name": f"Theme {n}", 
+        "description": f"Description of theme {n}",
+        "parent name": ""
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +79,7 @@ async def test_parse_csv_too_many_themes_raises_422(client):
 
 
 async def test_parse_csv_missing_column_raises_422(client):
-    csv_bytes = b"title,description\nTheme A,Desc A\n"  # missing 'name'
+    csv_bytes = b"node type,title,description,parent name\nTHEME,Theme A,Desc A,\n"  # missing 'name'
     resp = await client.post(
         f"{API}/parse-csv",
         files={"file": ("codebook.csv", csv_bytes, "text/csv")},
@@ -96,7 +101,7 @@ async def test_parse_csv_malformed_binary_raises_422(client):
 
 
 async def test_parse_csv_zero_themes_raises_422(client):
-    csv_bytes = b"name,description\n"  # header only
+    csv_bytes = b"node type,name,description,parent name\n"  # header only
     resp = await client.post(
         f"{API}/parse-csv",
         files={"file": ("codebook.csv", csv_bytes, "text/csv")},

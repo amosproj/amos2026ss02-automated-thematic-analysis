@@ -1,9 +1,10 @@
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Self
 from uuid import UUID
 
 from pydantic import Field, field_validator
 
+from app.models.themes import NodeType
 from app.schemas.common import BaseSchema
 
 # ---------------------------------------------------------------------------
@@ -15,10 +16,12 @@ MAX_THEMES = 50
 
 
 class ThemeInput(BaseSchema):
-    """One theme supplied by the researcher — used in both CSV upload and manual entry."""
+    """One node supplied by the researcher (Theme, Subtheme, or Code)."""
 
+    node_type: NodeType = Field(default=NodeType.THEME)
     name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(..., min_length=1)
+    parent_name: str | None = Field(default=None, max_length=255)
 
 
 class CodebookCreateRequest(BaseSchema):
@@ -125,15 +128,23 @@ class CodebookGenerationJobSchema(BaseSchema):
 
 
 class ThemeInCodebookSchema(BaseSchema):
-    """A single persisted theme as returned inside a CodebookDetailSchema."""
+    """A single persisted theme node, potentially containing nested children."""
 
     id: UUID
+    node_type: NodeType
     name: str  # maps from Theme.label
     description: str | None = None
+    children: list[Self] = Field(default_factory=list)
 
     @classmethod
     def from_theme(cls, theme) -> "ThemeInCodebookSchema":
-        return cls(id=theme.id, name=theme.label, description=theme.description)
+        return cls(
+            id=theme.id,
+            node_type=theme.node_type,
+            name=theme.label,
+            description=theme.description,
+            children=[]
+        )
 
 
 class CodebookDetailSchema(CodebookSchema):
