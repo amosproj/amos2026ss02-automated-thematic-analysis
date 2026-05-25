@@ -168,7 +168,7 @@
       <h3 style="margin-top: 0; margin-bottom: 0.5rem;">Failed to retrieve codebook details</h3>
       <p style="margin: 0;">{{ error }}</p>
       <br>
-      <a href="{{ url_for('codebook.upload_form') }}" class="btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Try Again</a>
+      <a href="{{ url_for('codebooks.upload_form') }}" class="btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Try Again</a>
     </div>
   {% else %}
     <div class="success-card">
@@ -211,7 +211,7 @@
         {% endfor %}
       </div>
 
-      <a href="{{ url_for('ingestion.list_transcripts') }}" class="btn">Proceed to Transcripts</a>
+      <a href="{{ url_for('ingestion.transcripts_landing') }}" class="btn">Proceed to Transcripts</a>
     </div>
   {% endif %}
 </div>

@@ -51,8 +51,8 @@
                href="{{ url_for('codebooks.list_codebooks') }}">Codebooks</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint and request.endpoint.startswith('codebook.') %}active{% endif %}"
-               href="{{ url_for('codebook.upload_form') }}">Upload Codebook</a>
+            <a class="nav-link {% if request.endpoint and request.endpoint.startswith('codebooks.') %}active{% endif %}"
+               href="{{ url_for('codebooks.upload_form') }}">Upload Codebook</a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint == 'analysis.index' %}active{% endif %}"
