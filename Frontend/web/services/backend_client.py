@@ -263,6 +263,25 @@ class BackendClient:
             return result
         return result.get("items", result) if isinstance(result, dict) else []
 
+    # ---- Codebook generation jobs -------------------------------------------
+
+    def create_generation_job(
+        self,
+        codebook_name: str,
+        corpus_id: str,
+        transcript_document_ids: list[str] | None = None,
+    ) -> dict:
+        payload: dict = {"codebook_name": codebook_name, "corpus_id": corpus_id}
+        if transcript_document_ids:
+            payload["transcript_document_ids"] = transcript_document_ids
+        return self._post("/codebooks/generate-jobs", json=payload)
+
+    def get_generation_job(self, job_id: str) -> dict:
+        return self._get(f"/codebooks/generate-jobs/{job_id}")
+
+    def cancel_generation_job(self, job_id: str) -> dict:
+        return self._post(f"/codebooks/generate-jobs/{job_id}/cancel")
+
     # ---- Helpers ------------------------------------------------------------
 
     def _unwrap(self, response: httpx.Response, *, sub_key: str | None = None):

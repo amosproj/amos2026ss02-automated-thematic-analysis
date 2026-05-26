@@ -53,6 +53,9 @@ class FakeBackend:
         }
         self.demographic_upload_response: dict | None = None
         self.demographic_confirm_response: dict | None = None
+        # Codebook generation jobs
+        self.generation_jobs: dict[str, dict] = {}
+        self.last_generation_job_request: dict | None = None
         # Either a method-name string (generic BackendError) or a
         # (method-name, ExceptionClass) tuple (specific typed subclass).
         self.raise_on: str | tuple[str, type] | None = None
@@ -141,6 +144,46 @@ class FakeBackend:
     def get_demographic_link_summary(self, corpus_id) -> dict:
         self._maybe_raise("get_demographic_link_summary")
         return self.demographic_link_summary
+
+    # ---- Codebook generation jobs -------------------------------------------
+
+    def create_generation_job(
+        self,
+        codebook_name: str,
+        corpus_id: str,
+        transcript_document_ids: list[str] | None = None,
+    ) -> dict:
+        self._maybe_raise("create_generation_job")
+        self.last_generation_job_request = {
+            "codebook_name": codebook_name,
+            "corpus_id": corpus_id,
+            "transcript_document_ids": transcript_document_ids,
+        }
+        job_id = f"job-{len(self.generation_jobs) + 1}"
+        job = {
+            "id": job_id,
+            "status": "queued",
+            "codebook_name": codebook_name,
+            "corpus_id": corpus_id,
+            "transcript_document_ids": transcript_document_ids or [],
+            "cancel_requested": False,
+            "codebook_id": None,
+            "passages_total": 0,
+            "passages_done": 0,
+        }
+        self.generation_jobs[job_id] = job
+        return job
+
+    def get_generation_job(self, job_id: str) -> dict:
+        self._maybe_raise("get_generation_job")
+        return self.generation_jobs[job_id]
+
+    def cancel_generation_job(self, job_id: str) -> dict:
+        self._maybe_raise("cancel_generation_job")
+        job = self.generation_jobs[job_id]
+        job["cancel_requested"] = True
+        job["status"] = "cancelled"
+        return job
 
     # ---- Internal -----------------------------------------------------------
 

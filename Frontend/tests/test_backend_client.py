@@ -135,6 +135,104 @@ def test_malformed_json_maps_to_generic_backend_error():
     assert type(exc_info.value) is BackendError
 
 
+# Codebook generation jobs > envelope unwrap + payload shaping
+
+
+def test_create_generation_job_sends_payload_and_unwraps_envelope():
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["url"] = str(request.url)
+        captured["body"] = request.read()
+        return httpx.Response(
+            202,
+            json={
+                "success": True,
+                "data": {"id": "job-1", "status": "queued"},
+                "error": None,
+                "meta": None,
+            },
+        )
+
+    client = _client_with_handler(handler)
+    job = client.create_generation_job(
+        codebook_name="My Codebook",
+        corpus_id="11111111-1111-1111-1111-111111111111",
+    )
+    assert captured["method"] == "POST"
+    assert captured["url"].endswith("/codebooks/generate-jobs")
+    body = captured["body"].decode()
+    assert "My Codebook" in body
+    assert "11111111-1111-1111-1111-111111111111" in body
+    # transcript_document_ids omitted when empty/None
+    assert "transcript_document_ids" not in body
+    assert job == {"id": "job-1", "status": "queued"}
+
+
+def test_create_generation_job_includes_transcript_ids_when_provided():
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.read()
+        return httpx.Response(
+            202,
+            json={"success": True, "data": {"id": "job-2"}, "error": None, "meta": None},
+        )
+
+    client = _client_with_handler(handler)
+    client.create_generation_job(
+        codebook_name="cb",
+        corpus_id="cid",
+        transcript_document_ids=["d1", "d2"],
+    )
+    body = captured["body"].decode()
+    assert "transcript_document_ids" in body
+    assert "d1" in body and "d2" in body
+
+
+def test_get_generation_job_returns_unwrapped_data():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path.endswith("/codebooks/generate-jobs/job-42")
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "data": {"id": "job-42", "status": "succeeded", "codebook_id": "cb-9"},
+                "error": None,
+                "meta": None,
+            },
+        )
+
+    client = _client_with_handler(handler)
+    job = client.get_generation_job("job-42")
+    assert job["status"] == "succeeded"
+    assert job["codebook_id"] == "cb-9"
+
+
+def test_cancel_generation_job_posts_and_unwraps():
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        return httpx.Response(
+            202,
+            json={
+                "success": True,
+                "data": {"id": "job-7", "status": "cancelled", "cancel_requested": True},
+                "error": None,
+                "meta": None,
+            },
+        )
+
+    client = _client_with_handler(handler)
+    job = client.cancel_generation_job("job-7")
+    assert captured["method"] == "POST"
+    assert captured["path"].endswith("/codebooks/generate-jobs/job-7/cancel")
+    assert job["status"] == "cancelled"
+
+
 # User messages never leak raw exception text
 
 
