@@ -71,7 +71,7 @@ async def _seed_codebook_with_theme_graph(
     )
 
     for label, theme_id in theme_ids_by_label.items():
-        session.add(Theme(id=theme_id, label=label, is_active=True))
+        session.add(Theme(id=theme_id, codebook_id=codebook_id, label=label, is_active=True))
 
     await session.flush()
 

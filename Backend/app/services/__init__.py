@@ -7,6 +7,7 @@ from app.schemas.theme_graph import (
     ThemeNodeView,
     ThemeTreeNode,
 )
+from app.services.codebook_generation import CodebookGenerationService
 from app.services.theme_frequency import ThemeFrequencyService
 from app.services.theme_graph import (
     ThemeGraphError,
@@ -28,4 +29,5 @@ __all__ = [
     "ThemeValidationError",
     "ThemeFrequencyService",
     "ThemeReadService",
+    "CodebookGenerationService",
 ]

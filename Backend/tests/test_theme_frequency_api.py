@@ -19,9 +19,9 @@ async def _seed_codebook_with_themes(db_engine):
             created_by="system",
         )
         themes = [
-            Theme(id=uuid4(), label="Alpha Theme", is_active=True),
-            Theme(id=uuid4(), label="Beta Theme", is_active=True),
-            Theme(id=uuid4(), label="Gamma Theme", is_active=True),
+            Theme(id=uuid4(), codebook_id=codebook.id, label="Alpha Theme", is_active=True),
+            Theme(id=uuid4(), codebook_id=codebook.id, label="Beta Theme", is_active=True),
+            Theme(id=uuid4(), codebook_id=codebook.id, label="Gamma Theme", is_active=True),
         ]
         session.add(codebook)
         session.add_all(themes)

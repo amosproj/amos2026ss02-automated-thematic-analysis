@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, String, Text
+from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,8 +14,14 @@ class Theme(Base, TimestampMixin):
     """TODO: Unfinished placeholder model; feel free to change whatever you want. Versioning is intentionally not implemented."""
 
     __tablename__ = "themes"
+    __table_args__ = (
+        UniqueConstraint("codebook_id", "label", name="uq_theme_codebook_label"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    codebook_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
+    )
     label: Mapped[str] = mapped_column(String(255), index=True)
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean(), default=True)

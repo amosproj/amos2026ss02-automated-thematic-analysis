@@ -19,7 +19,13 @@ from app.models import Base, Codebook
 from app.routers import codebooks as codebooks_router
 from app.routers import demo as demo_router
 from app.routers import themes as themes_router
+from app.schemas.codebook import (
+    CodebookGenerateRequest,
+    CodebookSchema,
+    GeneratedCodebookResponse,
+)
 from app.schemas.theme_views import ThemeFrequencyItem
+from app.services.codebook_generation import CodebookGenerationService
 from app.services.theme_frequency import ThemeFrequencyService
 from app.services.theme_graph import ThemeGraphService, ThemeNotFoundError, ThemeValidationError
 
@@ -162,6 +168,40 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(payload["success"])
             self.assertIn("data", payload)
             self.assertEqual(payload["data"], [])
+
+    async def test_generate_codebook_route_success_response_shape(self) -> None:
+        async with self.session_factory() as session:
+            generated = GeneratedCodebookResponse(
+                codebook=CodebookSchema(
+                    id=uuid4(),
+                    project_id="project_generated",
+                    name="Generated Codebook",
+                    description="LLM-generated codebook",
+                    version=1,
+                    created_by="system-llm",
+                ),
+                transcripts_processed=2,
+                passages_processed=5,
+                themes_created=3,
+                codes_created=4,
+            )
+            with patch.object(
+                CodebookGenerationService,
+                "generate_codebook",
+                new=AsyncMock(return_value=generated),
+            ):
+                response = await codebooks_router.generate_codebook(
+                    payload=CodebookGenerateRequest(
+                        codebook_name="Generated Codebook",
+                        corpus_id=uuid4(),
+                        transcript_document_ids=[uuid4()],
+                    ),
+                    session=session,
+                )
+            payload = json.loads(response.body)
+            self.assertTrue(payload["success"])
+            self.assertEqual(payload["data"]["themes_created"], 3)
+            self.assertEqual(payload["data"]["codes_created"], 4)
 
     async def test_theme_list_route_success_response_shape(self) -> None:
         async with self.session_factory() as session:
