@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Preview — {{ preview.name }}{% endblock %}
+{% block content %}
+  <div class="mb-4">
+    <h1 class="h3 mb-1">Preview: {{ preview.name }}</h1>
+    <p class="text-secondary mb-0">
+      {{ preview.preview.rows_detected }} row{{ 's' if preview.preview.rows_detected != 1 else '' }} detected,
+      {{ preview.preview.columns_detected }} column{{ 's' if preview.preview.columns_detected != 1 else '' }}.
+    </p>
+  </div>
+
+  <div class="alert alert-info d-flex align-items-start gap-2" role="alert">
+    <span aria-hidden="true">&#x24D8;</span>
+    <div>
+      Showing up to 50 sample rows. Review the data below before confirming the upload.
+    </div>
+  </div>
+
+  {% set sample_rows = preview.preview.sample_rows[:50] %}
+  {% if sample_rows %}
+    {% set columns = sample_rows[0].keys() | list %}
+    <div class="bg-white border rounded-2 mb-4">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" id="preview-table">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              {% for col in columns %}
+                <th>{{ col }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in sample_rows %}
+              <tr>
+                <td class="text-secondary">{{ loop.index }}</td>
+                {% for col in columns %}
+                  <td>{{ row[col] if row[col] is not none else '—' }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <p class="text-secondary">No sample rows available.</p>
+  {% endif %}
+
+  <form method="post"
+        action="{{ url_for('demographic.preview_confirm', corpus_id=corpus_id, import_id=import_id) }}">
+    <div class="d-flex gap-2">
+      <button type="submit" name="action" value="confirm"
+              class="btn btn-success" id="confirm-upload-btn">
+        Confirm Upload
+      </button>
+      <button type="submit" name="action" value="discard"
+              class="btn btn-outline-danger" id="discard-upload-btn">
+        Discard
+      </button>
+    </div>
+  </form>
+{% endblock %}

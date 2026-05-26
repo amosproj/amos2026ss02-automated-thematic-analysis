@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Upload Demographic Data{% endblock %}
+{% block content %}
+  <div class="mb-4">
+    <h1 class="h3 mb-1">Upload Demographic Data</h1>
+    <p class="text-secondary mb-0">
+      Accepted: <span class="badge text-bg-secondary">.csv</span>.
+      Maximum {{ max_size_mb }} MB per file.
+      CSV must use <code>;</code> as delimiter and include a <code>username</code> column.
+    </p>
+  </div>
+
+  <div class="bg-white border rounded-2 p-4" style="max-width: 640px;">
+    <form id="demographic-upload-form"
+          method="post"
+          action="{{ url_for('demographic.upload_submit', corpus_id=corpus_id) }}"
+          enctype="multipart/form-data">
+      <div class="mb-3">
+        <label for="file" class="form-label fw-semibold">Select CSV file</label>
+        <input class="form-control"
+               type="file"
+               id="file"
+               name="file"
+               accept=".csv"
+               required>
+      </div>
+
+      <div id="file-info" class="mb-3 d-none">
+        <div class="d-flex justify-content-between align-items-baseline mb-1">
+          <span class="fw-semibold" id="file-name"></span>
+          <span class="text-secondary small" id="file-size"></span>
+        </div>
+        <div id="file-warnings" class="small text-danger"></div>
+      </div>
+
+      <button id="submit-btn" type="submit" class="btn btn-primary" disabled>
+        Upload &amp; Preview
+      </button>
+    </form>
+  </div>
+
+  <script>
+    (() => {
+      const MAX_MB = {{ max_size_mb }};
+      const MAX_BYTES = MAX_MB * 1024 * 1024;
+
+      const input = document.getElementById("file");
+      const info = document.getElementById("file-info");
+      const nameEl = document.getElementById("file-name");
+      const sizeEl = document.getElementById("file-size");
+      const warningsEl = document.getElementById("file-warnings");
+      const submitBtn = document.getElementById("submit-btn");
+
+      function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+        return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+      }
+
+      input.addEventListener("change", () => {
+        const file = input.files[0];
+        if (!file) {
+          info.classList.add("d-none");
+          submitBtn.disabled = true;
+          return;
+        }
+
+        nameEl.textContent = file.name;
+        sizeEl.textContent = formatBytes(file.size);
+        info.classList.remove("d-none");
+
+        const warnings = [];
+        if (!file.name.toLowerCase().endsWith(".csv")) {
+          warnings.push("Only .csv files are accepted.");
+        }
+        if (file.size > MAX_BYTES) {
+          warnings.push("File exceeds " + MAX_MB + " MB limit.");
+        }
+
+        warningsEl.textContent = warnings.join(" ");
+        submitBtn.disabled = warnings.length > 0;
+      });
+    })();
+  </script>
+{% endblock %}
