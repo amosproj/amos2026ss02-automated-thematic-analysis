@@ -2,10 +2,7 @@
 {% block title %}Demographic Data{% endblock %}
 {% block content %}
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-      <h1 class="h3 mb-1">Demographic Data</h1>
-      <p class="text-secondary mb-0">Linked to corpus: <span class="fw-semibold">{{ corpus_name }}</span></p>
-    </div>
+    <h1 class="h3 mb-0">Demographic Data</h1>
     {% if corpus_id %}
       <a class="btn btn-primary"
          id="upload-csv-btn"
@@ -24,6 +21,7 @@
           <thead class="table-light">
             <tr>
               <th>Name</th>
+              <th>Corpus</th>
               <th>Columns</th>
               <th>Rows</th>
               <th>Uploaded</th>
@@ -34,6 +32,7 @@
             {% for f in files %}
               <tr>
                 <td>{{ f.name }}</td>
+                <td class="text-secondary">{{ corpus_name }}</td>
                 <td>{{ f.original_columns | length }}</td>
                 <td>{{ f.rows_total }}</td>
                 <td class="text-secondary">{{ f.created_at }}</td>
