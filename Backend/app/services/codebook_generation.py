@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from langchain_core.exceptions import OutputParserException
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -216,7 +217,7 @@ class CodebookGenerationService:
             await on_progress(0, total)
 
         for index, passage in enumerate(passages, start=1):
-            parse_error: OutputParserException | None = None
+            parse_error: OutputParserException | ValidationError | None = None
             attempts = 3
             for attempt in range(1, attempts + 1):
                 if should_cancel is not None and await should_cancel():
@@ -227,6 +228,10 @@ class CodebookGenerationService:
                     parse_error = None
                     break
                 except OutputParserException as exc:
+                    parse_error = exc
+                    if attempt < attempts:
+                        continue
+                except ValidationError as exc:
                     parse_error = exc
                     if attempt < attempts:
                         continue
