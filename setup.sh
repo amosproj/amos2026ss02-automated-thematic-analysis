@@ -2,8 +2,9 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPOSE_DIR="$SCRIPT_DIR/Backend"
+COMPOSE_DIR="$SCRIPT_DIR"
 APP_PORT="${APP_PORT:-8000}"
+FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 
 # shellcheck source=scripts/lib/common.sh
 source "$SCRIPT_DIR/scripts/lib/common.sh"
@@ -43,6 +44,7 @@ OPTIONS
 
 ENVIRONMENT
   APP_PORT             Override the API host port (default: 8000)
+  FRONTEND_PORT        Override the frontend host port (default: 3000)
 
 EXAMPLES
   ./setup.sh                       Build and start the full stack
@@ -81,7 +83,7 @@ done
 
 # ── Compose wrapper ───────────────────────────────────────────────────────────
 # All mode functions run after `cd "$COMPOSE_DIR"`, so docker compose
-# picks up docker-compose.yml from Backend/ automatically.
+# picks up docker-compose.yml from the repository root automatically.
 run_compose() {
   docker compose "$@"
 }
@@ -111,18 +113,23 @@ mode_test() {
   log_info "Running test suite inside Docker..."
 
   if $REBUILD; then
-    log_info "Rebuilding api-test image with --no-cache..."
-    run_compose --profile test build --no-cache api-test
+    log_info "Rebuilding test images with --no-cache..."
+    run_compose --profile test build --no-cache api-test frontend-test
   elif $BUILD; then
-    log_info "Ensuring api-test image is up to date..."
-    run_compose --profile test build api-test
+    log_info "Ensuring test images are up to date..."
+    run_compose --profile test build api-test frontend-test
   fi
 
-  local pytest_cmd=(pytest --cov=app --cov-report=term-missing --cov-report=html)
-  (( ${#EXTRA_ARGS[@]} > 0 )) && pytest_cmd+=("${EXTRA_ARGS[@]}")
+  local api_pytest_cmd=(pytest --cov=app --cov-report=term-missing --cov-report=html)
+  (( ${#EXTRA_ARGS[@]} > 0 )) && api_pytest_cmd+=("${EXTRA_ARGS[@]}")
 
-  run_compose --profile test run --rm api-test "${pytest_cmd[@]}"
-  log_success "Tests complete. Open Backend/htmlcov/index.html for the coverage report."
+  log_info "Running backend tests..."
+  run_compose --profile test run --rm api-test "${api_pytest_cmd[@]}"
+  log_success "Backend tests complete. Open Backend/htmlcov/index.html for the coverage report."
+
+  log_info "Running frontend tests..."
+  run_compose --profile test run --rm frontend-test pytest
+  log_success "Frontend tests complete."
 }
 
 # ── Mode: lint ────────────────────────────────────────────────────────────────
@@ -157,12 +164,9 @@ mode_up() {
   $DETACH || return 0
 
   log_info "Waiting for API to become ready (up to 60s)..."
-  local health_url="http://localhost:${APP_PORT}/api/v1/health/ready"
+  local api_health_url="http://localhost:${APP_PORT}/api/v1/health/ready"
 
-  if wait_for_http "$health_url" 60; then
-    print_success_banner
-  else
-    # Diagnose: distinguish exited container vs slow startup
+  if ! wait_for_http "$api_health_url" 60; then
     local running
     running=$(run_compose ps --status running --quiet api 2>/dev/null || true)
     if [[ -z "$running" ]]; then
@@ -170,7 +174,24 @@ mode_up() {
     else
       log_error "API container is running but health check timed out (60s)."
     fi
-    log_error "Inspect logs with: docker compose logs api  (run from the Backend/ directory)"
+    log_error "Inspect logs with: docker compose logs api"
+    exit 1
+  fi
+
+  log_info "Waiting for frontend to become ready (up to 60s)..."
+  local fe_health_url="http://localhost:${FRONTEND_PORT}/health"
+
+  if wait_for_http "$fe_health_url" 60; then
+    print_success_banner
+  else
+    local fe_running
+    fe_running=$(run_compose ps --status running --quiet frontend 2>/dev/null || true)
+    if [[ -z "$fe_running" ]]; then
+      log_error "The 'frontend' container exited unexpectedly."
+    else
+      log_error "Frontend container is running but health check timed out (60s)."
+    fi
+    log_error "Inspect logs with: docker compose logs frontend"
     exit 1
   fi
 }
@@ -181,12 +202,13 @@ print_success_banner() {
   printf "${GREEN}${BOLD}║        Stack is up and healthy!              ║${RESET}\n"
   printf "${GREEN}${BOLD}╚══════════════════════════════════════════════╝${RESET}\n"
   printf "\n"
+  printf "  Frontend UI  ${BOLD}http://localhost:${FRONTEND_PORT}${RESET}\n"
   printf "  API server   ${BOLD}http://localhost:${APP_PORT}${RESET}\n"
   printf "  API docs     ${BOLD}http://localhost:${APP_PORT}/docs${RESET}\n"
   printf "  Postgres     ${BOLD}localhost:5433${RESET}\n"
   printf "\n"
   printf "Next steps:\n"
-  printf "  Tail logs    ${BOLD}docker compose logs -f api${RESET}   (from Backend/ directory)\n"
+  printf "  Tail logs    ${BOLD}docker compose logs -f frontend api${RESET}\n"
   printf "  Run tests    ${BOLD}./setup.sh --test${RESET}\n"
   printf "  Run lint     ${BOLD}./setup.sh --lint${RESET}\n"
   printf "  Stop stack   ${BOLD}./setup.sh --down${RESET}\n"
