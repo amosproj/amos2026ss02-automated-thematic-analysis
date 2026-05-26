@@ -13,6 +13,7 @@ from app.exceptions import register_exception_handlers
 from app.logging_config import configure_logging
 from app.middleware import register_middleware
 from app.routers import register_routers
+from app.services.codebook_generation_jobs import codebook_generation_job_runner
 from app.services.upload_cleanup import run_upload_cleanup_loop
 
 
@@ -35,10 +36,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             interval_seconds=settings.UPLOAD_CLEANUP_INTERVAL_SECONDS,
         )
     )
+    await codebook_generation_job_runner.start()
 
     try:
         yield
     finally:
+        await codebook_generation_job_runner.stop()
         cleanup_task.cancel()
         try:
             await cleanup_task

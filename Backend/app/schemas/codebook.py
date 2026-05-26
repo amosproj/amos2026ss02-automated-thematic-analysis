@@ -1,5 +1,8 @@
 from uuid import UUID
 
+from datetime import datetime
+from typing import Literal
+
 from pydantic import Field, field_validator
 
 from app.schemas.common import BaseSchema
@@ -43,3 +46,33 @@ class GeneratedCodebookResponse(BaseSchema):
     passages_processed: int
     themes_created: int
     codes_created: int
+
+
+JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
+
+
+class CodebookGenerationJobCreateRequest(CodebookGenerateRequest):
+    pass
+
+
+class CodebookGenerationJobSchema(BaseSchema):
+    id: UUID
+    status: JobStatus
+    codebook_name: str
+    corpus_id: UUID
+    transcript_document_ids: list[UUID]
+    cancel_requested: bool
+
+    codebook_id: UUID | None = None
+    passages_total: int
+    passages_done: int
+    transcripts_processed: int | None = None
+    passages_processed: int | None = None
+    themes_created: int | None = None
+    codes_created: int | None = None
+    error_message: str | None = None
+
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None

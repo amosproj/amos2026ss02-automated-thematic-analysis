@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -38,6 +40,10 @@ class _CodeDraft:
     description: str | None
 
 
+class CodebookGenerationCancelledError(Exception):
+    pass
+
+
 class CodebookGenerationService:
     """Generate and persist a new codebook from selected transcript chunks."""
 
@@ -50,6 +56,8 @@ class CodebookGenerationService:
         codebook_name: str,
         corpus_id: UUID,
         transcript_document_ids: list[UUID],
+        on_progress: Callable[[int, int], Awaitable[None]] | None = None,
+        should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> GeneratedCodebookResponse:
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
         if not normalized_document_ids:
@@ -67,7 +75,11 @@ class CodebookGenerationService:
         if not passages:
             raise UnprocessableError("No transcript passages found for selected transcript_document_ids")
 
-        generation_results = self._generate_per_passage(passages)
+        generation_results = await self._generate_per_passage(
+            passages,
+            on_progress=on_progress,
+            should_cancel=should_cancel,
+        )
         theme_nodes, code_nodes = self._deduplicate_generation(generation_results)
         if not theme_nodes:
             raise UnprocessableError("Codebook generation produced no themes from selected passages")
@@ -166,11 +178,25 @@ class CodebookGenerationService:
         return passages
 
     @staticmethod
-    def _generate_per_passage(passages: list[str]) -> list[PassageCodebookGeneration]:
+    async def _generate_per_passage(
+        passages: list[str],
+        *,
+        on_progress: Callable[[int, int], Awaitable[None]] | None = None,
+        should_cancel: Callable[[], Awaitable[bool]] | None = None,
+    ) -> list[PassageCodebookGeneration]:
         results: list[PassageCodebookGeneration] = []
-        for passage in passages:
+        total = len(passages)
+        if on_progress is not None:
+            await on_progress(0, total)
+
+        for index, passage in enumerate(passages, start=1):
+            if should_cancel is not None and await should_cancel():
+                raise CodebookGenerationCancelledError("Codebook generation was cancelled")
             try:
-                results.append(generate_codebook_for_passage(passage))
+                generation = await asyncio.to_thread(generate_codebook_for_passage, passage)
+                results.append(generation)
+                if on_progress is not None:
+                    await on_progress(index, total)
             except Exception as exc:
                 raise UnprocessableError(f"Codebook generation failed: {exc}") from exc
         return results
