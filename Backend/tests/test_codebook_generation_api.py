@@ -237,3 +237,94 @@ async def test_generate_codebook_returns_404_for_unknown_corpus(client) -> None:
     )
     assert response.status_code == 404
     assert response.json()["success"] is False
+
+
+async def test_generate_codebook_uses_all_corpus_documents_when_ids_omitted(
+    client,
+    monkeypatch,
+) -> None:
+    corpus_id, _ = await _create_corpus_and_docs(client)
+
+    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+        return PassageCodebookGeneration(
+            themes=[
+                GeneratedThemePath(
+                    path=[
+                        GeneratedThemeNode(label="Workflow Friction"),
+                    ]
+                )
+            ],
+            codes=[
+                GeneratedCodeSuggestion(
+                    label="Process Delay",
+                    description=None,
+                    theme_path=["Workflow Friction"],
+                )
+            ],
+        )
+
+    monkeypatch.setattr(
+        "app.services.codebook_generation.generate_codebook_for_passage",
+        _fake_generate_codebook_for_passage,
+    )
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate",
+        json={
+            "codebook_name": "All Docs",
+            "corpus_id": corpus_id,
+        },
+    )
+    assert response.status_code == 201
+    payload = response.json()["data"]
+    assert payload["transcripts_processed"] == 2
+
+
+async def test_generate_codebook_merges_duplicate_theme_labels_across_paths(
+    client,
+    db_engine,
+    monkeypatch,
+) -> None:
+    corpus_id, document_ids = await _create_corpus_and_docs(client)
+
+    def _fake_generate_codebook_for_passage(passage: str) -> PassageCodebookGeneration:
+        if "Alpha" in passage:
+            return PassageCodebookGeneration(
+                themes=[
+                    GeneratedThemePath(
+                        path=[
+                            GeneratedThemeNode(label="Planning"),
+                            GeneratedThemeNode(label="Future Expectations"),
+                        ]
+                    )
+                ],
+                codes=[],
+            )
+        return PassageCodebookGeneration(
+            themes=[
+                GeneratedThemePath(
+                    path=[
+                        GeneratedThemeNode(label="Adoption"),
+                        GeneratedThemeNode(label="Future Expectations"),
+                    ]
+                )
+            ],
+            codes=[],
+        )
+
+    monkeypatch.setattr(
+        "app.services.codebook_generation.generate_codebook_for_passage",
+        _fake_generate_codebook_for_passage,
+    )
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate",
+        json={
+            "codebook_name": "Duplicate Labels",
+            "corpus_id": corpus_id,
+            "transcript_document_ids": document_ids,
+        },
+    )
+    assert response.status_code == 201
+    payload = response.json()["data"]
+    assert payload["themes_created"] == 3

@@ -55,19 +55,19 @@ class CodebookGenerationService:
         *,
         codebook_name: str,
         corpus_id: UUID,
-        transcript_document_ids: list[UUID],
+        transcript_document_ids: list[UUID] | None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> GeneratedCodebookResponse:
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
-        if not normalized_document_ids:
-            raise UnprocessableError("transcript_document_ids must contain at least one document id")
 
         corpus = await self._load_corpus(corpus_id)
         documents = await self._load_documents(
             corpus_id=corpus_id,
             transcript_document_ids=normalized_document_ids,
         )
+        if not documents:
+            raise UnprocessableError("No documents found in the selected corpus")
         passages = await self._load_passages(
             corpus_id=corpus_id,
             transcript_document_ids=[document.id for document in documents],
@@ -80,7 +80,7 @@ class CodebookGenerationService:
             on_progress=on_progress,
             should_cancel=should_cancel,
         )
-        theme_nodes, code_nodes = self._deduplicate_generation(generation_results)
+        theme_nodes, code_nodes, hierarchy_edges = self._deduplicate_generation(generation_results)
         if not theme_nodes:
             raise UnprocessableError("Codebook generation produced no themes from selected passages")
 
@@ -89,6 +89,7 @@ class CodebookGenerationService:
             project_id=str(corpus.project_id),
             theme_nodes=theme_nodes,
             code_nodes=code_nodes,
+            hierarchy_edges=hierarchy_edges,
         )
         return GeneratedCodebookResponse(
             codebook=CodebookSchema.model_validate(created_codebook),
@@ -99,7 +100,9 @@ class CodebookGenerationService:
         )
 
     @staticmethod
-    def _deduplicate_document_ids(document_ids: list[UUID]) -> list[UUID]:
+    def _deduplicate_document_ids(document_ids: list[UUID] | None) -> list[UUID]:
+        if not document_ids:
+            return []
         ordered_unique: list[UUID] = []
         seen: set[UUID] = set()
         for document_id in document_ids:
@@ -125,6 +128,17 @@ class CodebookGenerationService:
         corpus_id: UUID,
         transcript_document_ids: list[UUID],
     ) -> list[CorpusDocument]:
+        if not transcript_document_ids:
+            return list(
+                (
+                    await self._session.scalars(
+                        select(CorpusDocument)
+                        .where(CorpusDocument.corpus_id == corpus_id)
+                        .order_by(CorpusDocument.id)
+                    )
+                ).all()
+            )
+
         documents = list(
             (
                 await self._session.scalars(
@@ -197,6 +211,8 @@ class CodebookGenerationService:
                 results.append(generation)
                 if on_progress is not None:
                     await on_progress(index, total)
+            except CodebookGenerationCancelledError:
+                raise
             except Exception as exc:
                 raise UnprocessableError(f"Codebook generation failed: {exc}") from exc
         return results
@@ -209,9 +225,10 @@ class CodebookGenerationService:
     def _deduplicate_generation(
         cls,
         generation_results: list[PassageCodebookGeneration],
-    ) -> tuple[dict[tuple[str, ...], _ThemeNodeDraft], list[_CodeDraft]]:
+    ) -> tuple[dict[tuple[str, ...], _ThemeNodeDraft], list[_CodeDraft], list[tuple[tuple[str, ...], tuple[str, ...]]]]:
         theme_nodes_by_key: dict[tuple[str, ...], _ThemeNodeDraft] = {}
         codes_by_key: dict[str, _CodeDraft] = {}
+        raw_edges: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
 
         for result in generation_results:
             for generated_path in result.themes:
@@ -232,6 +249,8 @@ class CodebookGenerationService:
                         )
                     elif not existing.description and description and description.strip():
                         existing.description = description.strip()
+                    if index > 1:
+                        raw_edges.append((tuple(part.lower() for part in normalized_labels[: index - 1]), key))
 
             for generated_code in result.codes:
                 normalized_code_label = cls._normalize_label(generated_code.label)
@@ -268,7 +287,47 @@ class CodebookGenerationService:
             codes_by_key.values(),
             key=lambda code: code.label.lower(),
         )
-        return theme_nodes_by_key, sorted_codes
+        canonical_key_by_label: dict[str, tuple[str, ...]] = {}
+        for key in sorted(theme_nodes_by_key.keys(), key=lambda item: (len(item), item)):
+            label_key = theme_nodes_by_key[key].label.lower()
+            canonical_key_by_label.setdefault(label_key, key)
+
+        canonical_theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft] = {}
+        canonical_key_by_original: dict[tuple[str, ...], tuple[str, ...]] = {}
+        for key, node in theme_nodes_by_key.items():
+            canonical_key = canonical_key_by_label[node.label.lower()]
+            canonical_key_by_original[key] = canonical_key
+            canonical_node = canonical_theme_nodes.get(canonical_key)
+            if canonical_node is None:
+                canonical_theme_nodes[canonical_key] = _ThemeNodeDraft(
+                    key=canonical_key,
+                    label=theme_nodes_by_key[canonical_key].label,
+                    description=node.description,
+                )
+            elif not canonical_node.description and node.description:
+                canonical_node.description = node.description
+
+        canonical_edges: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+        child_parent: dict[tuple[str, ...], tuple[str, ...]] = {}
+        seen_edges: set[tuple[tuple[str, ...], tuple[str, ...]]] = set()
+        for parent, child in sorted(raw_edges, key=lambda pair: (len(pair[0]), pair[0], len(pair[1]), pair[1])):
+            canonical_parent = canonical_key_by_original.get(parent)
+            canonical_child = canonical_key_by_original.get(child)
+            if canonical_parent is None or canonical_child is None:
+                continue
+            if canonical_parent == canonical_child:
+                continue
+            existing_parent = child_parent.get(canonical_child)
+            if existing_parent is not None and existing_parent != canonical_parent:
+                continue
+            edge = (canonical_parent, canonical_child)
+            if edge in seen_edges:
+                continue
+            seen_edges.add(edge)
+            child_parent[canonical_child] = canonical_parent
+            canonical_edges.append(edge)
+
+        return canonical_theme_nodes, sorted_codes, canonical_edges
 
     async def _persist_generated_codebook(
         self,
@@ -277,6 +336,7 @@ class CodebookGenerationService:
         project_id: str,
         theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
         code_nodes: list[_CodeDraft],
+        hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
     ) -> tuple[Codebook, int, int]:
         try:
             version = await self._next_codebook_version(project_id=project_id)
@@ -293,7 +353,14 @@ class CodebookGenerationService:
 
             ordered_theme_nodes = sorted(theme_nodes.values(), key=lambda node: (len(node.key), node.key))
             theme_id_by_key: dict[tuple[str, ...], UUID] = {}
+            theme_id_by_label: dict[str, UUID] = {}
             for node in ordered_theme_nodes:
+                label_key = node.label.lower()
+                existing_theme_id = theme_id_by_label.get(label_key)
+                if existing_theme_id is not None:
+                    theme_id_by_key[node.key] = existing_theme_id
+                    continue
+
                 theme = Theme(
                     id=uuid.uuid4(),
                     codebook_id=codebook.id,
@@ -304,6 +371,7 @@ class CodebookGenerationService:
                 self._session.add(theme)
                 await self._session.flush()
                 theme_id_by_key[node.key] = theme.id
+                theme_id_by_label[label_key] = theme.id
                 self._session.add(
                     CodebookThemeRelationship(
                         id=uuid.uuid4(),
@@ -313,13 +381,21 @@ class CodebookGenerationService:
                     )
                 )
 
-            for node in ordered_theme_nodes:
-                if len(node.key) <= 1:
-                    continue
-                parent_key = node.key[:-1]
+            parent_by_child: dict[UUID, UUID] = {}
+            added_edges: set[tuple[UUID, UUID]] = set()
+            for parent_key, child_key in hierarchy_edges:
                 parent_theme_id = theme_id_by_key.get(parent_key)
-                child_theme_id = theme_id_by_key.get(node.key)
+                child_theme_id = theme_id_by_key.get(child_key)
                 if parent_theme_id is None or child_theme_id is None:
+                    continue
+                if parent_theme_id == child_theme_id:
+                    continue
+                existing_parent = parent_by_child.get(child_theme_id)
+                if existing_parent is not None and existing_parent != parent_theme_id:
+                    # A label-merged child already has a parent in this codebook; keep first parent.
+                    continue
+                edge_key = (parent_theme_id, child_theme_id)
+                if edge_key in added_edges:
                     continue
                 self._session.add(
                     ThemeHierarchyRelationship(
@@ -330,6 +406,8 @@ class CodebookGenerationService:
                         is_active=True,
                     )
                 )
+                parent_by_child[child_theme_id] = parent_theme_id
+                added_edges.add(edge_key)
 
             codes_created = 0
             for code_node in code_nodes:
@@ -359,7 +437,7 @@ class CodebookGenerationService:
 
             await self._session.commit()
             await self._session.refresh(codebook)
-            return codebook, len(theme_id_by_key), codes_created
+            return codebook, len(theme_id_by_label), codes_created
         except Exception:
             await self._session.rollback()
             raise

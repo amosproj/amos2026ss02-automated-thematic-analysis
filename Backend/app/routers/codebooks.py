@@ -26,7 +26,9 @@ from app.services.codebook_generation_jobs import codebook_generation_job_runner
 router = APIRouter(prefix="/codebooks", tags=["codebooks"])
 
 
-def _serialize_document_ids(document_ids: list[UUID]) -> str:
+def _serialize_document_ids(document_ids: list[UUID] | None) -> str:
+    if not document_ids:
+        return "[]"
     return json.dumps([str(document_id) for document_id in document_ids])
 
 
@@ -58,7 +60,12 @@ def _to_job_schema(job: CodebookGenerationJob) -> CodebookGenerationJobSchema:
     )
 
 
-@router.get("/", response_model=ResponseEnvelope[list[CodebookSchema]])
+@router.get(
+    "/",
+    response_model=ResponseEnvelope[list[CodebookSchema]],
+    summary="List codebooks",
+    description="Return all codebooks ordered by project id and descending version.",
+)
 async def get_codebooks(
     session: DbSession,
 ) -> JSONResponse:
@@ -75,6 +82,12 @@ async def get_codebooks(
     "/generate",
     response_model=ResponseEnvelope[GeneratedCodebookResponse],
     status_code=201,
+    summary="Generate codebook (synchronous)",
+    description=(
+        "Generate and persist a codebook immediately. "
+        "If `transcript_document_ids` is provided, only those documents are used. "
+        "If omitted or empty, all documents in the selected corpus are used."
+    ),
 )
 async def generate_codebook(
     payload: CodebookGenerateRequest,
@@ -96,6 +109,12 @@ async def generate_codebook(
     "/generate-jobs",
     response_model=ResponseEnvelope[CodebookGenerationJobSchema],
     status_code=202,
+    summary="Create codebook generation job",
+    description=(
+        "Create an asynchronous codebook generation job and return immediately. "
+        "If `transcript_document_ids` is provided, only those documents are used. "
+        "If omitted or empty, all documents in the selected corpus are used."
+    ),
 )
 async def create_generate_codebook_job(
     payload: CodebookGenerationJobCreateRequest,
@@ -135,6 +154,8 @@ async def create_generate_codebook_job(
 @router.get(
     "/generate-jobs/{job_id}",
     response_model=ResponseEnvelope[CodebookGenerationJobSchema],
+    summary="Get codebook generation job",
+    description="Return the current status, progress, and result metadata of a generation job.",
 )
 async def get_generate_codebook_job(
     job_id: UUID,
@@ -150,6 +171,11 @@ async def get_generate_codebook_job(
     "/generate-jobs/{job_id}/cancel",
     response_model=ResponseEnvelope[CodebookGenerationJobSchema],
     status_code=202,
+    summary="Cancel codebook generation job",
+    description=(
+        "Request cancellation for a queued or running codebook generation job. "
+        "Queued jobs are cancelled immediately; running jobs are cancelled when the worker observes the request."
+    ),
 )
 async def cancel_generate_codebook_job(
     job_id: UUID,

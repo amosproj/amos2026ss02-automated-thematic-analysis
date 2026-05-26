@@ -195,3 +195,38 @@ async def test_generate_codebook_job_can_be_cancelled_while_running(client, monk
 
     terminal_job = await _wait_for_terminal_job_status(client, created_job["id"])
     assert terminal_job["status"] == "cancelled"
+
+
+async def test_generate_codebook_job_uses_all_corpus_documents_when_ids_omitted(client, monkeypatch) -> None:
+    corpus_id, _ = await _create_corpus_with_docs(
+        client,
+        texts=[
+            "First transcript about collaboration.",
+            "Second transcript about process and communication.",
+        ],
+    )
+
+    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+        return PassageCodebookGeneration(
+            themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Collaboration")])],
+            codes=[GeneratedCodeSuggestion(label="Team Alignment", description=None, theme_path=["Collaboration"])],
+        )
+
+    monkeypatch.setattr(
+        "app.services.codebook_generation.generate_codebook_for_passage",
+        _fake_generate_codebook_for_passage,
+    )
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate-jobs",
+        json={
+            "codebook_name": "Generated Async All Docs",
+            "corpus_id": corpus_id,
+        },
+    )
+    assert response.status_code == 202
+    created_job = response.json()["data"]
+
+    terminal_job = await _wait_for_terminal_job_status(client, created_job["id"])
+    assert terminal_job["status"] == "succeeded"
+    assert terminal_job["transcripts_processed"] == 2

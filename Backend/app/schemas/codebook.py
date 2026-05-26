@@ -22,7 +22,7 @@ class CodebookSchema(BaseSchema):
 class CodebookGenerateRequest(BaseSchema):
     codebook_name: str = Field(min_length=1, max_length=255)
     corpus_id: UUID
-    transcript_document_ids: list[UUID]
+    transcript_document_ids: list[UUID] | None = None
 
     @field_validator("codebook_name")
     @classmethod
@@ -34,9 +34,11 @@ class CodebookGenerateRequest(BaseSchema):
 
     @field_validator("transcript_document_ids")
     @classmethod
-    def validate_transcript_document_ids(cls, values: list[UUID]) -> list[UUID]:
+    def normalize_transcript_document_ids(cls, values: list[UUID] | None) -> list[UUID] | None:
+        if values is None:
+            return None
         if not values:
-            raise ValueError("transcript_document_ids must contain at least one document id")
+            return None
         return values
 
 
