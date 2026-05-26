@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter
@@ -191,7 +191,7 @@ async def cancel_generate_codebook_job(
     job.cancel_requested = True
     if job.status == "queued":
         job.status = "cancelled"
-        job.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        job.finished_at = datetime.now(UTC).replace(tzinfo=None)
     await session.commit()
     await session.refresh(job)
 
