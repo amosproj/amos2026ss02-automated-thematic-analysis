@@ -6,7 +6,7 @@
     {% if corpus_id %}
       <a class="btn btn-primary"
          id="upload-csv-btn"
-         href="{{ url_for('demographic.upload_form', corpus_id=corpus_id) }}">
+         href="{{ url_for('ingestion.upload_form', corpus_id=corpus_id) }}">
         Upload CSV
       </a>
     {% endif %}
@@ -52,7 +52,7 @@
   {% elif corpus_id %}
     <p class="text-secondary" id="empty-state">
       No demographic data uploaded yet.
-      <a href="{{ url_for('demographic.upload_form', corpus_id=corpus_id) }}">Upload a CSV file</a>
+      <a href="{{ url_for('ingestion.upload_form', corpus_id=corpus_id) }}">Upload a CSV file</a>
     </p>
   {% else %}
     <p class="text-secondary">No demographic data to show.</p>

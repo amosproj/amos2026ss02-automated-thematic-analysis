@@ -50,7 +50,9 @@ def demographic_landing():
 
 @bp.get("/upload")
 def upload_landing():
-    return _landing_with_corpus("demographic.upload_form")
+    # The upload entry point moved to the Uploads page 
+    # as a redirect so any external links to /demographic/upload still work.
+    return _landing_with_corpus("ingestion.upload_form")
 
 
 # ---- List (corpus-scoped) ---------------------------------------------------
@@ -72,14 +74,19 @@ def list_files(corpus_id: str) -> str:
 
 
 # ---- Upload (corpus-scoped) ------------------------------------------------
+#
+# The upload entry point lives on the Uploads page : "The
+# Uploads page includes a secondary file input specifically for Demographic
+# Data (.csv)"). The standalone demographic upload page was removed; the
+# old `/demographic/<id>/upload` URL is kept as a redirect for any external
+# links. The POST endpoint stays here — the form on the Uploads page submits
+# to it.
 
 
-def _render_upload_form(corpus_id: str) -> str:
-    return render_template(
-        "demographic/upload.html",
-        corpus_id=corpus_id,
-        max_size_mb=current_app.config["MAX_UPLOAD_SIZE_MB"],
-    )
+def _redirect_to_upload_form(corpus_id: str):
+    """All upload-side error paths land back on the shared Uploads page so
+    the demographic flash appears next to the form the user just submitted."""
+    return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
 
 
 def _file_size(fileobj) -> int:
@@ -92,8 +99,9 @@ def _file_size(fileobj) -> int:
 
 
 @bp.get("/<corpus_id>/upload")
-def upload_form(corpus_id: str) -> str:
-    return _render_upload_form(corpus_id)
+def upload_form(corpus_id: str):
+    # Backwards-compatible redirect for old direct links.
+    return _redirect_to_upload_form(corpus_id)
 
 
 @bp.post("/<corpus_id>/upload")
@@ -101,22 +109,24 @@ def upload_submit(corpus_id: str):
     f = request.files.get("file")
     if not f or not f.filename:
         flash("Please select a CSV file to upload.", "danger")
-        return _render_upload_form(corpus_id)
+        return _redirect_to_upload_form(corpus_id)
 
     max_bytes = current_app.config["MAX_UPLOAD_BYTES"]
     if _file_size(f) > max_bytes:
         max_mb = current_app.config["MAX_UPLOAD_SIZE_MB"]
         flash(f"File must be at most {max_mb} MB.", "danger")
-        return _render_upload_form(corpus_id)
+        return _redirect_to_upload_form(corpus_id)
+
+    import_name = (request.form.get("name") or "").strip() or None
 
     try:
-        result = _backend().upload_demographic(corpus_id, f)
+        result = _backend().upload_demographic(corpus_id, f, name=import_name)
     except BackendValidationError as exc:
         flash(exc.user_message, "danger")
-        return _render_upload_form(corpus_id)
+        return _redirect_to_upload_form(corpus_id)
     except BackendError as exc:
         flash(exc.user_message, "danger")
-        return _render_upload_form(corpus_id)
+        return _redirect_to_upload_form(corpus_id)
 
     # Store preview data in the session so the preview page can display it.
     import_id = result["import_id"]

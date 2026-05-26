@@ -1,50 +1,163 @@
 {% extends "base.html" %}
-{% block title %}Upload Transcripts{% endblock %}
+{% block title %}Upload Files{% endblock %}
 {% block content %}
   <div class="mb-4">
-    <h1 class="h3 mb-1">Upload Interview Transcripts</h1>
+    <h1 class="h3 mb-1">Upload Files</h1>
     <p class="text-secondary mb-0">
-      Accepted:
-      {% for ext in accepted_extensions %}
-        <span class="badge text-bg-secondary me-1">{{ ext }}</span>
-      {% endfor %}.
-      Maximum {{ max_size_mb }} MB per file.
+      Add interview transcripts and demographic data to your corpus.
     </p>
   </div>
 
-  <div class="bg-white border rounded-2 p-4" style="max-width: 640px;">
-    <form id="upload-form"
-          method="post"
-          action="{{ url_for('ingestion.upload_submit', corpus_id=corpus_id) }}"
-          enctype="multipart/form-data">
-      <div class="mb-3">
-        <label for="files" class="form-label fw-semibold">Select files</label>
-        <input class="form-control"
-               type="file"
-               id="files"
-               name="files"
-               multiple
-               accept="{{ accepted_extensions | join(',') }}"
-               required>
-      </div>
+  <div class="row g-4 upload-row">
 
-      <div id="file-list-wrapper" class="mb-3 d-none">
-        <div class="d-flex justify-content-between align-items-baseline mb-2">
-          <span class="form-label fw-semibold mb-0">
-            Selected files (<span id="file-count">0</span>)
-          </span>
-          <span class="text-secondary small">
-            Total: <span id="file-total-size">0 B</span>
-          </span>
+    {# ─── Transcripts card (primary, indigo) ─────────────────────────── #}
+    <div class="col-12 col-lg-6">
+      <div class="upload-card upload-card--indigo h-100">
+
+        <div class="upload-card-header">
+          {# document-text icon (Lucide / Heroicons style) #}
+          <svg class="upload-card-icon" xmlns="http://www.w3.org/2000/svg"
+               viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          <p class="upload-card-title">Upload Interview Transcripts</p>
+          <p class="upload-card-subtitle">
+            Multiple files ·
+            {% for ext in accepted_extensions %}{{ ext }}{% if not loop.last %} · {% endif %}{% endfor %}
+            · Max {{ max_size_mb }} MB each
+          </p>
         </div>
-        <ul id="file-list" class="list-group list-group-flush border rounded-2"></ul>
-        <div id="file-warnings" class="small text-danger mt-2"></div>
-      </div>
 
-      <button id="submit-btn" type="submit" class="btn btn-primary" disabled>
-        Upload Interview Transcripts
-      </button>
-    </form>
+        <div class="upload-card-body">
+          <form id="upload-form"
+                method="post"
+                action="{{ url_for('ingestion.upload_submit', corpus_id=corpus_id) }}"
+                enctype="multipart/form-data">
+            <div class="mb-3">
+              <label for="files" class="form-label fw-semibold">Select files</label>
+              <input class="form-control"
+                     type="file"
+                     id="files"
+                     name="files"
+                     multiple
+                     accept="{{ accepted_extensions | join(',') }}"
+                     required>
+            </div>
+
+            <div id="file-list-wrapper" class="mb-3 d-none">
+              <div class="d-flex justify-content-between align-items-baseline mb-2">
+                <span class="form-label fw-semibold mb-0">
+                  Selected files (<span id="file-count">0</span>)
+                </span>
+                <span class="text-secondary small">
+                  Total: <span id="file-total-size">0 B</span>
+                </span>
+              </div>
+              <ul id="file-list" class="list-group list-group-flush border rounded-2"></ul>
+              <div id="file-warnings" class="small text-danger mt-2"></div>
+            </div>
+
+            <button id="submit-btn" type="submit" class="btn btn-indigo" disabled>
+              Upload Transcripts
+            </button>
+          </form>
+        </div>
+
+      </div>
+    </div>
+
+    {# ─── Demographics card (secondary, teal) ────────────────────────── #}
+    <div class="col-12 col-lg-6">
+      <div class="upload-card upload-card--teal h-100">
+
+        <div class="upload-card-header">
+          {# users / people icon #}
+          <svg class="upload-card-icon" xmlns="http://www.w3.org/2000/svg"
+               viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <p class="upload-card-title">
+            Upload Demographic Data
+            <span class="text-white-50 fw-normal fs-6">(optional)</span>
+          </p>
+          <p class="upload-card-subtitle">
+            Single CSV · Required column <code class="text-white">username</code>
+            + at least one demographic field · Preview before saving
+          </p>
+        </div>
+
+        <div class="upload-card-body">
+          <form id="demographic-form"
+                method="post"
+                action="{{ url_for('demographic.upload_submit', corpus_id=corpus_id) }}"
+                enctype="multipart/form-data">
+            <div class="mb-3">
+              <label for="demographic_file" class="form-label fw-semibold">Demographic CSV</label>
+              <input class="form-control"
+                     type="file"
+                     id="demographic_file"
+                     name="file"
+                     accept=".csv,text/csv"
+                     required>
+
+              {# Selected-file indicator (mirrors the transcripts file list,
+                 simplified for the single-file case). Hidden until a file is
+                 picked; shows name + size + circular X to remove. #}
+              <div id="demographic-file-preview"
+                   class="d-none mt-2 list-group-item d-flex justify-content-between align-items-center file-list-item">
+                <div class="text-truncate me-3" style="min-width:0;">
+                  <span class="fw-semibold" id="demographic-file-name"></span>
+                  <span class="text-secondary small ms-2" id="demographic-file-size"></span>
+                </div>
+                <button type="button"
+                        id="demographic-file-remove"
+                        class="file-list-remove"
+                        aria-label="Remove selected file"
+                        title="Remove selected file">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"
+                       aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+              <div id="demographic-file-warning" class="small text-danger mt-2"></div>
+            </div>
+
+            <div class="mb-3">
+              <label for="demographic_name" class="form-label fw-semibold">
+                Import name
+                <span class="text-secondary fw-normal">(optional)</span>
+              </label>
+              <input class="form-control"
+                     type="text"
+                     id="demographic_name"
+                     name="name"
+                     maxlength="255"
+                     placeholder="Defaults to the uploaded filename">
+            </div>
+
+            <button id="demographic-submit-btn" type="submit" class="btn btn-teal" disabled>
+              Upload &amp; preview
+            </button>
+          </form>
+        </div>
+
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -86,8 +199,8 @@
           if (tooBig) oversize.push(file.name);
 
           const li = document.createElement("li");
-          li.className = "list-group-item d-flex justify-content-between align-items-center";
-          if (tooBig) li.classList.add("list-group-item-danger");
+          li.className = "list-group-item d-flex justify-content-between align-items-center file-list-item";
+          if (tooBig) li.classList.add("is-oversize");
 
           const left = document.createElement("div");
           left.className = "text-truncate me-3";
@@ -101,11 +214,19 @@
           left.appendChild(name);
           left.appendChild(size);
 
+          // Circular X-icon remove button (icon hardcoded — no user data → safe).
           const removeBtn = document.createElement("button");
           removeBtn.type = "button";
-          removeBtn.className = "btn btn-sm btn-outline-secondary";
+          removeBtn.className = "file-list-remove";
           removeBtn.setAttribute("aria-label", "Remove " + file.name);
-          removeBtn.textContent = "Remove";
+          removeBtn.title = "Remove " + file.name;
+          removeBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+            'stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" ' +
+            'aria-hidden="true">' +
+            '<line x1="18" y1="6" x2="6" y2="18"/>' +
+            '<line x1="6" y1="6" x2="18" y2="18"/>' +
+            '</svg>';
           removeBtn.addEventListener("click", () => {
             selected.splice(idx, 1);
             syncInput();
@@ -142,6 +263,56 @@
           if (!existing.has(key(f))) selected.push(f);
         });
         syncInput();
+        render();
+      });
+    })();
+
+    // Demographic form — single-file equivalent of the transcripts picker:
+    // shows the selected file's name + size with an X to remove, enforces the
+    // same per-file size cap, and keeps the submit button disabled until a
+    // valid file is picked.
+    (() => {
+      const MAX_MB = {{ max_size_mb }};
+      const MAX_BYTES = MAX_MB * 1024 * 1024;
+
+      const input    = document.getElementById("demographic_file");
+      const preview  = document.getElementById("demographic-file-preview");
+      const nameEl   = document.getElementById("demographic-file-name");
+      const sizeEl   = document.getElementById("demographic-file-size");
+      const removeBtn = document.getElementById("demographic-file-remove");
+      const warning  = document.getElementById("demographic-file-warning");
+      const submitBtn = document.getElementById("demographic-submit-btn");
+
+      function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+        return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+      }
+
+      function render() {
+        const file = input.files && input.files[0];
+        if (!file) {
+          preview.classList.add("d-none");
+          preview.classList.remove("is-oversize");
+          warning.textContent = "";
+          submitBtn.disabled = true;
+          return;
+        }
+        preview.classList.remove("d-none");
+        nameEl.textContent = file.name;
+        sizeEl.textContent = formatBytes(file.size);
+
+        const tooBig = file.size > MAX_BYTES;
+        preview.classList.toggle("is-oversize", tooBig);
+        warning.textContent = tooBig
+          ? "File must be at most " + MAX_MB + " MB. Remove or replace it."
+          : "";
+        submitBtn.disabled = tooBig;
+      }
+
+      input.addEventListener("change", render);
+      removeBtn.addEventListener("click", () => {
+        input.value = "";  // clear the native input so re-picking the same file fires "change"
         render();
       });
     })();
