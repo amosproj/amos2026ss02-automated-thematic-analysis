@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
+from langchain_core.exceptions import OutputParserException
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -19,7 +20,6 @@ from app.schemas.llm import (
     GeneratedThemePath,
     PassageCodebookGeneration,
 )
-from langchain_core.exceptions import OutputParserException
 
 API_INGESTION = "/api/v1/ingestion"
 API_CODEBOOKS = "/api/v1/codebooks"

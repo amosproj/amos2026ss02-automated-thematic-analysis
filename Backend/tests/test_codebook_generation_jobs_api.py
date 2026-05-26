@@ -5,6 +5,7 @@ import json
 import time
 
 from langchain_core.exceptions import OutputParserException
+
 from app.schemas.llm import (
     GeneratedCodeSuggestion,
     GeneratedThemeNode,
