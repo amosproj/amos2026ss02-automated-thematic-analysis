@@ -25,6 +25,8 @@ All responses use the shared envelope:
 ### `POST /codebooks/generate`
 
 Creates and persists a codebook in a single request/response cycle.
+Do not use for large corpora or when generation time is expected to exceed a few seconds.
+Ideally only for single files. 
 
 Request body:
 
