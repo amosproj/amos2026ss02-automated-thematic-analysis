@@ -394,3 +394,203 @@
     .footer-logo { height: 32px; }
     .footer-partner-name { font-size: 0.82rem; }
 }
+
+/* ── Upload cards (Uploads page two-card side-by-side layout) ───────────────
+   Reuses the indigo/teal gradient palette from the theme-browser metric cards
+   so the Uploads page visually belongs to the same design system. Cards lift
+   on hover (translateY + shadow) for a clear tactile affordance.
+*/
+
+/* Soft max-width cap keeps the cards from sprawling across 1920px+ monitors
+   without making them awkwardly narrow on medium screens. */
+.upload-row {
+    max-width: 1080px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.upload-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.upload-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 28px -12px rgba(15, 23, 42, 0.18);
+}
+
+.upload-card:active {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px -8px rgba(15, 23, 42, 0.18);
+}
+
+.upload-card-header {
+    padding: 1.1rem 1.25rem;
+    color: #fff;
+}
+
+.upload-card--indigo .upload-card-header {
+    background: linear-gradient(135deg, #4338ca, #6366f1);
+}
+.upload-card--indigo:hover { border-color: #6366f1; }
+
+.upload-card--teal .upload-card-header {
+    background: linear-gradient(135deg, #0f766e, #14b8a6);
+}
+.upload-card--teal:hover { border-color: #14b8a6; }
+
+.upload-card-icon {
+    width: 26px;
+    height: 26px;
+    margin-bottom: 0.45rem;
+    opacity: 0.94;
+}
+
+.upload-card-title {
+    font-size: 1.02rem;
+    font-weight: 600;
+    margin: 0 0 0.2rem;
+    line-height: 1.25;
+}
+
+.upload-card-subtitle {
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.86);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.upload-card-body {
+    padding: 1.1rem 1.25rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Push the submit button to the bottom so cards align even when one form
+   has more interactive content (e.g. the dynamic file list). */
+.upload-card-body > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+.upload-card-body > form > :last-child {
+    margin-top: auto;
+}
+
+/* ── Theme-coloured submit buttons (match each card's gradient header) ───── */
+.btn-indigo,
+.btn-teal {
+    color: #fff;
+    border: 1px solid transparent;
+    font-weight: 500;
+    padding: 0.45rem 1.1rem;
+    transition: background 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+}
+
+.btn-indigo {
+    /* Solid deep indigo — matches the dominant start colour of the
+       .upload-card--indigo header gradient. A small button can't render the
+       header's 135deg gradient meaningfully — the colour just looks washed
+       out — so a solid pull from the same palette reads as "same family". */
+    background: #4338ca;
+}
+.btn-indigo:hover,
+.btn-indigo:focus {
+    background: #3730a3;
+    color: #fff;
+    box-shadow: 0 6px 14px -6px rgba(67, 56, 202, 0.45);
+}
+.btn-indigo:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+.btn-indigo:disabled,
+.btn-indigo.disabled {
+    background: #c7d2fe;
+    color: #eef2ff;
+    opacity: 0.85;
+    cursor: not-allowed;
+    /* Bootstrap's .btn:disabled sets pointer-events: none, which makes the
+       cursor: not-allowed declaration ineffective — the cursor falls through.
+       Re-enable pointer events here so the cursor is visible; the disabled
+       HTML attribute still blocks form submission at the element level. */
+    pointer-events: auto;
+    box-shadow: none;
+}
+
+.btn-teal {
+    /* Solid deep teal — matches the dominant start colour of the
+       .upload-card--teal header gradient (same reasoning as .btn-indigo). */
+    background: #0f766e;
+}
+.btn-teal:hover,
+.btn-teal:focus {
+    background: #115e59;
+    color: #fff;
+    box-shadow: 0 6px 14px -6px rgba(15, 118, 110, 0.45);
+}
+.btn-teal:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+.btn-teal:disabled,
+.btn-teal.disabled {
+    background: #ccfbf1;
+    color: #ecfeff;
+    opacity: 0.85;
+    cursor: not-allowed;
+    pointer-events: auto;     /* see .btn-indigo:disabled for rationale */
+    box-shadow: none;
+}
+
+/* ── File list rows (denser layout, icon-based remove control) ──────────── */
+.file-list-item {
+    border: none !important;
+    padding: 0.45rem 0.6rem;
+    border-radius: 6px;
+    transition: background 0.12s ease;
+}
+.file-list-item + .file-list-item {
+    margin-top: 2px;
+}
+.file-list-item:hover {
+    background: #f3f4f6;
+}
+.file-list-item.is-oversize {
+    background: #fef2f2;
+    color: #991b1b;
+}
+.file-list-item.is-oversize:hover {
+    background: #fee2e2;
+}
+
+.file-list-remove {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border-radius: 50%;
+    color: #6b7280;
+    background: transparent;
+    border: 1px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.file-list-remove:hover,
+.file-list-remove:focus {
+    background: #fee2e2;
+    color: #b91c1c;
+    border-color: #fecaca;
+    outline: none;
+}
+.file-list-remove svg {
+    width: 13px;
+    height: 13px;
+}
