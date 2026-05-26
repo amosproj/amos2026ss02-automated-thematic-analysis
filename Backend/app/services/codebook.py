@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,8 +17,6 @@ from app.schemas.codebook import (
     ThemeInCodebookSchema,
 )
 
-
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.schemas.codebook import CodebookDetailSchema
 
@@ -181,7 +180,7 @@ class CodebookService:
     @staticmethod
     def build_detail_schema(
         codebook: Codebook, themes: list[Theme], edges: list[ThemeHierarchyRelationship] | None = None
-    ) -> "CodebookDetailSchema":
+    ) -> CodebookDetailSchema:
         """Build a CodebookDetailSchema from ORM objects.
 
         Imported inline to avoid circular imports at module level.
