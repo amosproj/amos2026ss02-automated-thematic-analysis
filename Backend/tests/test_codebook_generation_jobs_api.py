@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 
+from langchain_core.exceptions import OutputParserException
 from app.schemas.llm import (
     GeneratedCodeSuggestion,
     GeneratedThemeNode,
@@ -217,3 +219,47 @@ async def test_generate_codebook_job_uses_all_corpus_documents_when_ids_omitted(
     terminal_job = await _wait_for_terminal_job_status(client, created_job["id"])
     assert terminal_job["status"] == "succeeded"
     assert terminal_job["transcripts_processed"] == 2
+
+
+async def test_generate_codebook_job_records_partial_parse_failures_and_succeeds(client, monkeypatch) -> None:
+    corpus_id, document_ids = await _create_corpus_with_docs(
+        client,
+        texts=[
+            "Alpha transcript about collaboration and adaptation.",
+            "Beta transcript about planning and process.",
+        ],
+    )
+    calls = {"count": 0}
+
+    def _sometimes_fails_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+        calls["count"] += 1
+        if calls["count"] <= 3:
+            raise OutputParserException("Invalid json output: malformed")
+        return PassageCodebookGeneration(
+            themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Collaboration")])],
+            codes=[GeneratedCodeSuggestion(label="Team Alignment", description=None, theme_path=["Collaboration"])],
+        )
+
+    monkeypatch.setattr(
+        "app.services.codebook_generation.generate_codebook_for_passage",
+        _sometimes_fails_generate_codebook_for_passage,
+    )
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate-jobs",
+        json={
+            "codebook_name": "Generated Async Partial Parse Failure",
+            "corpus_id": corpus_id,
+            "transcript_document_ids": document_ids,
+        },
+    )
+    assert response.status_code == 202
+    created_job = response.json()["data"]
+
+    terminal_job = await _wait_for_terminal_job_status(client, created_job["id"])
+    assert terminal_job["status"] == "succeeded"
+    assert terminal_job["error_message"] is not None
+    warning = json.loads(terminal_job["error_message"])
+    assert warning["type"] == "passage_generation_partial_failures"
+    assert warning["passages_failed"] == 1
+    assert len(warning["failed_passages"]) == 1

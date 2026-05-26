@@ -19,6 +19,7 @@ from app.schemas.llm import (
     GeneratedThemePath,
     PassageCodebookGeneration,
 )
+from langchain_core.exceptions import OutputParserException
 
 API_INGESTION = "/api/v1/ingestion"
 API_CODEBOOKS = "/api/v1/codebooks"
@@ -328,3 +329,51 @@ async def test_generate_codebook_merges_duplicate_theme_labels_across_paths(
     assert response.status_code == 201
     payload = response.json()["data"]
     assert payload["themes_created"] == 3
+
+
+async def test_generate_codebook_continues_when_one_passage_has_output_parse_error(
+    client,
+    monkeypatch,
+) -> None:
+    corpus_id, document_ids = await _create_corpus_and_docs(client)
+    calls = {"count": 0}
+
+    def _sometimes_fails_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+        calls["count"] += 1
+        if calls["count"] <= 3:
+            raise OutputParserException("Invalid json output: malformed")
+        return PassageCodebookGeneration(
+            themes=[
+                GeneratedThemePath(
+                    path=[
+                        GeneratedThemeNode(label="Workflow Friction"),
+                    ]
+                )
+            ],
+            codes=[
+                GeneratedCodeSuggestion(
+                    label="Process Delay",
+                    description=None,
+                    theme_path=["Workflow Friction"],
+                )
+            ],
+        )
+
+    monkeypatch.setattr(
+        "app.services.codebook_generation.generate_codebook_for_passage",
+        _sometimes_fails_generate_codebook_for_passage,
+    )
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate",
+        json={
+            "codebook_name": "Partial Parse Failure",
+            "corpus_id": corpus_id,
+            "transcript_document_ids": document_ids,
+        },
+    )
+    assert response.status_code == 201
+    payload = response.json()["data"]
+    assert payload["passages_failed"] == 1
+    assert len(payload["failed_passages"]) == 1
+    assert payload["failed_passages"][0]["passage_index"] == 1

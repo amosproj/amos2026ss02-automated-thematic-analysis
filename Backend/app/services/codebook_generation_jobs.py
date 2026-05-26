@@ -121,7 +121,17 @@ class CodebookGenerationJobRunner:
                 job.codes_created = generated.codes_created
                 job.passages_done = generated.passages_processed
                 job.passages_total = max(job.passages_total, generated.passages_processed)
-                job.error_message = None
+                if generated.failed_passages:
+                    job.error_message = json.dumps(
+                        {
+                            "type": "passage_generation_partial_failures",
+                            "passages_failed": generated.passages_failed,
+                            "failed_passages": [failure.model_dump(mode="json") for failure in generated.failed_passages],
+                        },
+                        ensure_ascii=False,
+                    )
+                else:
+                    job.error_message = None
                 job.finished_at = _utc_now_naive()
                 await session.commit()
             except CodebookGenerationCancelledError:

@@ -42,11 +42,19 @@ class CodebookGenerateRequest(BaseSchema):
 
 
 class GeneratedCodebookResponse(BaseSchema):
+    class PassageFailure(BaseSchema):
+        passage_index: int
+        passage_excerpt: str
+        error: str
+        attempts: int
+
     codebook: CodebookSchema
     transcripts_processed: int
     passages_processed: int
     themes_created: int
     codes_created: int
+    passages_failed: int = 0
+    failed_passages: list[PassageFailure] = Field(default_factory=list)
 
 
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]

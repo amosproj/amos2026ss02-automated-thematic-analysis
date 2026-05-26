@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from uuid import UUID
 
+from langchain_core.exceptions import OutputParserException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -80,14 +81,17 @@ class CodebookGenerationService:
         # does not keep a checked-out DB connection during inference.
         await self._session.rollback()
 
-        generation_results = await self._generate_per_passage(
+        generation_results, failed_passages = await self._generate_per_passage(
             passages,
             on_progress=on_progress,
             should_cancel=should_cancel,
         )
         theme_nodes, code_nodes, hierarchy_edges = self._deduplicate_generation(generation_results)
         if not theme_nodes:
-            raise UnprocessableError("Codebook generation produced no themes from selected passages")
+            raise UnprocessableError(
+                "Codebook generation produced no themes from selected passages "
+                f"(failed passages: {len(failed_passages)})"
+            )
 
         created_codebook, themes_created, codes_created = await self._persist_generated_codebook(
             codebook_name=codebook_name,
@@ -102,6 +106,8 @@ class CodebookGenerationService:
             passages_processed=len(passages),
             themes_created=themes_created,
             codes_created=codes_created,
+            passages_failed=len(failed_passages),
+            failed_passages=failed_passages,
         )
 
     @staticmethod
@@ -202,25 +208,45 @@ class CodebookGenerationService:
         *,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
-    ) -> list[PassageCodebookGeneration]:
+    ) -> tuple[list[PassageCodebookGeneration], list[GeneratedCodebookResponse.PassageFailure]]:
         results: list[PassageCodebookGeneration] = []
+        failures: list[GeneratedCodebookResponse.PassageFailure] = []
         total = len(passages)
         if on_progress is not None:
             await on_progress(0, total)
 
         for index, passage in enumerate(passages, start=1):
-            if should_cancel is not None and await should_cancel():
-                raise CodebookGenerationCancelledError("Codebook generation was cancelled")
-            try:
-                generation = await asyncio.to_thread(generate_codebook_for_passage, passage)
-                results.append(generation)
-                if on_progress is not None:
-                    await on_progress(index, total)
-            except CodebookGenerationCancelledError:
-                raise
-            except Exception as exc:
-                raise UnprocessableError(f"Codebook generation failed: {exc}") from exc
-        return results
+            parse_error: OutputParserException | None = None
+            attempts = 3
+            for attempt in range(1, attempts + 1):
+                if should_cancel is not None and await should_cancel():
+                    raise CodebookGenerationCancelledError("Codebook generation was cancelled")
+                try:
+                    generation = await asyncio.to_thread(generate_codebook_for_passage, passage)
+                    results.append(generation)
+                    parse_error = None
+                    break
+                except OutputParserException as exc:
+                    parse_error = exc
+                    if attempt < attempts:
+                        continue
+                except CodebookGenerationCancelledError:
+                    raise
+                except Exception as exc:
+                    raise UnprocessableError(f"Codebook generation failed: {exc}") from exc
+
+            if parse_error is not None:
+                failures.append(
+                    GeneratedCodebookResponse.PassageFailure(
+                        passage_index=index,
+                        passage_excerpt=passage[:240],
+                        error=str(parse_error),
+                        attempts=attempts,
+                    )
+                )
+            if on_progress is not None:
+                await on_progress(index, total)
+        return results, failures
 
     @staticmethod
     def _normalize_label(value: str) -> str:
@@ -354,6 +380,7 @@ class CodebookGenerationService:
                 created_by="system-llm",
             )
             self._session.add(codebook)
+            await self._session.flush()
 
             ordered_theme_nodes = sorted(theme_nodes.values(), key=lambda node: (len(node.key), node.key))
             theme_id_by_key: dict[tuple[str, ...], UUID] = {}
@@ -373,6 +400,7 @@ class CodebookGenerationService:
                     is_active=True,
                 )
                 self._session.add(theme)
+                await self._session.flush()
                 theme_id_by_key[node.key] = theme.id
                 theme_id_by_label[label_key] = theme.id
                 self._session.add(
@@ -422,6 +450,7 @@ class CodebookGenerationService:
                     is_active=True,
                 )
                 self._session.add(code)
+                await self._session.flush()
                 self._session.add(
                     CodebookCodeRelationship(
                         id=uuid.uuid4(),
