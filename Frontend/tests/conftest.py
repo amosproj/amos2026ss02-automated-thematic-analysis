@@ -56,6 +56,7 @@ class FakeBackend:
         # Codebook generation jobs
         self.generation_jobs: dict[str, dict] = {}
         self.last_generation_job_request: dict | None = None
+        self.last_create_codebook_request: dict | None = None
         # Either a method-name string (generic BackendError) or a
         # (method-name, ExceptionClass) tuple (specific typed subclass).
         self.raise_on: str | tuple[str, type] | None = None
@@ -118,6 +119,13 @@ class FakeBackend:
     def get_theme_tree(self, codebook_id: str) -> list[dict]:
         self._maybe_raise("get_theme_tree")
         return self.theme_tree
+
+    def create_codebook(self, *, project_id: str, name: str, themes: list[dict]) -> dict:
+        self._maybe_raise("create_codebook")
+        self.last_create_codebook_request = {
+            "project_id": project_id, "name": name, "themes": themes,
+        }
+        return {"id": "cb-new", "name": name, "project_id": project_id, "themes": themes}
 
     # ---- Demographic --------------------------------------------------------
 

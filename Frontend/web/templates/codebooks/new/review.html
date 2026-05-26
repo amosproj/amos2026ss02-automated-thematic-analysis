@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Review Codebook{% endblock %}
+{% block content %}
+  <div class="mb-4">
+    <h1 class="h3 mb-1">Review Codebook</h1>
+    <p class="text-secondary mb-0">
+      Edit the generated themes below. Saving creates a new versioned codebook
+      &mdash; the original generated copy stays intact.
+    </p>
+  </div>
+
+  {% if error %}
+    <div class="alert alert-danger" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <form method="post"
+        action="{{ url_for('codebooks.codebook_review_submit', codebook_id=codebook_id) }}"
+        id="review-form">
+    <div class="bg-white border rounded-2 p-4 mb-3" style="max-width: 900px;">
+      <div class="mb-3">
+        <label for="codebook_name" class="form-label fw-semibold">Codebook name</label>
+        <input type="text"
+               class="form-control"
+               id="codebook_name"
+               name="codebook_name"
+               value="{{ codebook_name }}"
+               maxlength="255"
+               required>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-baseline mb-2">
+        <span class="form-label fw-semibold mb-0">Themes</span>
+        <button type="button" id="add-row-btn" class="btn btn-sm btn-outline-primary">
+          + Add theme
+        </button>
+      </div>
+
+      <div id="theme-rows">
+        {% for theme in themes %}
+          <div class="theme-row border rounded-2 p-3 mb-2 bg-light">
+            <div class="row g-2">
+              <div class="col-md-4">
+                <label class="form-label small text-secondary mb-1">Name</label>
+                <input type="text" class="form-control form-control-sm"
+                       name="theme_names[]" value="{{ theme.name }}" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small text-secondary mb-1">
+                  Parent (blank for root)
+                </label>
+                <input type="text" class="form-control form-control-sm"
+                       name="parent_names[]" value="{{ theme.parent_name }}"
+                       placeholder="Name of parent theme">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small text-secondary mb-1">Description</label>
+                <textarea class="form-control form-control-sm"
+                          name="theme_descriptions[]" rows="1">{{ theme.description }}</textarea>
+              </div>
+              <div class="col-md-1 d-flex align-items-end justify-content-end">
+                <button type="button" class="btn btn-sm btn-outline-secondary remove-row-btn"
+                        aria-label="Remove theme">&times;</button>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      {% if not themes and not error %}
+        <p class="text-secondary mb-0">No themes yet. Add one to get started.</p>
+      {% endif %}
+    </div>
+
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary"
+         href="{{ url_for('codebooks.codebook_themes', codebook_id=codebook_id) }}">
+        Cancel
+      </a>
+      <button type="submit" class="btn btn-primary">Save as new version</button>
+    </div>
+  </form>
+
+  <script>
+    (() => {
+      const rowsContainer = document.getElementById("theme-rows");
+      const addBtn = document.getElementById("add-row-btn");
+
+      function makeRow() {
+        const row = document.createElement("div");
+        row.className = "theme-row border rounded-2 p-3 mb-2 bg-light";
+        row.innerHTML = `
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label small text-secondary mb-1">Name</label>
+              <input type="text" class="form-control form-control-sm" name="theme_names[]" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small text-secondary mb-1">Parent (blank for root)</label>
+              <input type="text" class="form-control form-control-sm" name="parent_names[]"
+                     placeholder="Name of parent theme">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small text-secondary mb-1">Description</label>
+              <textarea class="form-control form-control-sm" name="theme_descriptions[]" rows="1"></textarea>
+            </div>
+            <div class="col-md-1 d-flex align-items-end justify-content-end">
+              <button type="button" class="btn btn-sm btn-outline-secondary remove-row-btn"
+                      aria-label="Remove theme">&times;</button>
+            </div>
+          </div>`;
+        return row;
+      }
+
+      addBtn.addEventListener("click", () => rowsContainer.appendChild(makeRow()));
+
+      rowsContainer.addEventListener("click", (e) => {
+        if (e.target.classList.contains("remove-row-btn")) {
+          e.target.closest(".theme-row").remove();
+        }
+      });
+    })();
+  </script>
+{% endblock %}

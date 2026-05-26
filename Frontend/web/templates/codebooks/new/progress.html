@@ -76,7 +76,6 @@
         const done = job.passages_done || 0;
 
         if (job.status === "queued") {
-          // Phase 1: no worker yet.
           setBar(0);
           counts.textContent = "Preparing…";
           statusLine.textContent = "Waiting for a worker…";
@@ -84,8 +83,7 @@
         }
 
         if (job.status === "running" && done === 0) {
-          // Phase 2: connected, first passage hasn't returned yet. A tiny
-          // non-zero slice signals "we have a worker" without lying about output.
+          // 2% signals "we have a worker" without claiming any output yet.
           setBar(2);
           counts.textContent = total > 0
             ? ("0 / " + total + " passages")
@@ -95,8 +93,7 @@
         }
 
         if (job.status === "running") {
-          // Phase 3: real progress. Clamp at 99% so 100% is reserved for the
-          // succeeded state and we never show "100% but still running".
+          // Clamp at 99% so the bar can't read "100%" before status flips.
           const raw = total > 0 ? Math.round((done / total) * 100) : 2;
           const pct = Math.min(99, Math.max(2, raw));
           setBar(pct);

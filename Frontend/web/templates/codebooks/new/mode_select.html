@@ -66,6 +66,16 @@
 
       radios.forEach((r) => r.addEventListener("change", paint));
       paint();
+
+      // Encode the selected mode in this page's URL before navigating away, so
+      // that a later browser-back lands here with the card already highlighted.
+      form.addEventListener("submit", () => {
+        const selected = form.querySelector(".mode-radio:checked");
+        if (!selected) return;
+        const url = new URL(window.location.href);
+        url.searchParams.set("mode", selected.value);
+        window.history.replaceState(null, "", url.toString());
+      });
     })();
   </script>
 {% endblock %}

@@ -162,6 +162,17 @@ class BackendClient:
     def get_theme_tree(self, codebook_id: str) -> list[dict]:
         return self._get(f"/codebooks/{codebook_id}/themes/tree")
 
+    def create_codebook(self, *, project_id: str, name: str, themes: list[dict]) -> dict:
+        """Persist a new codebook with its themes via POST /codebooks/.
+
+        `themes` is a flat list of `{name, description, parent_name|None}`
+        dicts. Hierarchy is encoded by `parent_name` referencing another
+        theme's `name` within the same payload."""
+        return self._post(
+            "/codebooks/",
+            json={"project_id": project_id, "name": name, "themes": themes},
+        )
+
     # ---- Demographic --------------------------------------------------------
 
     def upload_demographic(

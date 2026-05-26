@@ -38,4 +38,20 @@
       </div>
     </form>
   </div>
+
+  <script>
+    // Encode the entered name in this page's URL before navigating away, so a
+    // later browser-back lands here with the field re-populated.
+    (() => {
+      const form = document.querySelector("form");
+      const nameInput = document.getElementById("codebook_name");
+      form.addEventListener("submit", () => {
+        const url = new URL(window.location.href);
+        const value = nameInput.value.trim();
+        if (value) url.searchParams.set("name", value);
+        else url.searchParams.delete("name");
+        window.history.replaceState(null, "", url.toString());
+      });
+    })();
+  </script>
 {% endblock %}

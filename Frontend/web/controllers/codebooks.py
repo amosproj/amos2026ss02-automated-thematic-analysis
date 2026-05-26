@@ -459,11 +459,6 @@ def new_codebook_mode_submit(corpus_id: str):
 
 
 def _resolve_mode(value: str) -> str:
-    """Return one of the auto/semi modes or default to 'auto'.
-
-    Used by routes that should never see 'manual' (those flows have already
-    branched away) but still want a defensive fallback if the query string is
-    tampered with."""
     return value if value in ("auto", "semi") else "auto"
 
 
@@ -520,34 +515,10 @@ def new_codebook_job_progress(job_id: str) -> str:
     )
 
 
-_DEMO_SCENARIOS = ("fast", "slow")
-
-
-@bp.get("/new/demo/<scenario>")
-def new_codebook_demo_progress(scenario: str) -> str:
-    """Render the progress UI driven by a scripted timeline (no backend call).
-
-    Used to iterate on the waiting-screen UX without running real generation.
-    Scenarios:
-      - fast: single-passage style, completes in ~2s.
-      - slow: multi-passage progress climbing 0 -> 8 over ~7s.
-
-    Unknown values fall back to `fast`."""
-    if scenario not in _DEMO_SCENARIOS:
-        scenario = "fast"
-    return render_template(
-        "codebooks/new/progress_demo.html",
-        demo_scenario=scenario,
-    )
-
-
 @bp.get("/new/jobs/<job_id>.json")
 def new_codebook_job_status(job_id: str):
-    """JSON status for the progress poller.
-
-    Errors are returned as JSON `{error: "..."}` (HTTP 200) so the browser
-    poller can surface them without needing to distinguish HTTP vs payload
-    failure modes — keeps the client-side script tiny."""
+    # Errors come back as 200 with `{error: "..."}` so the poller doesn't need
+    # to distinguish HTTP failure modes.
     try:
         job = _backend().get_generation_job(job_id)
     except BackendError as exc:
@@ -564,34 +535,93 @@ def new_codebook_job_cancel(job_id: str):
     return jsonify(job)
 
 
+def _flatten_theme_tree(tree: list[dict]) -> list[dict]:
+    """Flatten get_theme_tree into editor rows: name, description, parent_name."""
+    rows: list[dict] = []
+
+    def walk(node: dict, parent_label: str | None) -> None:
+        theme = node.get("theme") or {}
+        label = theme.get("label", "")
+        rows.append({
+            "name": label,
+            "description": theme.get("description") or "",
+            "parent_name": parent_label or "",
+        })
+        for child in node.get("children") or []:
+            walk(child, label)
+
+    for root in tree:
+        walk(root, None)
+    return rows
+
+
+def _render_review(codebook_id: str, codebook_name: str,
+                   themes: list[dict], error: str | None = None) -> str:
+    return render_template(
+        "codebooks/new/review.html",
+        codebook_id=codebook_id,
+        codebook_name=codebook_name,
+        themes=themes,
+        error=error,
+    )
+
+
 @bp.get("/<codebook_id>/review")
 def codebook_review(codebook_id: str) -> str:
-    """Mode-2 destination after generation.
-
-    Placeholder: shows the generated theme tree read-only with a banner. Will
-    be swapped for branch 9's `preview.html` editor + an update endpoint in
-    the next iteration."""
     try:
-        client = _backend()
-        tree = client.get_theme_tree(codebook_id)
+        tree = _backend().get_theme_tree(codebook_id)
     except BackendNotFoundError:
         flash("That codebook couldn't be found. It may have been deleted.", "danger")
-        return render_template(
-            "codebooks/new/review_placeholder.html",
-            codebook_id=codebook_id,
-            tree=[],
-            error=True,
-        )
+        return _render_review(codebook_id, "", [], error="Codebook not found.")
     except BackendError as exc:
         flash(exc.user_message, "danger")
-        return render_template(
-            "codebooks/new/review_placeholder.html",
-            codebook_id=codebook_id,
-            tree=[],
-            error=True,
+        return _render_review(codebook_id, "", [], error=exc.user_message)
+
+    return _render_review(codebook_id, "Generated Codebook", _flatten_theme_tree(tree))
+
+
+@bp.post("/<codebook_id>/review")
+def codebook_review_submit(codebook_id: str):
+    codebook_name = (request.form.get("codebook_name") or "").strip()
+    names = request.form.getlist("theme_names[]")
+    descriptions = request.form.getlist("theme_descriptions[]")
+    parents = request.form.getlist("parent_names[]")
+
+    themes: list[dict] = []
+    for name, desc, parent in zip(names, descriptions, parents):
+        cleaned_name = name.strip()
+        if not cleaned_name:
+            continue
+        themes.append({
+            "name": cleaned_name,
+            "description": desc.strip(),
+            "parent_name": parent.strip() or None,
+        })
+
+    name_set = {t["name"] for t in themes}
+    error: str | None = None
+    if not codebook_name:
+        error = "Codebook name must not be blank."
+    elif not themes:
+        error = "A codebook must contain at least one theme."
+    else:
+        for t in themes:
+            if t["parent_name"] and t["parent_name"] not in name_set:
+                error = f"Parent '{t['parent_name']}' for theme '{t['name']}' does not exist."
+                break
+
+    if error:
+        return _render_review(codebook_id, codebook_name, themes, error=error)
+
+    try:
+        client = _backend()
+        client.create_codebook(
+            project_id=current_app.config["DEFAULT_PROJECT_ID"],
+            name=codebook_name,
+            themes=themes,
         )
-    return render_template(
-        "codebooks/new/review_placeholder.html",
-        codebook_id=codebook_id,
-        tree=tree,
-    )
+    except BackendError as exc:
+        return _render_review(codebook_id, codebook_name, themes, error=exc.user_message)
+
+    flash(f"Saved '{codebook_name}' as a new codebook version.", "success")
+    return redirect(url_for("codebooks.list_codebooks"))
