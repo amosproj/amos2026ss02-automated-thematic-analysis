@@ -333,6 +333,22 @@ def test_view_renders_backend_error(client, fake_backend):
     assert b"Traceback" not in resp.data
 
 
+def test_view_shows_specific_message_for_deleted_file(client, fake_backend):
+    """Stale link to a deleted file_id: the backend returns 404 (which our
+    BackendClient maps to BackendNotFoundError). The view should surface a
+    specific, user-friendly message rather than the generic BackendError text."""
+    from web.services.backend_client import BackendNotFoundError
+
+    fake_backend.raise_on = ("list_demographic_files", BackendNotFoundError)
+    resp = client.get(f"/demographic/{CORPUS}/view/missing-file-id")
+    assert resp.status_code == 200
+    # Substring chosen to skip the apostrophe in "couldn't" — Jinja2 escapes it.
+    assert b"may have been deleted" in resp.data
+    # Generic error template still rendered, no class names leaked.
+    assert b"BackendNotFoundError" not in resp.data
+    assert b"Traceback" not in resp.data
+
+
 def test_view_renders_empty_when_no_rows(client, fake_backend):
     fake_backend.demographic_files = [
         {
