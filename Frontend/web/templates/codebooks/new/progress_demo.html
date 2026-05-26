@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Progress UX Demo{% endblock %}
+{% block content %}
+  <div class="mb-4">
+    <h1 class="h3 mb-1">Progress UX Demo &mdash; "{{ demo_scenario }}"</h1>
+    <p class="text-secondary mb-0 d-flex align-items-center gap-2">
+      <span id="status-spinner"
+            class="spinner-border spinner-border-sm text-secondary"
+            role="status"
+            aria-hidden="true"></span>
+      <span id="status-line">Starting demo&hellip;</span>
+    </p>
+  </div>
+
+  <div class="alert alert-warning mb-3" role="alert">
+    <strong>Demo mode.</strong> Scripted timeline, no backend call. Switch with
+    <a href="{{ url_for('codebooks.new_codebook_demo_progress', scenario='fast') }}">fast</a>
+    /
+    <a href="{{ url_for('codebooks.new_codebook_demo_progress', scenario='slow') }}">slow</a>.
+    Refresh to replay.
+  </div>
+
+  <div class="bg-white border rounded-2 p-4" style="max-width: 640px;"
+       data-demo-scenario="{{ demo_scenario }}"
+       id="progress-app">
+
+    <div class="progress mb-3" role="progressbar" aria-label="Generation progress">
+      <div id="progress-bar"
+           class="progress-bar progress-bar-striped progress-bar-animated"
+           style="width: 0%">0%</div>
+    </div>
+
+    <div class="text-secondary small mb-3">
+      <span id="progress-counts">Preparing&hellip;</span>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      // Scripted timelines for UX iteration. Each entry is
+      // { at: ms_since_start, job: { ... same shape as backend response } }.
+      // Production logic in progress.html consumes the same job shape, so
+      // anything that looks right here also looks right against a real backend.
+      const TIMELINES = {
+        fast: [
+          { at:    0, job: { status: "queued",   passages_total: 0, passages_done: 0 } },
+          { at:  900, job: { status: "running",  passages_total: 0, passages_done: 0 } },
+          { at: 1900, job: { status: "succeeded", passages_total: 1, passages_done: 1 } },
+        ],
+        slow: [
+          { at:    0, job: { status: "queued",   passages_total: 0, passages_done: 0 } },
+          { at: 1000, job: { status: "running",  passages_total: 0, passages_done: 0 } },
+          { at: 2200, job: { status: "running",  passages_total: 8, passages_done: 0 } },
+          { at: 3200, job: { status: "running",  passages_total: 8, passages_done: 1 } },
+          { at: 4200, job: { status: "running",  passages_total: 8, passages_done: 3 } },
+          { at: 5200, job: { status: "running",  passages_total: 8, passages_done: 5 } },
+          { at: 6200, job: { status: "running",  passages_total: 8, passages_done: 7 } },
+          { at: 7000, job: { status: "succeeded", passages_total: 8, passages_done: 8 } },
+        ],
+      };
+
+      const app = document.getElementById("progress-app");
+      const scenario = app.dataset.demoScenario;
+      const timeline = TIMELINES[scenario] || TIMELINES.fast;
+
+      const statusLine = document.getElementById("status-line");
+      const statusSpinner = document.getElementById("status-spinner");
+      const bar = document.getElementById("progress-bar");
+      const counts = document.getElementById("progress-counts");
+
+      function setBar(pct) {
+        bar.style.width = pct + "%";
+        bar.textContent = pct + "%";
+        bar.setAttribute("aria-valuenow", String(pct));
+      }
+
+      // Mirror of progress.html `paint()` — kept here so a change in the demo
+      // can't silently diverge from production phase rendering.
+      function paint(job) {
+        const total = job.passages_total || 0;
+        const done = job.passages_done || 0;
+        if (job.status === "queued") {
+          setBar(0);
+          counts.textContent = "Preparing…";
+          statusLine.textContent = "Waiting for a worker…";
+          return;
+        }
+        if (job.status === "running" && done === 0) {
+          setBar(2);
+          counts.textContent = total > 0
+            ? ("0 / " + total + " passages")
+            : "Connected — waiting for first passage…";
+          statusLine.textContent = "Connected to worker — waiting for first passage from the LLM…";
+          return;
+        }
+        if (job.status === "running") {
+          const raw = total > 0 ? Math.round((done / total) * 100) : 2;
+          const pct = Math.min(99, Math.max(2, raw));
+          setBar(pct);
+          counts.textContent = done + " / " + total + " passages";
+          statusLine.textContent = "Generating themes and codes…";
+          return;
+        }
+        if (job.status === "succeeded") {
+          setBar(100);
+          counts.textContent = (done || total) + " / " + (total || done) + " passages";
+          statusLine.textContent = "Done. (Demo — refresh to replay.)";
+          bar.classList.remove("progress-bar-animated", "progress-bar-striped");
+          statusSpinner.classList.add("d-none");
+        }
+      }
+
+      // Schedule each entry. Simpler than a polling loop and identical visually.
+      timeline.forEach((entry) => setTimeout(() => paint(entry.job), entry.at));
+    })();
+  </script>
+{% endblock %}

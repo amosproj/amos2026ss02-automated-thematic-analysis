@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Generating Codebook{% endblock %}
+{% block content %}
+  <div class="mb-4">
+    <h1 class="h3 mb-1">Generating Codebook</h1>
+    <p class="text-secondary mb-0 d-flex align-items-center gap-2">
+      <span id="status-spinner"
+            class="spinner-border spinner-border-sm text-secondary"
+            role="status"
+            aria-hidden="true"></span>
+      <span id="status-line">Starting job&hellip;</span>
+    </p>
+  </div>
+
+  <div class="bg-white border rounded-2 p-4" style="max-width: 640px;"
+       data-job-id="{{ job_id }}"
+       data-mode="{{ mode }}"
+       data-status-url="{{ url_for('codebooks.new_codebook_job_status', job_id=job_id) }}"
+       data-list-url="{{ url_for('codebooks.list_codebooks') }}"
+       data-review-base="/codebooks/"
+       id="progress-app">
+
+    <div class="progress mb-3" role="progressbar" aria-label="Generation progress">
+      <div id="progress-bar"
+           class="progress-bar progress-bar-striped progress-bar-animated"
+           style="width: 0%">0%</div>
+    </div>
+
+    <div class="text-secondary small mb-3">
+      <span id="progress-counts">Preparing&hellip;</span>
+    </div>
+
+    <div id="progress-error" class="alert alert-danger d-none" role="alert"></div>
+
+    <form id="cancel-form" method="post" action="">
+      <button type="button" id="cancel-btn" class="btn btn-outline-secondary">Cancel</button>
+    </form>
+  </div>
+
+  <script>
+    (() => {
+      const app = document.getElementById("progress-app");
+      const jobId = app.dataset.jobId;
+      const mode = app.dataset.mode;
+      const statusUrl = app.dataset.statusUrl;
+      const listUrl = app.dataset.listUrl;
+      const reviewBase = app.dataset.reviewBase;
+
+      const statusLine = document.getElementById("status-line");
+      const statusSpinner = document.getElementById("status-spinner");
+      const bar = document.getElementById("progress-bar");
+      const counts = document.getElementById("progress-counts");
+      const errorEl = document.getElementById("progress-error");
+      const cancelBtn = document.getElementById("cancel-btn");
+
+      // Faster polls early so a quick job doesn't look frozen.
+      let pollIntervalMs = 600;
+      const MAX_INTERVAL_MS = 1800;
+
+      let stopped = false;
+      let tickCount = 0;
+
+      function showError(message) {
+        errorEl.textContent = message;
+        errorEl.classList.remove("d-none");
+      }
+
+      function setBar(pct) {
+        bar.style.width = pct + "%";
+        bar.textContent = pct + "%";
+        bar.setAttribute("aria-valuenow", String(pct));
+      }
+
+      function paint(job) {
+        const total = job.passages_total || 0;
+        const done = job.passages_done || 0;
+
+        if (job.status === "queued") {
+          // Phase 1: no worker yet.
+          setBar(0);
+          counts.textContent = "Preparing…";
+          statusLine.textContent = "Waiting for a worker…";
+          return;
+        }
+
+        if (job.status === "running" && done === 0) {
+          // Phase 2: connected, first passage hasn't returned yet. A tiny
+          // non-zero slice signals "we have a worker" without lying about output.
+          setBar(2);
+          counts.textContent = total > 0
+            ? ("0 / " + total + " passages")
+            : "Connected — waiting for first passage…";
+          statusLine.textContent = "Connected to worker — waiting for first passage from the LLM…";
+          return;
+        }
+
+        if (job.status === "running") {
+          // Phase 3: real progress. Clamp at 99% so 100% is reserved for the
+          // succeeded state and we never show "100% but still running".
+          const raw = total > 0 ? Math.round((done / total) * 100) : 2;
+          const pct = Math.min(99, Math.max(2, raw));
+          setBar(pct);
+          counts.textContent = done + " / " + total + " passages";
+          statusLine.textContent = "Generating themes and codes…";
+          return;
+        }
+
+        if (job.status === "succeeded") {
+          setBar(100);
+          counts.textContent = (done || total) + " / " + (total || done) + " passages";
+          statusLine.textContent = "Done. Opening results…";
+        } else {
+          statusLine.textContent = "Status: " + job.status;
+        }
+      }
+
+      function stopAnimation() {
+        bar.classList.remove("progress-bar-animated", "progress-bar-striped");
+        statusSpinner.classList.add("d-none");
+      }
+
+      function redirectFor(job) {
+        if (mode === "semi") {
+          window.location = reviewBase + job.codebook_id + "/review";
+        } else {
+          window.location = listUrl;
+        }
+      }
+
+      function onTerminal(job) {
+        stopped = true;
+        if (job.status === "succeeded" && job.codebook_id) {
+          // Hold the "Done" state briefly so success is perceived rather than
+          // appearing as an instant page jump.
+          setBar(100);
+          statusLine.textContent = "Done. Opening results…";
+          cancelBtn.disabled = true;
+          setTimeout(() => redirectFor(job), 500);
+          return;
+        }
+        stopAnimation();
+        cancelBtn.disabled = true;
+        if (job.status === "failed") {
+          showError(job.error_message || "Generation failed.");
+        } else if (job.status === "cancelled") {
+          showError("Generation was cancelled.");
+        }
+      }
+
+      async function tick() {
+        if (stopped) return;
+        try {
+          const r = await fetch(statusUrl, { headers: { "Accept": "application/json" } });
+          const job = await r.json();
+          if (job.error) {
+            stopAnimation();
+            showError(job.error);
+            return;
+          }
+          paint(job);
+          if (["succeeded", "failed", "cancelled"].includes(job.status)) {
+            onTerminal(job);
+            return;
+          }
+        } catch (e) {
+          // Transient — keep polling, surface only if it persists.
+        }
+        tickCount += 1;
+        if (tickCount >= 5 && pollIntervalMs < MAX_INTERVAL_MS) {
+          pollIntervalMs = MAX_INTERVAL_MS;
+        }
+        setTimeout(tick, pollIntervalMs);
+      }
+
+      cancelBtn.addEventListener("click", async () => {
+        cancelBtn.disabled = true;
+        try {
+          await fetch("/codebooks/new/jobs/" + jobId + "/cancel", { method: "POST" });
+        } catch (e) {
+          // Fall through — the next poll will reflect the state.
+        }
+      });
+
+      tick();
+    })();
+  </script>
+{% endblock %}

@@ -211,7 +211,7 @@ def test_new_codebook_mode_select_pre_selects_from_query_param(client, fake_back
 
 
 def test_new_codebook_mode_select_ignores_invalid_query_mode(client, fake_backend):
-    resp = client.get("/codebooks/new/corpus-xyz?mode=bogus")
+    resp = client.get("/codebooks/new/corpus-xyz?mode=unknown")
     assert resp.status_code == 200
     assert b"checked>" not in resp.data
 
@@ -223,15 +223,72 @@ def test_new_codebook_submit_without_mode_re_renders_with_flash(client, fake_bac
     assert b"Fully automatic" in resp.data
 
 
-def test_new_codebook_submit_auto_redirects_with_mode_param(client, fake_backend):
+def test_new_codebook_submit_auto_redirects_to_auto_form(client, fake_backend):
     resp = client.post("/codebooks/new/corpus-xyz", data={"mode": "auto"})
     assert resp.status_code == 302
-    assert "corpus-xyz" in resp.headers["Location"]
-    assert "mode=auto" in resp.headers["Location"]
+    loc = resp.headers["Location"]
+    assert "/codebooks/new/corpus-xyz/auto" in loc
+    assert "mode=auto" in loc
 
 
-def test_new_codebook_submit_semi_redirects_with_mode_param(client, fake_backend):
+def test_new_codebook_submit_semi_redirects_to_auto_form(client, fake_backend):
     resp = client.post("/codebooks/new/corpus-xyz", data={"mode": "semi"})
+    assert resp.status_code == 302
+    loc = resp.headers["Location"]
+    assert "/codebooks/new/corpus-xyz/auto" in loc
+    assert "mode=semi" in loc
+
+
+# Wizard step 2: name + confirm form (auto + semi) --------------------------
+
+
+def test_auto_form_renders_with_mode_badge(client, fake_backend):
+    resp = client.get("/codebooks/new/corpus-xyz/auto?mode=auto")
+    assert resp.status_code == 200
+    assert b"Fully automatic" in resp.data
+    assert b"Generate codebook" in resp.data
+
+    resp = client.get("/codebooks/new/corpus-xyz/auto?mode=semi")
+    assert resp.status_code == 200
+    assert b"Semi-automatic" in resp.data
+    assert b"Generate &amp; review" in resp.data
+
+
+def test_auto_form_defaults_invalid_mode_to_auto(client, fake_backend):
+    resp = client.get("/codebooks/new/corpus-xyz/auto?mode=unknown")
+    assert resp.status_code == 200
+    assert b"Fully automatic" in resp.data
+
+
+def test_auto_submit_without_name_re_renders_with_flash(client, fake_backend):
+    resp = client.post(
+        "/codebooks/new/corpus-xyz/auto", data={"mode": "auto", "codebook_name": "  "}
+    )
+    assert resp.status_code == 200
+    assert b"give your codebook a name" in resp.data
+
+
+def test_auto_submit_creates_job_and_redirects_to_progress(client, fake_backend):
+    resp = client.post(
+        "/codebooks/new/corpus-xyz/auto",
+        data={"mode": "auto", "codebook_name": "Interview Codebook"},
+    )
+    assert resp.status_code == 302
+    assert "/codebooks/new/jobs/job-1" in resp.headers["Location"]
+    assert "mode=auto" in resp.headers["Location"]
+    # Backend was called with normalised name + corpus_id from URL.
+    assert fake_backend.last_generation_job_request == {
+        "codebook_name": "Interview Codebook",
+        "corpus_id": "corpus-xyz",
+        "transcript_document_ids": None,
+    }
+
+
+def test_auto_submit_semi_preserves_mode_in_progress_url(client, fake_backend):
+    resp = client.post(
+        "/codebooks/new/corpus-xyz/auto",
+        data={"mode": "semi", "codebook_name": "My CB"},
+    )
     assert resp.status_code == 302
     assert "mode=semi" in resp.headers["Location"]
 
@@ -241,3 +298,109 @@ def test_new_codebook_submit_manual_redirects_to_upload_form(client, fake_backen
     resp = client.post("/codebooks/new/corpus-xyz", data={"mode": "manual"})
     assert resp.status_code == 302
     assert resp.headers["Location"].endswith("/codebooks/corpus-xyz/upload")
+
+
+def test_auto_submit_surfaces_backend_error(client, fake_backend):
+    fake_backend.raise_on = "create_generation_job"
+    resp = client.post(
+        "/codebooks/new/corpus-xyz/auto",
+        data={"mode": "auto", "codebook_name": "X"},
+    )
+    assert resp.status_code == 200
+    assert b"simulated create_generation_job failure" in resp.data
+
+
+# Wizard step 3: progress page + JSON poller --------------------------------
+
+
+def test_progress_page_renders_with_job_and_mode(client, fake_backend):
+    resp = client.get("/codebooks/new/jobs/job-1?mode=semi")
+    assert resp.status_code == 200
+    assert b"Generating Codebook" in resp.data
+    assert b'data-job-id="job-1"' in resp.data
+    assert b'data-mode="semi"' in resp.data
+
+
+def test_progress_status_returns_job_json(client, fake_backend):
+    fake_backend.generation_jobs["job-7"] = {
+        "id": "job-7", "status": "running",
+        "passages_total": 10, "passages_done": 4,
+    }
+    resp = client.get("/codebooks/new/jobs/job-7.json")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["status"] == "running"
+    assert body["passages_done"] == 4
+
+
+def test_progress_status_surfaces_backend_error_as_json(client, fake_backend):
+    fake_backend.raise_on = "get_generation_job"
+    resp = client.get("/codebooks/new/jobs/missing.json")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert "error" in body
+
+
+def test_progress_demo_route_renders_with_scenario_flag(client, fake_backend):
+    resp = client.get("/codebooks/new/demo/fast")
+    assert resp.status_code == 200
+    assert b'data-demo-scenario="fast"' in resp.data
+    assert b"Demo mode" in resp.data
+
+
+def test_progress_demo_route_falls_back_to_fast_on_unknown_scenario(client, fake_backend):
+    resp = client.get("/codebooks/new/demo/not-a-scenario")
+    assert resp.status_code == 200
+    assert b'data-demo-scenario="fast"' in resp.data
+
+
+def test_progress_demo_route_supports_both_scenarios(client, fake_backend):
+    for scenario in ("fast", "slow"):
+        resp = client.get(f"/codebooks/new/demo/{scenario}")
+        assert resp.status_code == 200, scenario
+        assert f'data-demo-scenario="{scenario}"'.encode() in resp.data
+
+
+def test_progress_cancel_returns_updated_job(client, fake_backend):
+    fake_backend.generation_jobs["job-9"] = {
+        "id": "job-9", "status": "running",
+        "passages_total": 5, "passages_done": 1,
+        "cancel_requested": False,
+    }
+    resp = client.post("/codebooks/new/jobs/job-9/cancel")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["status"] == "cancelled"
+    assert body["cancel_requested"] is True
+
+
+# Mode-2 review placeholder ------------------------------------------------
+
+
+def test_review_renders_theme_tree_with_banner(client, fake_backend):
+    fake_backend.theme_tree = [
+        {"theme": {"id": "t-1", "label": "Work-Life Balance", "is_active": True},
+         "children": []},
+    ]
+    resp = client.get("/codebooks/cb-42/review")
+    assert resp.status_code == 200
+    assert b"Review Codebook" in resp.data
+    assert b"Editing comes with the next iteration" in resp.data
+    assert b"Work-Life Balance" in resp.data
+
+
+def test_review_empty_state(client, fake_backend):
+    fake_backend.theme_tree = []
+    resp = client.get("/codebooks/cb-42/review")
+    assert resp.status_code == 200
+    assert b"No themes found for this codebook" in resp.data
+
+
+def test_review_not_found_for_missing_codebook(client, fake_backend):
+    from web.services.backend_client import BackendNotFoundError
+
+    fake_backend.raise_on = ("get_theme_tree", BackendNotFoundError)
+    resp = client.get("/codebooks/missing/review")
+    assert resp.status_code == 200
+    assert b"may have been deleted" in resp.data
+    assert b"No themes found for this codebook" not in resp.data

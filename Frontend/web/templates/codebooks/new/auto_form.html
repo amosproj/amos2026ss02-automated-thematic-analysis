@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Name Your Codebook{% endblock %}
+{% block content %}
+  {% set mode_label = "Fully automatic" if mode == "auto" else "Semi-automatic" %}
+
+  <div class="mb-4">
+    <h1 class="h3 mb-1">Name Your Codebook</h1>
+    <p class="text-secondary mb-0">
+      Mode: <span class="badge text-bg-secondary">{{ mode_label }}</span>
+    </p>
+  </div>
+
+  <div class="bg-white border rounded-2 p-4" style="max-width: 640px;">
+    <form method="post"
+          action="{{ url_for('codebooks.new_codebook_auto_submit', corpus_id=corpus_id) }}">
+      <input type="hidden" name="mode" value="{{ mode }}">
+
+      <div class="mb-3">
+        <label for="codebook_name" class="form-label fw-semibold">Codebook name</label>
+        <input class="form-control"
+               type="text"
+               id="codebook_name"
+               name="codebook_name"
+               value="{{ codebook_name }}"
+               maxlength="255"
+               required
+               autofocus>
+      </div>
+
+      <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary"
+           href="{{ url_for('codebooks.new_codebook_mode_select', corpus_id=corpus_id, mode=mode) }}">
+          Back
+        </a>
+        <button type="submit" class="btn btn-primary">
+          {% if mode == "auto" %}Generate codebook{% else %}Generate &amp; review{% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+{% endblock %}

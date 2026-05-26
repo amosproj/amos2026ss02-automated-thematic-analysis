@@ -5,6 +5,7 @@ from flask import (
     Response,
     current_app,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -211,7 +212,6 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         codes=codes,
     )
 
-<<<<<<< HEAD
 @bp.get("/<corpus_id>/<codebook_id>/export")
 def export_codebook(corpus_id: str, codebook_id: str) -> Response | str:
     """Export a codebook and its hierarchical themes as a CSV file."""
@@ -451,8 +451,147 @@ def new_codebook_mode_submit(corpus_id: str):
 
     if mode in ("auto", "semi"):
         return redirect(
-            url_for("codebooks.new_codebook_mode_select", corpus_id=corpus_id, mode=mode)
+            url_for("codebooks.new_codebook_auto_form", corpus_id=corpus_id, mode=mode)
         )
 
     # mode == "manual": branch 9's upload form is corpus-scoped.
     return redirect(url_for("codebooks.upload_form", corpus_id=corpus_id))
+
+
+def _resolve_mode(value: str) -> str:
+    """Return one of the auto/semi modes or default to 'auto'.
+
+    Used by routes that should never see 'manual' (those flows have already
+    branched away) but still want a defensive fallback if the query string is
+    tampered with."""
+    return value if value in ("auto", "semi") else "auto"
+
+
+@bp.get("/new/<corpus_id>/auto")
+def new_codebook_auto_form(corpus_id: str) -> str:
+    mode = _resolve_mode(request.args.get("mode", ""))
+    return render_template(
+        "codebooks/new/auto_form.html",
+        corpus_id=corpus_id,
+        mode=mode,
+        codebook_name=request.args.get("name", ""),
+    )
+
+
+@bp.post("/new/<corpus_id>/auto")
+def new_codebook_auto_submit(corpus_id: str):
+    mode = _resolve_mode(request.form.get("mode", ""))
+    name = (request.form.get("codebook_name") or "").strip()
+    if not name:
+        flash("Please give your codebook a name.", "danger")
+        return render_template(
+            "codebooks/new/auto_form.html",
+            corpus_id=corpus_id,
+            mode=mode,
+            codebook_name="",
+        )
+
+    try:
+        job = _backend().create_generation_job(
+            codebook_name=name,
+            corpus_id=corpus_id,
+        )
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return render_template(
+            "codebooks/new/auto_form.html",
+            corpus_id=corpus_id,
+            mode=mode,
+            codebook_name=name,
+        )
+
+    return redirect(
+        url_for("codebooks.new_codebook_job_progress", job_id=job["id"], mode=mode)
+    )
+
+
+@bp.get("/new/jobs/<job_id>")
+def new_codebook_job_progress(job_id: str) -> str:
+    mode = _resolve_mode(request.args.get("mode", ""))
+    return render_template(
+        "codebooks/new/progress.html",
+        job_id=job_id,
+        mode=mode,
+    )
+
+
+_DEMO_SCENARIOS = ("fast", "slow")
+
+
+@bp.get("/new/demo/<scenario>")
+def new_codebook_demo_progress(scenario: str) -> str:
+    """Render the progress UI driven by a scripted timeline (no backend call).
+
+    Used to iterate on the waiting-screen UX without running real generation.
+    Scenarios:
+      - fast: single-passage style, completes in ~2s.
+      - slow: multi-passage progress climbing 0 -> 8 over ~7s.
+
+    Unknown values fall back to `fast`."""
+    if scenario not in _DEMO_SCENARIOS:
+        scenario = "fast"
+    return render_template(
+        "codebooks/new/progress_demo.html",
+        demo_scenario=scenario,
+    )
+
+
+@bp.get("/new/jobs/<job_id>.json")
+def new_codebook_job_status(job_id: str):
+    """JSON status for the progress poller.
+
+    Errors are returned as JSON `{error: "..."}` (HTTP 200) so the browser
+    poller can surface them without needing to distinguish HTTP vs payload
+    failure modes — keeps the client-side script tiny."""
+    try:
+        job = _backend().get_generation_job(job_id)
+    except BackendError as exc:
+        return jsonify({"error": exc.user_message}), 200
+    return jsonify(job)
+
+
+@bp.post("/new/jobs/<job_id>/cancel")
+def new_codebook_job_cancel(job_id: str):
+    try:
+        job = _backend().cancel_generation_job(job_id)
+    except BackendError as exc:
+        return jsonify({"error": exc.user_message}), 200
+    return jsonify(job)
+
+
+@bp.get("/<codebook_id>/review")
+def codebook_review(codebook_id: str) -> str:
+    """Mode-2 destination after generation.
+
+    Placeholder: shows the generated theme tree read-only with a banner. Will
+    be swapped for branch 9's `preview.html` editor + an update endpoint in
+    the next iteration."""
+    try:
+        client = _backend()
+        tree = client.get_theme_tree(codebook_id)
+    except BackendNotFoundError:
+        flash("That codebook couldn't be found. It may have been deleted.", "danger")
+        return render_template(
+            "codebooks/new/review_placeholder.html",
+            codebook_id=codebook_id,
+            tree=[],
+            error=True,
+        )
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return render_template(
+            "codebooks/new/review_placeholder.html",
+            codebook_id=codebook_id,
+            tree=[],
+            error=True,
+        )
+    return render_template(
+        "codebooks/new/review_placeholder.html",
+        codebook_id=codebook_id,
+        tree=tree,
+    )
