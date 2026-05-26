@@ -62,6 +62,7 @@ class CodebookGenerationService:
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
 
         corpus = await self._load_corpus(corpus_id)
+        project_id = str(corpus.project_id)
         documents = await self._load_documents(
             corpus_id=corpus_id,
             transcript_document_ids=normalized_document_ids,
@@ -75,6 +76,10 @@ class CodebookGenerationService:
         if not passages:
             raise UnprocessableError("No transcript passages found for selected transcript_document_ids")
 
+        # End the read transaction before long-running LLM calls so the session
+        # does not keep a checked-out DB connection during inference.
+        await self._session.rollback()
+
         generation_results = await self._generate_per_passage(
             passages,
             on_progress=on_progress,
@@ -86,7 +91,7 @@ class CodebookGenerationService:
 
         created_codebook, themes_created, codes_created = await self._persist_generated_codebook(
             codebook_name=codebook_name,
-            project_id=str(corpus.project_id),
+            project_id=project_id,
             theme_nodes=theme_nodes,
             code_nodes=code_nodes,
             hierarchy_edges=hierarchy_edges,
@@ -349,7 +354,6 @@ class CodebookGenerationService:
                 created_by="system-llm",
             )
             self._session.add(codebook)
-            await self._session.flush()
 
             ordered_theme_nodes = sorted(theme_nodes.values(), key=lambda node: (len(node.key), node.key))
             theme_id_by_key: dict[tuple[str, ...], UUID] = {}
@@ -369,7 +373,6 @@ class CodebookGenerationService:
                     is_active=True,
                 )
                 self._session.add(theme)
-                await self._session.flush()
                 theme_id_by_key[node.key] = theme.id
                 theme_id_by_label[label_key] = theme.id
                 self._session.add(
@@ -419,7 +422,6 @@ class CodebookGenerationService:
                     is_active=True,
                 )
                 self._session.add(code)
-                await self._session.flush()
                 self._session.add(
                     CodebookCodeRelationship(
                         id=uuid.uuid4(),
