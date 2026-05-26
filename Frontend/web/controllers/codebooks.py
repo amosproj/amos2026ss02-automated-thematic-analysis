@@ -1,6 +1,15 @@
 import csv
 import io
-from flask import Blueprint, flash, redirect, render_template, request, url_for, current_app, Response
+from flask import (
+    Blueprint,
+    Response,
+    current_app,
+    flash,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 
 from web.services.backend_client import (
     BackendClient,
@@ -11,6 +20,8 @@ from web.services.backend_client import (
 from web.services.corpus_context import resolve_active_corpus, set_active_corpus_id
 
 bp = Blueprint("codebooks", __name__)
+
+CODING_MODES = ("auto", "semi", "manual")
 
 
 @bp.get("/")
@@ -200,6 +211,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         codes=codes,
     )
 
+<<<<<<< HEAD
 @bp.get("/<corpus_id>/<codebook_id>/export")
 def export_codebook(corpus_id: str, codebook_id: str) -> Response | str:
     """Export a codebook and its hierarchical themes as a CSV file."""
@@ -400,3 +412,47 @@ def success(corpus_id: str) -> str:
         return render_template("codebooks/success.html", corpus_id=corpus_id, codebook=codebook, error=None)
     except BackendError as exc:
         return render_template("codebooks/success.html", corpus_id=corpus_id, codebook=None, error=str(exc))
+
+
+# Wizard: Create New Codebook ------------------------------------------------
+
+
+@bp.get("/new")
+def new_codebook_landing():
+    try:
+        active_corpus_id, _, _ = resolve_active_corpus(_backend())
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return redirect(url_for("codebooks.list_codebooks"))
+    return redirect(url_for("codebooks.new_codebook_mode_select", corpus_id=active_corpus_id))
+
+
+@bp.get("/new/<corpus_id>")
+def new_codebook_mode_select(corpus_id: str) -> str:
+    set_active_corpus_id(corpus_id)
+    selected = request.args.get("mode") or ""
+    return render_template(
+        "codebooks/new/mode_select.html",
+        corpus_id=corpus_id,
+        selected=selected if selected in CODING_MODES else "",
+    )
+
+
+@bp.post("/new/<corpus_id>")
+def new_codebook_mode_submit(corpus_id: str):
+    mode = request.form.get("mode", "")
+    if mode not in CODING_MODES:
+        flash("Please select a coding mode before continuing.", "danger")
+        return render_template(
+            "codebooks/new/mode_select.html",
+            corpus_id=corpus_id,
+            selected="",
+        )
+
+    if mode in ("auto", "semi"):
+        return redirect(
+            url_for("codebooks.new_codebook_mode_select", corpus_id=corpus_id, mode=mode)
+        )
+
+    # mode == "manual": branch 9's upload form is corpus-scoped.
+    return redirect(url_for("codebooks.upload_form", corpus_id=corpus_id))

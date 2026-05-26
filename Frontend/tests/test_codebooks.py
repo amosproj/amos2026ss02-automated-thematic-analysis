@@ -171,3 +171,73 @@ def test_codebook_themes_shows_error_for_codebook_outside_selected_corpus(client
     assert resp.status_code == 200
     assert b"selected corpus" in resp.data
     assert b"No themes found for this codebook" not in resp.data
+
+
+# Wizard: Create New Codebook (step 1) ---------------------------------------
+
+
+def test_new_codebook_landing_redirects_to_corpus_scoped_step1(client, fake_backend):
+    fake_backend.corpus_id = "corpus-xyz"
+    fake_backend.corpora = [{"id": "corpus-xyz", "name": "Test Corpus"}]
+    resp = client.get("/codebooks/new")
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/codebooks/new/corpus-xyz")
+
+
+def test_new_codebook_landing_surfaces_backend_error(client, fake_backend):
+    fake_backend.raise_on = "list_corpora"
+    resp = client.get("/codebooks/new", follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"simulated list_corpora failure" in resp.data
+
+
+def test_new_codebook_mode_select_renders_three_cards(client, fake_backend):
+    resp = client.get("/codebooks/new/corpus-xyz")
+    assert resp.status_code == 200
+    assert b"Fully automatic" in resp.data
+    assert b"Semi-automatic" in resp.data
+    assert b"User-instructed" in resp.data
+    # `checked>` matches the server-rendered radio attribute and not JS like
+    # `:checked` or `radio.checked` that also appears in the inline script.
+    assert b"checked>" not in resp.data
+    assert b'id="mode-submit"' in resp.data
+
+
+def test_new_codebook_mode_select_pre_selects_from_query_param(client, fake_backend):
+    resp = client.get("/codebooks/new/corpus-xyz?mode=semi")
+    assert resp.status_code == 200
+    assert resp.data.count(b"checked>") == 1
+    assert b'value="semi"' in resp.data
+
+
+def test_new_codebook_mode_select_ignores_invalid_query_mode(client, fake_backend):
+    resp = client.get("/codebooks/new/corpus-xyz?mode=bogus")
+    assert resp.status_code == 200
+    assert b"checked>" not in resp.data
+
+
+def test_new_codebook_submit_without_mode_re_renders_with_flash(client, fake_backend):
+    resp = client.post("/codebooks/new/corpus-xyz", data={})
+    assert resp.status_code == 200
+    assert b"Please select a coding mode" in resp.data
+    assert b"Fully automatic" in resp.data
+
+
+def test_new_codebook_submit_auto_redirects_with_mode_param(client, fake_backend):
+    resp = client.post("/codebooks/new/corpus-xyz", data={"mode": "auto"})
+    assert resp.status_code == 302
+    assert "corpus-xyz" in resp.headers["Location"]
+    assert "mode=auto" in resp.headers["Location"]
+
+
+def test_new_codebook_submit_semi_redirects_with_mode_param(client, fake_backend):
+    resp = client.post("/codebooks/new/corpus-xyz", data={"mode": "semi"})
+    assert resp.status_code == 302
+    assert "mode=semi" in resp.headers["Location"]
+
+
+def test_new_codebook_submit_manual_redirects_to_upload_form(client, fake_backend):
+    # Branch 9 supplies corpus-scoped upload_form at /codebooks/<corpus_id>/upload.
+    resp = client.post("/codebooks/new/corpus-xyz", data={"mode": "manual"})
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/codebooks/corpus-xyz/upload")
