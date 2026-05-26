@@ -12,11 +12,11 @@
   <div class="alert alert-info d-flex align-items-start gap-2" role="alert">
     <span aria-hidden="true">&#x24D8;</span>
     <div>
-      Showing up to 50 sample rows. Review the data below before confirming the upload.
+      Showing up to 10 sample rows. Review the data below before confirming the upload.
     </div>
   </div>
 
-  {% set sample_rows = preview.preview.sample_rows[:50] %}
+  {% set sample_rows = preview.preview.sample_rows[:10] %}
   {% if sample_rows %}
     {% set columns = sample_rows[0].keys() | list %}
     <div class="bg-white border rounded-2 mb-4">

@@ -58,15 +58,16 @@ def upload_landing():
 
 @bp.get("/<corpus_id>/")
 def list_files(corpus_id: str) -> str:
+    corpus_name = current_app.config["DEFAULT_CORPUS_NAME"]
     try:
         files = _backend().list_demographic_files(corpus_id)
     except BackendError as exc:
         flash(exc.user_message, "danger")
         return render_template(
-            "demographic/list.html", files=[], corpus_id=corpus_id, error=True
+            "demographic/list.html", files=[], corpus_id=corpus_id, error=True, corpus_name=corpus_name
         )
     return render_template(
-        "demographic/list.html", files=files, corpus_id=corpus_id
+        "demographic/list.html", files=files, corpus_id=corpus_id, corpus_name=corpus_name
     )
 
 
@@ -172,10 +173,13 @@ def preview_confirm(corpus_id: str, import_id: str):
 
 @bp.get("/<corpus_id>/view/<file_id>")
 def view_data(corpus_id: str, file_id: str) -> str:
+    page = request.args.get("page", 1, type=int)
     try:
         client = _backend()
         files = client.list_demographic_files(corpus_id)
-        rows = client.list_demographic_rows(corpus_id, file_id)
+        rows_page = client.list_demographic_rows(corpus_id, file_id, page=page, page_size=100)
+        rows = rows_page.get("items", [])
+        meta = rows_page.get("meta", {})
         link_summary = client.get_demographic_link_summary(corpus_id)
     except BackendError as exc:
         flash(exc.user_message, "danger")
@@ -183,6 +187,7 @@ def view_data(corpus_id: str, file_id: str) -> str:
             "demographic/view.html",
             file_info=None,
             rows=[],
+            meta={},
             columns=[],
             transcript_lookup={},
             corpus_id=corpus_id,
@@ -208,6 +213,7 @@ def view_data(corpus_id: str, file_id: str) -> str:
         "demographic/view.html",
         file_info=file_info,
         rows=rows,
+        meta=meta,
         columns=columns,
         transcript_lookup=transcript_lookup,
         corpus_id=corpus_id,

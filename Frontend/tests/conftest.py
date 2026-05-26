@@ -96,9 +96,13 @@ class FakeBackend:
         self._maybe_raise("list_demographic_files")
         return self.demographic_files
 
-    def list_demographic_rows(self, corpus_id, file_id, page=1, page_size=200) -> list[dict]:
+    def list_demographic_rows(self, corpus_id, file_id, page=1, page_size=100) -> dict:
         self._maybe_raise("list_demographic_rows")
-        return self.demographic_rows
+        total = len(self.demographic_rows)
+        return {
+            "items": self.demographic_rows,
+            "meta": {"page": page, "pages": max(1, (total + page_size - 1) // page_size), "total": total}
+        }
 
     def get_demographic_link_summary(self, corpus_id) -> dict:
         self._maybe_raise("get_demographic_link_summary")

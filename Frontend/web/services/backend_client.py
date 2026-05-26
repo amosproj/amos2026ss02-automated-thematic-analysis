@@ -211,9 +211,9 @@ class BackendClient:
         corpus_id: str,
         file_id: str,
         page: int = 1,
-        page_size: int = 200,
-    ) -> list[dict]:
-        """List demographic rows for a specific file."""
+        page_size: int = 100,
+    ) -> dict:
+        """List demographic rows for a specific file, returning items and pagination meta."""
         return self._get(
             f"/demographic/{corpus_id}/rows",
             params={
@@ -221,7 +221,6 @@ class BackendClient:
                 "page": page,
                 "page_size": page_size,
             },
-            sub_key="items",
         )
 
     def get_demographic_link_summary(self, corpus_id: str) -> dict:

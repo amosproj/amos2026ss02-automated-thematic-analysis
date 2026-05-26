@@ -54,6 +54,27 @@
           </table>
         </div>
       </div>
+
+      {% if meta and meta.pages > 1 %}
+        <nav aria-label="Data pagination" class="mt-4">
+          <ul class="pagination pagination-sm">
+            <li class="page-item {% if meta.page == 1 %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('demographic.view_data', corpus_id=corpus_id, file_id=file_id, page=meta.page - 1) }}" tabindex="-1">Previous</a>
+            </li>
+            
+            {% for p in range(1, meta.pages + 1) %}
+              <li class="page-item {% if p == meta.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('demographic.view_data', corpus_id=corpus_id, file_id=file_id, page=p) }}">{{ p }}</a>
+              </li>
+            {% endfor %}
+
+            <li class="page-item {% if meta.page == meta.pages %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('demographic.view_data', corpus_id=corpus_id, file_id=file_id, page=meta.page + 1) }}">Next</a>
+            </li>
+          </ul>
+        </nav>
+      {% endif %}
+
     {% else %}
       <p class="text-secondary">No data rows in this file.</p>
     {% endif %}
