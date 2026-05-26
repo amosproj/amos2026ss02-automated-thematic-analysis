@@ -2,6 +2,7 @@ import csv
 import datetime
 import io
 import json
+import os
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -50,21 +51,36 @@ class DemographicService:
         self._settings = settings
         self._ingestion_service = IngestionService(session, settings)
 
-    def _get_out_file_path(self, corpus_id: uuid.UUID, import_id: uuid.UUID) -> Path:
-        return Path(
-            self._settings.UPLOADS_DIR,
-            "demographic",
-            str(corpus_id),
-            f"{import_id}.csv",
+    @staticmethod
+    def _coerce_uuid(value: uuid.UUID, field_name: str) -> uuid.UUID:
+        if isinstance(value, uuid.UUID):
+            return value
+        try:
+            return uuid.UUID(str(value))
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise UnprocessableError(f"Invalid {field_name}") from exc
+
+    def _safe_demographic_path(
+        self,
+        corpus_id: uuid.UUID,
+        import_id: uuid.UUID,
+        suffix: str,
+    ) -> Path:
+        parsed_corpus_id = self._coerce_uuid(corpus_id, "corpus_id")
+        parsed_import_id = self._coerce_uuid(import_id, "import_id")
+        root = os.path.realpath(os.path.join(self._settings.UPLOADS_DIR, "demographic"))
+        candidate = os.path.realpath(
+            os.path.join(root, str(parsed_corpus_id), f"{parsed_import_id}{suffix}")
         )
+        if os.path.commonpath([root, candidate]) != root:
+            raise UnprocessableError("Invalid pending demographic upload path")
+        return Path(candidate)
+
+    def _get_out_file_path(self, corpus_id: uuid.UUID, import_id: uuid.UUID) -> Path:
+        return self._safe_demographic_path(corpus_id, import_id, ".csv")
 
     def _get_out_meta_path(self, corpus_id: uuid.UUID, import_id: uuid.UUID) -> Path:
-        return Path(
-            self._settings.UPLOADS_DIR,
-            "demographic",
-            str(corpus_id),
-            f"{import_id}.meta.json",
-        )
+        return self._safe_demographic_path(corpus_id, import_id, ".meta.json")
 
     @staticmethod
     def _normalize_demographic_name(name: str) -> str:
@@ -110,7 +126,7 @@ class DemographicService:
     def _parse_demographic_csv(self, filename: str, content: bytes) -> ParsedDemographicCsv:
         csv_text = self._decode_csv_bytes(filename, content)
         text_stream = io.StringIO(csv_text)
-        reader = csv.DictReader(text_stream, restkey="__extra__")
+        reader = csv.DictReader(text_stream, delimiter=';', restkey="__extra__")
         rows = list(reader)
         fieldnames = list(reader.fieldnames or [])
 

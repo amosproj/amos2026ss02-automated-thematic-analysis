@@ -1,0 +1,80 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-appdb}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./Backend
+      target: runtime
+    env_file: ./Backend/.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-appdb}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    develop:
+      watch:
+        - action: sync
+          path: ./Backend/app
+          target: /app/app
+
+  frontend:
+    build:
+      context: ./Frontend
+      target: runtime
+    environment:
+      - BACKEND_API_URL=http://api:8000/api/v1
+      - APP_ENV=development
+      - FLASK_DEBUG=1
+      - SECRET_KEY=dev-secret
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: sync
+          path: ./Frontend/web
+          target: /app/web
+
+  frontend-test:
+    build:
+      context: ./Frontend
+      target: test
+    profiles: ["test"]
+    command: pytest
+
+  api-test:
+    build:
+      context: ./Backend
+      target: test
+    env_file: ./Backend/.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-appdb}
+    volumes:
+      - ./Backend/htmlcov:/app/htmlcov
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["test"]
+    command: pytest
+
+volumes:
+  pgdata:

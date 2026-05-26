@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Something went wrong{% endblock %}
+{% block content %}
+  <div class="text-center py-5">
+    <p class="text-secondary text-uppercase fw-semibold mb-2" style="letter-spacing:.1em">Error 500</p>
+    <h1 class="h2 mb-3">Something went wrong on our end</h1>
+    <p class="text-secondary mb-4">
+      The error has been logged. Please try again in a moment, or head back to the home page.
+    </p>
+    <a class="btn btn-primary" href="{{ url_for('main.index') }}">Back to home</a>
+  </div>
+{% endblock %}

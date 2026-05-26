@@ -11,3 +11,34 @@ class InterviewAnalysisResult(BaseModel):
     themes: list[ThemePresence] = Field(description="The list of themes evaluated against the transcript.")
     summary: str | None = Field(None, description="A 2-3 sentence orientation to what the interview is about.")
     researcher_notes: str | None = Field(None, description="Anything ambiguous, contradictory, or worth a follow-up interview question.")
+
+
+class GeneratedThemeNode(BaseModel):
+    label: str = Field(description="Theme node label, e.g., a theme or subtheme name.")
+    description: str | None = Field(
+        None,
+        description="Optional short description for this node.",
+    )
+
+
+class GeneratedThemePath(BaseModel):
+    path: list[GeneratedThemeNode] = Field(
+        description="Ordered theme path from root theme to deepest subtheme.",
+    )
+
+
+class GeneratedCodeSuggestion(BaseModel):
+    label: str = Field(description="Code label.")
+    description: str | None = Field(None, description="Optional short code description.")
+    theme_path: list[str] = Field(
+        description="Theme path (root -> ... -> leaf theme) this code belongs to.",
+    )
+
+
+class PassageCodebookGeneration(BaseModel):
+    themes: list[GeneratedThemePath] = Field(
+        description="Theme/subtheme paths identified in one passage.",
+    )
+    codes: list[GeneratedCodeSuggestion] = Field(
+        description="Codes identified in one passage.",
+    )

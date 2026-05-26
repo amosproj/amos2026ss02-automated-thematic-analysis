@@ -110,3 +110,51 @@ def build_codebook_application_prompt() -> ChatPromptTemplate:
         ]
     )
 
+
+GENERATE_CODEBOOK_SYSTEM_PROMPT = """You are an experienced qualitative researcher.
+You receive one transcript passage at a time and must propose candidate themes,
+subthemes, and codes grounded in the exact passage text.
+
+Rules:
+- Stay close to participant wording; do not invent facts.
+- Return only themes/subthemes that are actually present in this passage.
+- Return concise, specific labels (avoid generic labels).
+- Return valid JSON only (no markdown, no comments).
+- The same path can contain multiple depths (theme -> subtheme -> subsubtheme, etc.).
+- Every code must reference one theme_path that exists in your output.
+- If nothing meaningful is present, return empty arrays for both themes and codes.
+
+Return JSON with this exact shape:
+{{
+  "themes": [
+    {{
+      "path": [
+        {{"label": "Theme label", "description": "Optional short description"}},
+        {{"label": "Subtheme label", "description": "Optional short description"}}
+      ]
+    }}
+  ],
+  "codes": [
+    {{
+      "label": "Code label",
+      "description": "Optional short description",
+      "theme_path": ["Theme label", "Subtheme label"]
+    }}
+  ]
+}}"""
+
+GENERATE_CODEBOOK_USER_INSTRUCTION = """Generate candidate themes, subthemes, and codes for this passage.
+
+--- PASSAGE START ---
+{passage}
+--- PASSAGE END ---"""
+
+
+def build_codebook_generation_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", GENERATE_CODEBOOK_SYSTEM_PROMPT),
+            ("user", GENERATE_CODEBOOK_USER_INSTRUCTION),
+        ]
+    )
+

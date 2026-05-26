@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Demographic Data{% endblock %}
+{% block content %}
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0">Demographic Data</h1>
+    {% if corpus_id %}
+      <a class="btn btn-primary"
+         id="upload-csv-btn"
+         href="{{ url_for('demographic.upload_form', corpus_id=corpus_id) }}">
+        Upload CSV
+      </a>
+    {% endif %}
+  </div>
+
+  {% if error %}
+    <p class="text-secondary">Couldn't load demographic data right now.</p>
+  {% elif files %}
+    <div class="bg-white border rounded-2">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" id="demographic-files-table">
+          <thead class="table-light">
+            <tr>
+              <th>Name</th>
+              <th>Corpus</th>
+              <th>Columns</th>
+              <th>Rows</th>
+              <th>Uploaded</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in files %}
+              <tr>
+                <td>{{ f.name }}</td>
+                <td class="text-secondary">{{ corpus_name }}</td>
+                <td>{{ f.original_columns | length }}</td>
+                <td>{{ f.rows_total }}</td>
+                <td class="text-secondary">{{ f.created_at }}</td>
+                <td>
+                  <a class="btn btn-sm btn-outline-primary"
+                     id="view-data-btn-{{ loop.index }}"
+                     href="{{ url_for('demographic.view_data', corpus_id=corpus_id, file_id=f.id) }}">
+                    View Data
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% elif corpus_id %}
+    <p class="text-secondary" id="empty-state">
+      No demographic data uploaded yet.
+      <a href="{{ url_for('demographic.upload_form', corpus_id=corpus_id) }}">Upload a CSV file</a>
+    </p>
+  {% else %}
+    <p class="text-secondary">No demographic data to show.</p>
+  {% endif %}
+{% endblock %}
