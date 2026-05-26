@@ -7,16 +7,26 @@ ensure_env_file() {
   local env_example="$SCRIPT_DIR/Backend/.env.example"
 
   if [[ -f "$env_file" ]]; then
-    log_info ".env already exists — skipping copy"
-    return 0
+    log_info "Backend/.env already exists — skipping copy"
+  else
+    [[ -f "$env_example" ]] \
+      || die "Template $env_example not found. Is the repository fully checked out?"
+    cp "$env_example" "$env_file"
+    log_success "Created Backend/.env from Backend/.env.example"
+    log_warn  "Set LLM_API_KEY in Backend/.env before using LLM-dependent features"
   fi
 
-  [[ -f "$env_example" ]] \
-    || die "Template $env_example not found. Is the repository fully checked out?"
+  local fe_env_file="$SCRIPT_DIR/Frontend/.env"
+  local fe_env_example="$SCRIPT_DIR/Frontend/.env.example"
 
-  cp "$env_example" "$env_file"
-  log_success "Created Backend/.env from Backend/.env.example"
-  log_warn  "Set LLM_API_KEY in Backend/.env before using LLM-dependent features"
+  if [[ -f "$fe_env_file" ]]; then
+    log_info "Frontend/.env already exists — skipping copy"
+  elif [[ -f "$fe_env_example" ]]; then
+    cp "$fe_env_example" "$fe_env_file"
+    log_success "Created Frontend/.env from Frontend/.env.example"
+  else
+    log_warn "Frontend/.env.example not found — skipping frontend env setup"
+  fi
 }
 
 scan_env_placeholders() {

@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  One-command bootstrap for the Automated Thematic Analysis stack (Windows).
+  One-command bootstrap for the Automated Thematic Analysis stack (Windows, PS 5.1).
 
 .DESCRIPTION
   Verifies prerequisites (Docker, Docker Compose v2), creates Backend\.env and
@@ -9,6 +9,7 @@
   the full stack (API + frontend), and polls both health endpoints until ready.
 
   Run this script from the repository root in PowerShell or Windows Terminal.
+  Compatible with Windows PowerShell 5.1 and PowerShell 7+.
 
 .PARAMETER Test
   Run the pytest test suite inside Docker.
@@ -35,12 +36,12 @@
   Skip all confirmation prompts (use with -DownVolumes).
 
 .EXAMPLE
-  .\setup.ps1
-  .\setup.ps1 -Test
-  .\setup.ps1 -Lint
-  .\setup.ps1 -Down
-  .\setup.ps1 -DownVolumes -Yes
-  .\setup.ps1 -Foreground
+  .\setup-ps51.ps1
+  .\setup-ps51.ps1 -Test
+  .\setup-ps51.ps1 -Lint
+  .\setup-ps51.ps1 -Down
+  .\setup-ps51.ps1 -DownVolumes -Yes
+  .\setup-ps51.ps1 -Foreground
 #>
 [CmdletBinding()]
 param(
@@ -59,19 +60,23 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$ScriptDir     = $PSScriptRoot
-$ComposeDir    = $ScriptDir
-$AppPort       = if ($env:APP_PORT)      { $env:APP_PORT }      else { '8000' }
-$FrontendPort  = if ($env:FRONTEND_PORT) { $env:FRONTEND_PORT } else { '3000' }
-$EnvFile       = Join-Path $ScriptDir 'Backend'  '.env'
-$EnvExample    = Join-Path $ScriptDir 'Backend'  '.env.example'
-$FeEnvFile     = Join-Path $ScriptDir 'Frontend' '.env'
-$FeEnvExample  = Join-Path $ScriptDir 'Frontend' '.env.example'
+$ScriptDir    = $PSScriptRoot
+$ComposeDir   = $ScriptDir
+$AppPort      = if ($env:APP_PORT)      { $env:APP_PORT }      else { '8000' }
+$FrontendPort = if ($env:FRONTEND_PORT) { $env:FRONTEND_PORT } else { '3000' }
+
+# Join-Path with 3 args requires PS 6+; nest calls for PS 5.1 compatibility.
+$BackendDir   = Join-Path $ScriptDir 'Backend'
+$FrontendDir  = Join-Path $ScriptDir 'Frontend'
+$EnvFile      = Join-Path $BackendDir  '.env'
+$EnvExample   = Join-Path $BackendDir  '.env.example'
+$FeEnvFile    = Join-Path $FrontendDir '.env'
+$FeEnvExample = Join-Path $FrontendDir '.env.example'
 
 # == Logging helpers ===========================================================
 function Write-Info    { param([string]$Msg) Write-Host "[INFO]  $Msg" -ForegroundColor Cyan }
 function Write-Ok      { param([string]$Msg) Write-Host "[OK]    $Msg" -ForegroundColor Green }
-function Write-Warning { param([string]$Msg) Write-Host "[WARN]  $Msg" -ForegroundColor Yellow }
+function Write-Warn    { param([string]$Msg) Write-Host "[WARN]  $Msg" -ForegroundColor Yellow }
 function Write-Err     { param([string]$Msg) Write-Host "[ERROR] $Msg" -ForegroundColor Red }
 
 function Exit-WithError {
@@ -113,8 +118,8 @@ function Ensure-EnvFile {
       Exit-WithError "Template $EnvExample not found. Is the repository fully checked out?"
     }
     Copy-Item $EnvExample $EnvFile
-    Write-Ok      "Created Backend\.env from Backend\.env.example"
-    Write-Warning "Set LLM_API_KEY in Backend\.env before using LLM-dependent features"
+    Write-Ok   "Created Backend\.env from Backend\.env.example"
+    Write-Warn "Set LLM_API_KEY in Backend\.env before using LLM-dependent features"
   }
 
   if (Test-Path $FeEnvFile) {
@@ -125,7 +130,7 @@ function Ensure-EnvFile {
     Write-Ok "Created Frontend\.env from Frontend\.env.example"
   }
   else {
-    Write-Warning "Frontend\.env.example not found - skipping frontend env setup"
+    Write-Warn "Frontend\.env.example not found - skipping frontend env setup"
   }
 }
 
@@ -133,8 +138,8 @@ function Test-EnvPlaceholders {
   if (Test-Path $EnvFile) {
     $content = Get-Content $EnvFile -Raw
     if ($content -match '<your_api_key_here>') {
-      Write-Warning "LLM_API_KEY is still the placeholder value in Backend\.env"
-      Write-Warning "LLM-dependent endpoints will return errors until a real key is set"
+      Write-Warn "LLM_API_KEY is still the placeholder value in Backend\.env"
+      Write-Warn "LLM-dependent endpoints will return errors until a real key is set"
     }
   }
 }
@@ -156,7 +161,7 @@ function Wait-ForHttp {
       if ($response.StatusCode -eq 200) { return $true }
     }
     catch {
-      # Connection refused or non-200 - keep waiting
+      # Connection refused or non-200 — keep waiting
     }
 
     Start-Sleep -Seconds $interval
@@ -167,7 +172,7 @@ function Wait-ForHttp {
 }
 
 # == Compose wrapper ===========================================================
-# NOTE: $Args is a PowerShell automatic variable - do NOT use it as a param name.
+# NOTE: $Args is a PowerShell automatic variable — do NOT use it as a param name.
 function Invoke-Compose {
   param([string[]]$ComposeArgs)
   Push-Location $ComposeDir
@@ -237,11 +242,8 @@ function Invoke-Test {
 function Invoke-Lint {
   Write-Info "Running lint checks inside Docker..."
 
-  $ruffArgs = @('--profile', 'test', 'run', '--rm', 'api-test', 'ruff', 'check', 'app', 'tests')
-  Invoke-Compose $ruffArgs
-
-  $mypyArgs = @('--profile', 'test', 'run', '--rm', 'api-test', 'mypy', 'app')
-  Invoke-Compose $mypyArgs
+  Invoke-Compose @('--profile', 'test', 'run', '--rm', 'api-test', 'ruff', 'check', 'app', 'tests')
+  Invoke-Compose @('--profile', 'test', 'run', '--rm', 'api-test', 'mypy', 'app')
 
   Write-Ok "Lint checks complete."
 }
@@ -250,18 +252,18 @@ function Invoke-Lint {
 function Invoke-Up {
   Write-Info "Starting the stack..."
 
-  $upFlags = @()
-  if (-not $Foreground) { $upFlags += '-d' }
-  if ($Rebuild)         { $upFlags += '--build'; $upFlags += '--no-cache' }
-  elseif (-not $NoBuild){ $upFlags += '--build' }
+  $upFlags = [System.Collections.ArrayList]@()
+  if (-not $Foreground) { $null = $upFlags.Add('-d') }
+  if ($Rebuild)         { $null = $upFlags.Add('--build'); $null = $upFlags.Add('--no-cache') }
+  elseif (-not $NoBuild){ $null = $upFlags.Add('--build') }
 
   if (-not $NoBuild) {
     Write-Info "Building images - first run can take 3-5 minutes..."
   }
 
-  Invoke-Compose (@('up') + $upFlags)
+  Invoke-Compose ([string[]](@('up') + $upFlags))
 
-  # In foreground mode, Compose streams until Ctrl+C - nothing more to do.
+  # In foreground mode, Compose streams until Ctrl+C — nothing more to do.
   if ($Foreground) { return }
 
   Write-Info "Waiting for API to become ready (up to 60s)..."
@@ -298,9 +300,9 @@ function Invoke-Up {
     Write-Host ""
     Write-Host "Next steps:"
     Write-Host "  Tail logs    docker compose logs -f frontend api"
-    Write-Host "  Run tests    .\setup.ps1 -Test"
-    Write-Host "  Run lint     .\setup.ps1 -Lint"
-    Write-Host "  Stop stack   .\setup.ps1 -Down"
+    Write-Host "  Run tests    .\setup-ps51.ps1 -Test"
+    Write-Host "  Run lint     .\setup-ps51.ps1 -Lint"
+    Write-Host "  Stop stack   .\setup-ps51.ps1 -Down"
     Write-Host ""
   }
   else {
@@ -346,4 +348,3 @@ elseif ($Test) {
 else {
   Invoke-Up
 }
-
