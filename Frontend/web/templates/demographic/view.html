@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}View — {{ file_info.name if file_info else 'Demographic Data' }}{% endblock %}
+{% block content %}
+  <div class="mb-2">
+    <a class="text-decoration-none small"
+       href="{{ url_for('demographic.list_files', corpus_id=corpus_id) }}">&larr; Back to file list</a>
+  </div>
+
+  {% if error %}
+    <h1 class="h3 mb-4">Demographic Data</h1>
+    <p class="text-secondary">Couldn't load data right now.</p>
+  {% elif file_info %}
+    <div class="mb-4">
+      <h1 class="h3 mb-1">{{ file_info.name }}</h1>
+      <p class="text-secondary mb-0">
+        {{ file_info.rows_total }} row{{ 's' if file_info.rows_total != 1 else '' }},
+        {{ file_info.original_columns | length }} column{{ 's' if file_info.original_columns | length != 1 else '' }}.
+        Uploaded {{ file_info.created_at }}.
+      </p>
+    </div>
+
+    {% if rows %}
+      <div class="bg-white border rounded-2">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0" id="demographic-data-table">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Username</th>
+                <th>Linked Transcript</th>
+                {% for col in columns %}
+                  <th>{{ col }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+                <tr>
+                  <td class="text-secondary">{{ row.row_number }}</td>
+                  <td class="fw-semibold">{{ row.interviewee_id }}</td>
+                  <td>
+                    {% if transcript_lookup.get(row.id) %}
+                      <span class="badge text-bg-success">{{ transcript_lookup[row.id] }}</span>
+                    {% else %}
+                      <span class="text-secondary">Not linked</span>
+                    {% endif %}
+                  </td>
+                  {% for col in columns %}
+                    <td>{{ row.data.get(col, '—') if row.data else '—' }}</td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {% if meta and meta.pages > 1 %}
+        <nav aria-label="Data pagination" class="mt-4">
+          <ul class="pagination pagination-sm">
+            <li class="page-item {% if meta.page == 1 %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('demographic.view_data', corpus_id=corpus_id, file_id=file_id, page=meta.page - 1) }}" tabindex="-1">Previous</a>
+            </li>
+            
+            {% for p in range(1, meta.pages + 1) %}
+              <li class="page-item {% if p == meta.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('demographic.view_data', corpus_id=corpus_id, file_id=file_id, page=p) }}">{{ p }}</a>
+              </li>
+            {% endfor %}
+
+            <li class="page-item {% if meta.page == meta.pages %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('demographic.view_data', corpus_id=corpus_id, file_id=file_id, page=meta.page + 1) }}">Next</a>
+            </li>
+          </ul>
+        </nav>
+      {% endif %}
+
+    {% else %}
+      <p class="text-secondary">No data rows in this file.</p>
+    {% endif %}
+  {% else %}
+    <h1 class="h3 mb-4">Demographic Data</h1>
+    <p class="text-secondary">File not found.</p>
+  {% endif %}
+{% endblock %}

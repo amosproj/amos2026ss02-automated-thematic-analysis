@@ -163,6 +163,70 @@ class BackendClient:
     def get_theme_tree(self, codebook_id: str) -> list[dict]:
         return self._get(f"/codebooks/{codebook_id}/themes/tree")
 
+    # ---- Demographic --------------------------------------------------------
+
+    def upload_demographic(
+        self, corpus_id: str, file: FileStorage, name: str | None = None,
+    ) -> dict:
+        """POST a demographic CSV to the backend; returns preview + import_id."""
+        path = f"/demographic/{corpus_id}/upload"
+        multipart = [
+            ("file", (file.filename, file.stream, file.mimetype or "text/csv")),
+        ]
+        data = {}
+        if name:
+            data["name"] = name
+        started_at = time.monotonic()
+        try:
+            r = self._client.post(path, files=multipart, data=data)
+            r.raise_for_status()
+            return self._unwrap(r)
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "POST", started_at)
+        except (json.JSONDecodeError, KeyError) as exc:
+            self._handle_exc(exc, path, "POST", started_at)
+
+    def confirm_demographic(
+        self, corpus_id: str, import_id: str, confirm: bool,
+    ) -> dict:
+        """Confirm or cancel a pending demographic upload."""
+        path = f"/demographic/{corpus_id}/confirm"
+        return self._post(
+            path,
+            params={"import_id": import_id, "confirm": str(confirm).lower()},
+        )
+
+    def list_demographic_files(
+        self, corpus_id: str, page_size: int = 200,
+    ) -> list[dict]:
+        """List confirmed demographic imports for one corpus."""
+        return self._get(
+            f"/demographic/{corpus_id}/files",
+            params={"page_size": page_size},
+            sub_key="items",
+        )
+
+    def list_demographic_rows(
+        self,
+        corpus_id: str,
+        file_id: str,
+        page: int = 1,
+        page_size: int = 100,
+    ) -> dict:
+        """List demographic rows for a specific file, returning items and pagination meta."""
+        return self._get(
+            f"/demographic/{corpus_id}/rows",
+            params={
+                "demographic_file_id": file_id,
+                "page": page,
+                "page_size": page_size,
+            },
+        )
+
+    def get_demographic_link_summary(self, corpus_id: str) -> dict:
+        """Get transcript ↔ demographic linking status."""
+        return self._get(f"/demographic/{corpus_id}/link-summary")
+
     # ---- Helpers ------------------------------------------------------------
 
     def _unwrap(self, response: httpx.Response, *, sub_key: str | None = None):

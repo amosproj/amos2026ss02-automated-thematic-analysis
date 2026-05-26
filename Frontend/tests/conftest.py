@@ -39,6 +39,16 @@ class FakeBackend:
         self.codebooks: list[dict] = []
         self.theme_frequencies: list[dict] = []
         self.theme_tree: list[dict] = []
+        # Demographic data
+        self.demographic_files: list[dict] = []
+        self.demographic_rows: list[dict] = []
+        self.demographic_link_summary: dict = {
+            "total_transcripts": 0,
+            "matched": 0,
+            "details": [],
+        }
+        self.demographic_upload_response: dict | None = None
+        self.demographic_confirm_response: dict | None = None
         # Either a method-name string (generic BackendError) or a
         # (method-name, ExceptionClass) tuple (specific typed subclass).
         self.raise_on: str | tuple[str, type] | None = None
@@ -72,6 +82,32 @@ class FakeBackend:
         self._maybe_raise("get_theme_tree")
         return self.theme_tree
 
+    # ---- Demographic --------------------------------------------------------
+
+    def upload_demographic(self, corpus_id, file, name=None) -> dict:
+        self._maybe_raise("upload_demographic")
+        return self.demographic_upload_response or {}
+
+    def confirm_demographic(self, corpus_id, import_id, confirm) -> dict:
+        self._maybe_raise("confirm_demographic")
+        return self.demographic_confirm_response or {}
+
+    def list_demographic_files(self, corpus_id, page_size=200) -> list[dict]:
+        self._maybe_raise("list_demographic_files")
+        return self.demographic_files
+
+    def list_demographic_rows(self, corpus_id, file_id, page=1, page_size=100) -> dict:
+        self._maybe_raise("list_demographic_rows")
+        total = len(self.demographic_rows)
+        return {
+            "items": self.demographic_rows,
+            "meta": {"page": page, "pages": max(1, (total + page_size - 1) // page_size), "total": total}
+        }
+
+    def get_demographic_link_summary(self, corpus_id) -> dict:
+        self._maybe_raise("get_demographic_link_summary")
+        return self.demographic_link_summary
+
     # ---- Internal -----------------------------------------------------------
 
     def _maybe_raise(self, method: str) -> None:
@@ -94,6 +130,7 @@ def fake_backend(monkeypatch) -> FakeBackend:
     fake = FakeBackend()
     monkeypatch.setattr("web.controllers.ingestion._backend", lambda: fake)
     monkeypatch.setattr("web.controllers.codebooks._backend", lambda: fake)
+    monkeypatch.setattr("web.controllers.demographic._backend", lambda: fake)
     return fake
 
 

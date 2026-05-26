@@ -46,6 +46,10 @@
                href="{{ url_for('ingestion.transcripts_landing') }}">Transcripts</a>
           </li>
           <li class="nav-item">
+            <a class="nav-link {% if request.endpoint and request.endpoint.startswith('demographic.') %}active{% endif %}"
+               href="{{ url_for('demographic.demographic_landing') }}">Demographic Data</a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link {% if request.endpoint and request.endpoint.startswith('codebooks.') %}active{% endif %}"
                href="{{ url_for('codebooks.list_codebooks') }}">Codebooks</a>
           </li>
