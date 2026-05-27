@@ -154,8 +154,9 @@ class BackendClient:
 
     # ---- Codebooks ----------------------------------------------------------
 
-    def list_codebooks(self) -> list[dict]:
-        return self._get("/codebooks/")
+    def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
+        params = {"corpus_id": corpus_id} if corpus_id else None
+        return self._get("/codebooks/", params=params)
 
     def get_theme_frequencies(self, codebook_id: str) -> list[dict]:
         return self._get(f"/codebooks/{codebook_id}/themes")

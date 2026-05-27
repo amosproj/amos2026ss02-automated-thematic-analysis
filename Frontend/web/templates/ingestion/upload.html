@@ -8,6 +8,46 @@
     </p>
   </div>
 
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+      <label for="corpus_selector" class="form-label fw-semibold mb-2">
+        Upload target corpus
+      </label>
+      <select id="corpus_selector"
+              class="form-select"
+              data-switch-template="{{ url_for('ingestion.upload_form', corpus_id='__CORPUS_ID__') }}">
+        {% for corpus in corpus_options %}
+          <option value="{{ corpus.id }}" {% if corpus.id == corpus_id %}selected{% endif %}>
+            {{ corpus.name }} ({{ corpus.id }})
+          </option>
+        {% endfor %}
+      </select>
+      <p class="text-secondary small mb-0 mt-2">
+        This selection applies to both transcript and demographic uploads on this page.
+      </p>
+
+      <form id="create-corpus-form"
+            class="mt-3"
+            method="post"
+            action="{{ url_for('ingestion.create_corpus_submit') }}">
+        <input type="hidden" id="current_corpus_id" name="current_corpus_id" value="{{ corpus_id }}">
+        <label for="new_corpus_name" class="form-label fw-semibold mb-2">
+          + Create new corpus
+        </label>
+        <div class="input-group">
+          <input type="text"
+                 id="new_corpus_name"
+                 name="name"
+                 class="form-control"
+                 maxlength="255"
+                 placeholder="Enter corpus name"
+                 required>
+          <button type="submit" class="btn btn-outline-secondary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="row g-4 upload-row">
 
     {# ─── Transcripts card (primary, indigo) ─────────────────────────── #}
@@ -161,6 +201,21 @@
   </div>
 
   <script>
+    (() => {
+      const selector = document.getElementById("corpus_selector");
+      if (!selector) return;
+
+      function routeFromTemplate(template, corpusId) {
+        return template.replace("__CORPUS_ID__", encodeURIComponent(corpusId));
+      }
+
+      selector.addEventListener("change", () => {
+        const selectedCorpus = selector.value;
+        const template = selector.dataset.switchTemplate;
+        window.location.href = routeFromTemplate(template, selectedCorpus);
+      });
+    })();
+
     (() => {
       const MAX_MB = {{ max_size_mb }};
       const MAX_BYTES = MAX_MB * 1024 * 1024;

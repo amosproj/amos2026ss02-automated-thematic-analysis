@@ -15,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 from starlette.requests import Request
 
 from app.exceptions import NotFoundError, UnprocessableError
-from app.models import Base, Codebook
+from app.models import Base, Codebook, CodebookGenerationJob, Corpus
 from app.routers import codebooks as codebooks_router
 from app.routers import demo as demo_router
 from app.routers import themes as themes_router
@@ -110,6 +110,84 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
                 ordered_pairs,
                 [("project_a", 2), ("project_a", 1), ("project_b", 1)],
             )
+
+    async def test_codebooks_route_can_filter_by_corpus_with_legacy_fallback(self) -> None:
+        async with self.session_factory() as session:
+            corpus_a = Corpus(id=uuid4(), project_id=uuid4(), name="Corpus A")
+            corpus_b = Corpus(id=uuid4(), project_id=uuid4(), name="Corpus B")
+            session.add_all([corpus_a, corpus_b])
+            await session.flush()
+
+            legacy_a = Codebook(
+                id=uuid4(),
+                project_id=str(corpus_a.project_id),
+                name="Legacy A",
+                description="desc",
+                version=1,
+                created_by="system",
+            )
+            generated_a = Codebook(
+                id=uuid4(),
+                project_id=str(corpus_a.project_id),
+                name="Generated A",
+                description="desc",
+                version=2,
+                created_by="system",
+            )
+            generated_b = Codebook(
+                id=uuid4(),
+                project_id=str(corpus_b.project_id),
+                name="Generated B",
+                description="desc",
+                version=1,
+                created_by="system",
+            )
+            legacy_b = Codebook(
+                id=uuid4(),
+                project_id=str(corpus_b.project_id),
+                name="Legacy B",
+                description="desc",
+                version=3,
+                created_by="system",
+            )
+            session.add_all([legacy_a, generated_a, generated_b, legacy_b])
+            await session.flush()
+
+            session.add_all(
+                [
+                    CodebookGenerationJob(
+                        id=uuid4(),
+                        status="succeeded",
+                        codebook_name=generated_a.name,
+                        corpus_id=corpus_a.id,
+                        transcript_document_ids_json="[]",
+                        cancel_requested=False,
+                        codebook_id=generated_a.id,
+                        passages_total=1,
+                        passages_done=1,
+                    ),
+                    CodebookGenerationJob(
+                        id=uuid4(),
+                        status="succeeded",
+                        codebook_name=generated_b.name,
+                        corpus_id=corpus_b.id,
+                        transcript_document_ids_json="[]",
+                        cancel_requested=False,
+                        codebook_id=generated_b.id,
+                        passages_total=1,
+                        passages_done=1,
+                    ),
+                ]
+            )
+            await session.commit()
+
+            response = await codebooks_router.get_codebooks(
+                session=session,
+                corpus_id=corpus_a.id,
+            )
+            payload = json.loads(response.body)
+            names = sorted(row["name"] for row in payload["data"])
+            self.assertEqual(names, ["Generated A", "Legacy A"])
 
     async def test_themes_route_maps_not_found_error(self) -> None:
         async with self.session_factory() as session:

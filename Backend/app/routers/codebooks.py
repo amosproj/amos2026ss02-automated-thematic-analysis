@@ -6,12 +6,12 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from sqlalchemy import desc, select
+from sqlalchemy import and_, desc, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.dependencies import DbSession
 from app.exceptions import NotFoundError, UnprocessableError
-from app.models import Codebook, CodebookGenerationJob
+from app.models import Codebook, CodebookGenerationJob, Corpus
 from app.schemas.codebook import (
     CodebookGenerateRequest,
     CodebookGenerationJobCreateRequest,
@@ -68,11 +68,42 @@ def _to_job_schema(job: CodebookGenerationJob) -> CodebookGenerationJobSchema:
 )
 async def get_codebooks(
     session: DbSession,
+    corpus_id: UUID | None = None,
 ) -> JSONResponse:
     # TODO: Completely refactor / replace this endpoint. This is just a quick implementation to get some working data
     #  for the frontend.
     # The user needs to be able to select a project_id in the frontend in order to load a themes tree
-    stmt = select(Codebook).order_by(Codebook.project_id.asc(), desc(Codebook.version))
+    if corpus_id is None:
+        stmt = select(Codebook).order_by(Codebook.project_id.asc(), desc(Codebook.version))
+    else:
+        corpus = (
+            await session.execute(select(Corpus).where(Corpus.id == corpus_id))
+        ).scalar_one_or_none()
+        if corpus is None:
+            return JSONResponse(content=ResponseEnvelope.ok([]).model_dump(mode="json"))
+
+        generated_for_selected_corpus = exists(
+            select(CodebookGenerationJob.id).where(
+                CodebookGenerationJob.codebook_id == Codebook.id,
+                CodebookGenerationJob.corpus_id == corpus_id,
+                CodebookGenerationJob.codebook_id.is_not(None),
+                CodebookGenerationJob.status == "succeeded",
+            )
+        )
+        has_any_generation_job = exists(
+            select(CodebookGenerationJob.id).where(
+                CodebookGenerationJob.codebook_id == Codebook.id
+            )
+        )
+        legacy_project_scoped = and_(
+            Codebook.project_id == str(corpus.project_id),
+            ~has_any_generation_job,
+        )
+        stmt = (
+            select(Codebook)
+            .where(or_(generated_for_selected_corpus, legacy_project_scoped))
+            .order_by(Codebook.project_id.asc(), desc(Codebook.version))
+        )
     codebooks = list((await session.scalars(stmt)).all())
     payload = [CodebookSchema.model_validate(codebook) for codebook in codebooks]
     return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))
