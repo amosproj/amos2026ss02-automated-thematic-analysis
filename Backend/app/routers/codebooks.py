@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from sqlalchemy import and_, desc, exists, or_, select
+from sqlalchemy import desc, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.dependencies import DbSession
@@ -76,10 +76,12 @@ async def get_codebooks(
     if corpus_id is None:
         stmt = select(Codebook).order_by(Codebook.project_id.asc(), desc(Codebook.version))
     else:
-        corpus = (
-            await session.execute(select(Corpus).where(Corpus.id == corpus_id))
-        ).scalar_one_or_none()
-        if corpus is None:
+        corpus_exists = (
+            await session.execute(
+                select(exists().where(Corpus.id == corpus_id))
+            )
+        ).scalar_one()
+        if not corpus_exists:
             return JSONResponse(content=ResponseEnvelope.ok([]).model_dump(mode="json"))
 
         generated_for_selected_corpus = exists(
@@ -90,18 +92,9 @@ async def get_codebooks(
                 CodebookGenerationJob.status == "succeeded",
             )
         )
-        has_any_generation_job = exists(
-            select(CodebookGenerationJob.id).where(
-                CodebookGenerationJob.codebook_id == Codebook.id
-            )
-        )
-        legacy_project_scoped = and_(
-            Codebook.project_id == str(corpus.project_id),
-            ~has_any_generation_job,
-        )
         stmt = (
             select(Codebook)
-            .where(or_(generated_for_selected_corpus, legacy_project_scoped))
+            .where(generated_for_selected_corpus)
             .order_by(Codebook.project_id.asc(), desc(Codebook.version))
         )
     codebooks = list((await session.scalars(stmt)).all())

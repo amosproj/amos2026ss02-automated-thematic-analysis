@@ -111,7 +111,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
                 [("project_a", 2), ("project_a", 1), ("project_b", 1)],
             )
 
-    async def test_codebooks_route_can_filter_by_corpus_with_legacy_fallback(self) -> None:
+    async def test_codebooks_route_can_filter_by_corpus_id_only(self) -> None:
         async with self.session_factory() as session:
             corpus_a = Corpus(id=uuid4(), project_id=uuid4(), name="Corpus A")
             corpus_b = Corpus(id=uuid4(), project_id=uuid4(), name="Corpus B")
@@ -187,7 +187,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
             )
             payload = json.loads(response.body)
             names = sorted(row["name"] for row in payload["data"])
-            self.assertEqual(names, ["Generated A", "Legacy A"])
+            self.assertEqual(names, ["Generated A"])
 
     async def test_themes_route_maps_not_found_error(self) -> None:
         async with self.session_factory() as session:
