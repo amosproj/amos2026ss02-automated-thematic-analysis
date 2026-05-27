@@ -205,7 +205,8 @@ class DemographicService:
         )
         if existing:
             raise UnprocessableError(
-                f"username already exists: '{sorted(existing)[0]}'"
+                f"username already exists: '{sorted(existing)[0]}'. "
+                "This usually means the same demographic data was already uploaded for this corpus."
             )
 
     async def list_files(

@@ -85,6 +85,23 @@ def test_status_422_parses_fastapi_validation_detail():
     assert "themes: must contain at least 1 item" in msg
 
 
+def test_status_422_parses_response_envelope_meta_detail():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            422,
+            json={
+                "success": False,
+                "error": "UnprocessableError",
+                "meta": {"detail": "username already exists: 'user_a'"},
+            },
+        )
+
+    client = _client_with_handler(handler)
+    with pytest.raises(BackendValidationError) as exc_info:
+        client.list_codebooks()
+    assert "username already exists" in exc_info.value.user_message
+
+
 def test_status_500_maps_to_server_error():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, json={"detail": "boom"})

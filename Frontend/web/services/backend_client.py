@@ -326,9 +326,23 @@ def _parse_validation_detail(response: httpx.Response) -> str | None:
         body = response.json()
     except (json.JSONDecodeError, ValueError):
         return None
-    detail = body.get("detail") if isinstance(body, dict) else None
-    if not isinstance(detail, list):
+    if not isinstance(body, dict):
         return None
+
+    detail = body.get("detail")
+    if isinstance(detail, str) and detail.strip():
+        return detail
+
+    if not isinstance(detail, list):
+        # Our backend envelope for handled 422s is:
+        # {"success": false, "error": "...", "meta": {"detail": "..."}}
+        meta = body.get("meta")
+        if isinstance(meta, dict):
+            meta_detail = meta.get("detail")
+            if isinstance(meta_detail, str) and meta_detail.strip():
+                return meta_detail
+        return None
+
     messages: list[str] = []
     for item in detail:
         if not isinstance(item, dict):
