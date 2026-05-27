@@ -41,7 +41,7 @@ Pending uploads expire based on `DEMOGRAPHIC_UPLOAD_TTL_SECONDS`.
 
 - Supported extension: `.csv`
 - UTF-8 (including UTF-8 BOM) is required
-- Standard comma-separated CSV format is required
+- Delimiter can be comma (`,`) or semicolon (`;`)
 - Header row is required
 - Header must contain a `username` column
 - At least one demographic column in addition to `username` is required

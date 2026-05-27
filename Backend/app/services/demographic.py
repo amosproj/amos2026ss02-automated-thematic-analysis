@@ -123,10 +123,26 @@ class DemographicService:
         except UnicodeDecodeError as exc:
             raise UnprocessableError(f"Could not decode '{filename}' as UTF-8") from exc
 
+    @staticmethod
+    def _detect_csv_delimiter(csv_text: str) -> str:
+        sample = csv_text[:4096]
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=";,")
+            if dialect.delimiter in {";", ","}:
+                return dialect.delimiter
+        except csv.Error:
+            pass
+
+        header = csv_text.splitlines()[0] if csv_text.splitlines() else ""
+        semicolons = header.count(";")
+        commas = header.count(",")
+        return "," if commas > semicolons else ";"
+
     def _parse_demographic_csv(self, filename: str, content: bytes) -> ParsedDemographicCsv:
         csv_text = self._decode_csv_bytes(filename, content)
         text_stream = io.StringIO(csv_text)
-        reader = csv.DictReader(text_stream, delimiter=';', restkey="__extra__")
+        delimiter = self._detect_csv_delimiter(csv_text)
+        reader = csv.DictReader(text_stream, delimiter=delimiter, restkey="__extra__")
         rows = list(reader)
         fieldnames = list(reader.fieldnames or [])
 
