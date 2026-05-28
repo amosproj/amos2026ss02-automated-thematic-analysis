@@ -158,3 +158,41 @@ def build_codebook_generation_prompt() -> ChatPromptTemplate:
         ]
     )
 
+
+CODE_CONSOLIDATION_SYSTEM_PROMPT = """You are an experienced qualitative researcher refining a draft codebook.
+You receive a list of generated codes for one codebook and must reduce overlap.
+
+Rules:
+- Merge highly similar codes into one canonical code.
+- Merge subordinate/specific variants into a broader parent code when appropriate.
+- Merge reverse/opposite polarity labels that describe the same underlying dimension.
+- Keep only orthogonal (non-overlapping) codes.
+- Keep labels concise and specific.
+- Preserve grounded meaning from the input; do not invent unrelated concepts.
+- Return valid JSON only (no markdown, no comments).
+
+Return JSON with this exact shape:
+{{
+  "codes": [
+    {{
+      "label": "Code label",
+      "description": "Optional short description"
+    }}
+  ]
+}}"""
+
+CODE_CONSOLIDATION_USER_INSTRUCTION = """Consolidate this code list into a minimal orthogonal set.
+
+--- CODES START ---
+{codes}
+--- CODES END ---"""
+
+
+def build_code_consolidation_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", CODE_CONSOLIDATION_SYSTEM_PROMPT),
+            ("user", CODE_CONSOLIDATION_USER_INSTRUCTION),
+        ]
+    )
+

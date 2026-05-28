@@ -42,3 +42,14 @@ class PassageCodebookGeneration(BaseModel):
     codes: list[GeneratedCodeSuggestion] = Field(
         description="Codes identified in one passage.",
     )
+
+
+class CodeConsolidationItem(BaseModel):
+    label: str = Field(description="Code label.")
+    description: str | None = Field(None, description="Optional short code description.")
+
+
+class CodeConsolidationResult(BaseModel):
+    codes: list[CodeConsolidationItem] = Field(
+        description="Consolidated, non-overlapping codes for the generated codebook.",
+    )

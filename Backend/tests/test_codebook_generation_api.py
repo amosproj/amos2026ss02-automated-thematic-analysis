@@ -16,6 +16,7 @@ from app.models import (
     ThemeHierarchyRelationship,
 )
 from app.schemas.llm import (
+    CodeConsolidationResult,
     GeneratedCodeSuggestion,
     GeneratedThemeNode,
     GeneratedThemePath,
@@ -194,6 +195,88 @@ async def test_generate_codebook_creates_deduplicated_themes_and_codes(
             "Manual Bottleneck",
             "Onboarding Unclear",
         ]
+
+
+async def test_generate_codebook_post_processes_codes_with_llm_consolidation(
+    client,
+    db_engine,
+    monkeypatch,
+) -> None:
+    corpus_id, document_ids = await _create_corpus_and_docs(client)
+
+    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+        return PassageCodebookGeneration(
+            themes=[
+                GeneratedThemePath(
+                    path=[
+                        GeneratedThemeNode(label="Workflow Friction"),
+                    ]
+                )
+            ],
+            codes=[
+                GeneratedCodeSuggestion(
+                    label="Manual Delay",
+                    description="Manual steps slow work.",
+                    theme_path=["Workflow Friction"],
+                ),
+                GeneratedCodeSuggestion(
+                    label="Manual Bottleneck",
+                    description="Repeated handoffs create delay.",
+                    theme_path=["Workflow Friction"],
+                ),
+            ],
+        )
+
+    def _fake_consolidate_generated_codes(_):
+        return CodeConsolidationResult(
+            codes=[
+                {
+                    "label": "Manual Bottleneck",
+                    "description": "Consolidated operational delay due to manual work.",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(
+        "app.services.codebook_generation.generate_codebook_for_passage",
+        _fake_generate_codebook_for_passage,
+    )
+    monkeypatch.setattr(
+        "app.services.codebook_generation.consolidate_generated_codes",
+        _fake_consolidate_generated_codes,
+    )
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate",
+        json={
+            "codebook_name": "Consolidated Codes",
+            "corpus_id": corpus_id,
+            "transcript_document_ids": document_ids,
+        },
+    )
+    assert response.status_code == 201
+    payload = response.json()["data"]
+    assert payload["codes_created"] == 1
+
+    codebook_id = UUID(payload["codebook"]["id"])
+    session_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_factory() as session:
+        code_rows = list(
+            (
+                await session.scalars(
+                    select(Code)
+                    .join(
+                        CodebookCodeRelationship,
+                        and_(
+                            CodebookCodeRelationship.code_id == Code.id,
+                            CodebookCodeRelationship.codebook_id == codebook_id,
+                        ),
+                    )
+                )
+            ).all()
+        )
+        assert [code.label for code in code_rows] == ["Manual Bottleneck"]
+
 
 
 async def test_generate_codebook_rejects_documents_outside_selected_corpus(

@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import NotFoundError, UnprocessableError
-from app.llm.pipelines import generate_codebook_for_passage
+from app.llm.pipelines import consolidate_generated_codes, generate_codebook_for_passage
 from app.models import (
     Code,
     Codebook,
@@ -25,7 +25,7 @@ from app.models import (
     ThemeHierarchyRelationship,
 )
 from app.schemas.codebook import CodebookSchema, GeneratedCodebookResponse
-from app.schemas.llm import PassageCodebookGeneration
+from app.schemas.llm import CodeConsolidationItem, PassageCodebookGeneration
 from app.services.theme_graph import ThemeGraphService
 
 
@@ -88,6 +88,7 @@ class CodebookGenerationService:
             should_cancel=should_cancel,
         )
         theme_nodes, code_nodes, hierarchy_edges = self._deduplicate_generation(generation_results)
+        code_nodes = await self._post_process_codes(code_nodes)
         if not theme_nodes:
             raise UnprocessableError(
                 "Codebook generation produced no themes from selected passages "
@@ -256,6 +257,47 @@ class CodebookGenerationService:
     @staticmethod
     def _normalize_label(value: str) -> str:
         return " ".join(value.split()).strip()
+
+    async def _post_process_codes(self, codes: list[_CodeDraft]) -> list[_CodeDraft]:
+        """Consolidate generated codes and keep a deterministic fallback."""
+        if not codes:
+            return []
+        if len(codes) == 1:
+            # No overlap resolution needed for a single code.
+            return codes
+
+        consolidation_payload = [
+            CodeConsolidationItem(label=code.label, description=code.description)
+            for code in codes
+        ]
+        try:
+            consolidated = await asyncio.to_thread(
+                consolidate_generated_codes,
+                consolidation_payload,
+            )
+        except Exception:
+            # Keep raw deduplicated codes if consolidation fails for any reason.
+            return codes
+
+        consolidated_codes: list[_CodeDraft] = []
+        seen_labels: set[str] = set()
+        for code in consolidated.codes:
+            normalized_label = self._normalize_label(code.label)
+            if not normalized_label:
+                continue
+            code_key = normalized_label.lower()
+            if code_key in seen_labels:
+                continue
+            seen_labels.add(code_key)
+            description = code.description.strip() if code.description else None
+            consolidated_codes.append(
+                _CodeDraft(
+                    label=normalized_label,
+                    description=description or None,
+                )
+            )
+
+        return consolidated_codes or codes
 
     @classmethod
     def _deduplicate_generation(

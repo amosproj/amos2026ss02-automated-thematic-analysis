@@ -6,6 +6,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from app.llm.prompts import (
     APPLY_CODEBOOK_SYSTEM_PROMPT,
     APPLY_CODEBOOK_USER_INSTRUCTION,
+    CODE_CONSOLIDATION_SYSTEM_PROMPT,
+    CODE_CONSOLIDATION_USER_INSTRUCTION,
+    build_code_consolidation_prompt,
     build_codebook_application_prompt,
 )
 
@@ -59,3 +62,18 @@ class TestBuildCodebookApplicationPrompt:
         # User message contains both placeholders expanded
         assert "I trust my team." in messages[1].content
         assert "Theme: Trust" in messages[1].content
+
+
+class TestCodeConsolidationPrompt:
+    def test_system_prompt_mentions_merge_and_orthogonal(self) -> None:
+        prompt_text = CODE_CONSOLIDATION_SYSTEM_PROMPT.lower()
+        assert "merge" in prompt_text
+        assert "orthogonal" in prompt_text
+
+    def test_user_instruction_has_codes_placeholder(self) -> None:
+        assert "{codes}" in CODE_CONSOLIDATION_USER_INSTRUCTION
+
+    def test_build_prompt_accepts_codes_variable(self) -> None:
+        prompt = build_code_consolidation_prompt()
+        assert isinstance(prompt, ChatPromptTemplate)
+        assert "codes" in prompt.input_variables
