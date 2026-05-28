@@ -2,6 +2,7 @@ import json
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+from langchain_core.runnables import Runnable
 
 from app.llm.client import build_chat_model
 from app.llm.prompts import (
@@ -56,6 +57,15 @@ def apply_codebook_to_interview(
     return InterviewAnalysisResult(**raw_result)
 
 
+def build_codebook_generation_chain(
+    *,
+    model: BaseChatModel | None = None,
+) -> Runnable:
+    chat_model = model or build_chat_model()
+    parser = JsonOutputParser(pydantic_object=PassageCodebookGeneration)
+    return build_codebook_generation_prompt() | chat_model | parser
+
+
 # Generate candidate themes/subthemes/codes for a single transcript passage.
 def generate_codebook_for_passage(
     passage: str,
@@ -65,11 +75,42 @@ def generate_codebook_for_passage(
     if not passage.strip():
         raise ValueError("Passage is empty.")
 
-    chat_model = model or build_chat_model()
-    parser = JsonOutputParser(pydantic_object=PassageCodebookGeneration)
-    chain = build_codebook_generation_prompt() | chat_model | parser
+    chain = build_codebook_generation_chain(model=model)
     raw_result = chain.invoke({"passage": passage})
     return PassageCodebookGeneration(**raw_result)
+
+
+async def generate_codebook_for_passages(
+    passages: list[str],
+    *,
+    chain: Runnable | None = None,
+    model: BaseChatModel | None = None,
+    max_concurrency: int | None = None,
+) -> list[PassageCodebookGeneration | Exception]:
+    if not passages:
+        return []
+    for passage in passages:
+        if not passage.strip():
+            raise ValueError("Passage is empty.")
+
+    runnable = chain or build_codebook_generation_chain(model=model)
+    configs = {"max_concurrency": max_concurrency} if max_concurrency is not None else None
+    raw_results = await runnable.abatch(
+        [{"passage": passage} for passage in passages],
+        config=configs,
+        return_exceptions=True,
+    )
+
+    parsed_results: list[PassageCodebookGeneration | Exception] = []
+    for raw_result in raw_results:
+        if isinstance(raw_result, Exception):
+            parsed_results.append(raw_result)
+            continue
+        try:
+            parsed_results.append(PassageCodebookGeneration(**raw_result))
+        except Exception as exc:
+            parsed_results.append(exc)
+    return parsed_results
 
 
 def consolidate_generated_codes(

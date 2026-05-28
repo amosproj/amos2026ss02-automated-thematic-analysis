@@ -57,6 +57,16 @@ class Settings(BaseSettings):
 
     # Select which provider is active: "FAU" | "ACADEMIC"
     SELECTED_API: str = "FAU"
+
+    CODEBOOK_GEN_MAX_CONCURRENCY: int = 8
+    CODEBOOK_GEN_BATCH_SIZE: int = 16
+    CODEBOOK_GEN_MAX_RETRIES: int = 2
+    CODEBOOK_GEN_RETRY_BASE_DELAY_S: float = 0.5
+    CODEBOOK_GEN_RETRY_MAX_DELAY_S: float = 5.0
+    CODEBOOK_GEN_PROGRESS_MIN_PASSAGE_STEP: int = 5
+    CODEBOOK_GEN_PROGRESS_MIN_INTERVAL_S: float = 0.5
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

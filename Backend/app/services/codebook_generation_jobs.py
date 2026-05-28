@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from datetime import UTC, datetime
 from uuid import UUID
 
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.config import get_settings
 from app.database import get_session_factory
 from app.models import CodebookGenerationJob
 from app.services.codebook_generation import (
@@ -89,8 +91,24 @@ class CodebookGenerationJobRunner:
 
             transcript_document_ids = [UUID(raw) for raw in json.loads(job.transcript_document_ids_json)]
             service = CodebookGenerationService(session)
+            cfg = get_settings()
+            min_progress_step = max(1, int(cfg.CODEBOOK_GEN_PROGRESS_MIN_PASSAGE_STEP))
+            min_progress_interval_s = max(0.0, float(cfg.CODEBOOK_GEN_PROGRESS_MIN_INTERVAL_S))
+            last_progress_write_at = 0.0
+            last_progress_done = -1
 
             async def _on_progress(done: int, total: int) -> None:
+                nonlocal last_progress_write_at, last_progress_done
+                now = time.monotonic()
+                # Throttle DB writes while still forcing first and final progress updates.
+                should_write = (
+                    (done == 0 and last_progress_done < 0)
+                    or done == total
+                    or done >= (last_progress_done + min_progress_step)
+                    or (now - last_progress_write_at) >= min_progress_interval_s
+                )
+                if not should_write:
+                    return
                 async with session_factory() as progress_session:
                     progress_job = await progress_session.get(CodebookGenerationJob, job_id)
                     if progress_job is None:
@@ -98,6 +116,8 @@ class CodebookGenerationJobRunner:
                     progress_job.passages_done = done
                     progress_job.passages_total = total
                     await progress_session.commit()
+                    last_progress_done = done
+                    last_progress_write_at = now
 
             async def _should_cancel() -> bool:
                 async with session_factory() as cancel_session:

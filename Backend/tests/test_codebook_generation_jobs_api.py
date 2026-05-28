@@ -57,6 +57,22 @@ async def _wait_for_terminal_job_status(client, job_id: str, timeout_seconds: fl
     raise AssertionError(f"Job {job_id} did not reach terminal status. Last payload: {last_payload}")
 
 
+def _patch_batched_generation(monkeypatch, single_passage_fn) -> None:
+    async def _fake_generate_codebook_for_passages(passages, *_, **__):
+        results = []
+        for passage in passages:
+            try:
+                results.append(single_passage_fn(passage))
+            except Exception as exc:
+                results.append(exc)
+        return results
+
+    monkeypatch.setattr(
+        "app.services.codebook_generation.generate_codebook_for_passages",
+        _fake_generate_codebook_for_passages,
+    )
+
+
 async def test_generate_codebook_job_completes_successfully(client, monkeypatch) -> None:
     corpus_id, document_ids = await _create_corpus_with_docs(
         client,
@@ -85,10 +101,7 @@ async def test_generate_codebook_job_completes_successfully(client, monkeypatch)
             ],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _fake_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _fake_generate_codebook_for_passage)
 
     create_response = await client.post(
         f"{API_CODEBOOKS}/generate-jobs",
@@ -121,10 +134,7 @@ async def test_generate_codebook_job_accepts_payload_without_confirmation_field(
             codes=[GeneratedCodeSuggestion(label="Delay", description=None, theme_path=["Operations"])],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _fake_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _fake_generate_codebook_for_passage)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate-jobs",
@@ -161,10 +171,7 @@ async def test_generate_codebook_job_can_be_cancelled_while_running(client, monk
             ],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _slow_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _slow_generate_codebook_for_passage)
 
     create_response = await client.post(
         f"{API_CODEBOOKS}/generate-jobs",
@@ -202,10 +209,7 @@ async def test_generate_codebook_job_uses_all_corpus_documents_when_ids_omitted(
             codes=[GeneratedCodeSuggestion(label="Team Alignment", description=None, theme_path=["Collaboration"])],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _fake_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _fake_generate_codebook_for_passage)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate-jobs",
@@ -230,21 +234,18 @@ async def test_generate_codebook_job_records_partial_parse_failures_and_succeeds
             "Beta transcript about planning and process.",
         ],
     )
-    calls = {"count": 0}
+    calls_by_passage: dict[str, int] = {}
 
-    def _sometimes_fails_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
-        calls["count"] += 1
-        if calls["count"] <= 3:
+    def _sometimes_fails_generate_codebook_for_passage(passage: str) -> PassageCodebookGeneration:
+        calls_by_passage[passage] = calls_by_passage.get(passage, 0) + 1
+        if "Alpha" in passage and calls_by_passage[passage] <= 3:
             raise OutputParserException("Invalid json output: malformed")
         return PassageCodebookGeneration(
             themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Collaboration")])],
             codes=[GeneratedCodeSuggestion(label="Team Alignment", description=None, theme_path=["Collaboration"])],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _sometimes_fails_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _sometimes_fails_generate_codebook_for_passage)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate-jobs",
