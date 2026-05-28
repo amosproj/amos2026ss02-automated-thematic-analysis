@@ -252,10 +252,13 @@ function Invoke-Up {
 
   $upFlags = @()
   if (-not $Foreground) { $upFlags += '-d' }
-  if ($Rebuild)         { $upFlags += '--build'; $upFlags += '--no-cache' }
-  elseif (-not $NoBuild){ $upFlags += '--build' }
+  if (-not $NoBuild)    { $upFlags += '--build' }
 
-  if (-not $NoBuild) {
+  if ($Rebuild) {
+    Write-Info "Rebuilding images with --no-cache..."
+    Invoke-Compose @('build', '--no-cache')
+  }
+  elseif (-not $NoBuild) {
     Write-Info "Building images - first run can take 3-5 minutes..."
   }
 
