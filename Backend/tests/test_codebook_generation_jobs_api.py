@@ -114,9 +114,13 @@ async def test_generate_codebook_job_completes_successfully(client, monkeypatch)
     assert create_response.status_code == 202
     created_job = create_response.json()["data"]
     assert created_job["status"] in {"queued", "running"}
+    assert "progress_percent" in created_job
+    assert "phase" in created_job
 
     terminal_job = await _wait_for_terminal_job_status(client, created_job["id"])
     assert terminal_job["status"] == "succeeded"
+    assert terminal_job["progress_percent"] == 100
+    assert terminal_job["phase"] == "succeeded"
     assert terminal_job["codebook_id"] is not None
     assert terminal_job["themes_created"] >= 1
     assert terminal_job["codes_created"] >= 1

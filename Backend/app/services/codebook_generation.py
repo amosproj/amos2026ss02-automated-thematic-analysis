@@ -73,6 +73,7 @@ class CodebookGenerationService:
         corpus_id: UUID,
         transcript_document_ids: list[UUID] | None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
+        on_phase: Callable[[str], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> GeneratedCodebookResponse:
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
@@ -96,11 +97,15 @@ class CodebookGenerationService:
         # does not keep a checked-out DB connection during inference.
         await self._session.rollback()
 
+        if on_phase is not None:
+            await on_phase("generating_passages")
         generation_results, failed_passages = await self._generate_per_passage(
             passages,
             on_progress=on_progress,
             should_cancel=should_cancel,
         )
+        if on_phase is not None:
+            await on_phase("consolidating")
         theme_nodes, code_nodes, hierarchy_edges = self._deduplicate_generation(generation_results)
         code_nodes = await self._post_process_codes(code_nodes)
         theme_nodes, hierarchy_edges = await self._post_process_themes(
@@ -113,6 +118,8 @@ class CodebookGenerationService:
                 f"(failed passages: {len(failed_passages)})"
             )
 
+        if on_phase is not None:
+            await on_phase("persisting")
         created_codebook, themes_created, codes_created = await self._persist_generated_codebook(
             codebook_name=codebook_name,
             project_id=project_id,

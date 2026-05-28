@@ -38,9 +38,13 @@ def _deserialize_document_ids(document_ids_json: str) -> list[UUID]:
 
 
 def _to_job_schema(job: CodebookGenerationJob) -> CodebookGenerationJobSchema:
+    phase = codebook_generation_job_runner.get_phase(job.id, status=job.status)
+    progress_percent = _compute_job_progress_percent(job, phase=phase)
     return CodebookGenerationJobSchema(
         id=job.id,
         status=job.status,
+        phase=phase,
+        progress_percent=progress_percent,
         codebook_name=job.codebook_name,
         corpus_id=job.corpus_id,
         transcript_document_ids=_deserialize_document_ids(job.transcript_document_ids_json),
@@ -58,6 +62,22 @@ def _to_job_schema(job: CodebookGenerationJob) -> CodebookGenerationJobSchema:
         started_at=job.started_at,
         finished_at=job.finished_at,
     )
+
+
+def _compute_job_progress_percent(job: CodebookGenerationJob, *, phase: str) -> int:
+    if job.status in {"succeeded", "failed", "cancelled"}:
+        return 100
+    if job.status == "queued":
+        return 0
+    if phase == "consolidating":
+        return 95
+    if phase == "persisting":
+        return 98
+    if job.passages_total <= 0:
+        return 1
+    # Keep room for non-passage phases before terminal completion.
+    passage_progress = int((job.passages_done * 90) / job.passages_total)
+    return max(1, min(90, passage_progress))
 
 
 @router.get(
@@ -144,6 +164,7 @@ async def create_generate_codebook_job(
     )
 
     await codebook_generation_job_runner.start()
+    codebook_generation_job_runner.set_phase(job.id, "queued")
     await codebook_generation_job_runner.enqueue(job.id, session_factory=job_session_factory)
     return JSONResponse(
         status_code=202,
@@ -191,6 +212,7 @@ async def cancel_generate_codebook_job(
     job.cancel_requested = True
     if job.status == "queued":
         job.status = "cancelled"
+        codebook_generation_job_runner.set_phase(job.id, "cancelled")
         job.finished_at = datetime.now(UTC).replace(tzinfo=None)
     await session.commit()
     await session.refresh(job)

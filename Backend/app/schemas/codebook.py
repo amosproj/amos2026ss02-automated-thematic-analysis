@@ -67,6 +67,8 @@ class CodebookGenerationJobCreateRequest(CodebookGenerateRequest):
 class CodebookGenerationJobSchema(BaseSchema):
     id: UUID
     status: JobStatus
+    phase: str
+    progress_percent: int
     codebook_name: str
     corpus_id: UUID
     transcript_document_ids: list[UUID]
