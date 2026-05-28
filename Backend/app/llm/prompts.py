@@ -207,6 +207,12 @@ Rules:
 - Keep themes distinct and non-overlapping where possible.
 - Keep the hierarchy coherent and readable.
 - Keep path order meaningful from broader to more specific.
+- Enforce level semantics:
+  - Level 1: domain-level theme (broad, cross-cutting area).
+  - Level 2: analytical theme (recurring pattern within the domain).
+  - Level 3+: granular subthemes only when they represent recurring mechanisms/dimensions.
+- Do not keep anecdotal examples, one-off cases, or concrete incidents as high-level themes.
+- For every child-parent relation, the child must be a type, cause, consequence, example, or dimension of the parent.
 - Preserve grounded meaning; do not invent unrelated concepts.
 - Return valid JSON only (no markdown, no comments).
 
@@ -223,6 +229,9 @@ Return JSON with this exact shape:
 }}"""
 
 THEME_CONSOLIDATION_USER_INSTRUCTION = """Consolidate this theme path list into a minimal coherent hierarchy.
+
+Apply these target constraints:
+{constraints}
 
 --- THEMES START ---
 {themes}

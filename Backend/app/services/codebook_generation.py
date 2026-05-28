@@ -353,10 +353,17 @@ class CodebookGenerationService:
         if len(theme_paths) <= 1:
             return theme_nodes, hierarchy_edges
 
+        target_total_themes = min(40, max(20, int(round(len(theme_nodes) * 0.35))))
+        first_pass_constraints = self._build_theme_consolidation_constraints(
+            max_root_themes=10,
+            target_total_themes=target_total_themes,
+            aggressive=False,
+        )
         try:
             consolidated = await asyncio.to_thread(
                 consolidate_generated_themes,
                 theme_paths,
+                constraints=first_pass_constraints,
             )
         except Exception:
             logger.exception(
@@ -373,6 +380,28 @@ class CodebookGenerationService:
                 count=len(theme_nodes),
             )
             return theme_nodes, hierarchy_edges
+
+        # If first pass remains too broad, run a stricter compression pass.
+        consolidated_root_count = self._count_root_themes(consolidated_edges, consolidated_theme_nodes)
+        if consolidated_root_count > 10 or len(consolidated_theme_nodes) > target_total_themes:
+            strict_constraints = self._build_theme_consolidation_constraints(
+                max_root_themes=8,
+                target_total_themes=min(target_total_themes, 30),
+                aggressive=True,
+            )
+            try:
+                strict_consolidated = await asyncio.to_thread(
+                    consolidate_generated_themes,
+                    consolidated.themes,
+                    constraints=strict_constraints,
+                )
+                strict_nodes, strict_edges = self._build_theme_graph_from_paths(strict_consolidated.themes)
+                if strict_nodes:
+                    consolidated = strict_consolidated
+                    consolidated_theme_nodes = strict_nodes
+                    consolidated_edges = strict_edges
+            except Exception:
+                logger.exception("Strict theme consolidation pass failed; using first-pass consolidated tree")
 
         original_labels = sorted({node.label for node in theme_nodes.values()})
         consolidated_labels = sorted({node.label for node in consolidated_theme_nodes.values()})
@@ -402,6 +431,38 @@ class CodebookGenerationService:
             ],
         )
         return consolidated_theme_nodes, consolidated_edges
+
+    @staticmethod
+    def _count_root_themes(
+        hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+    ) -> int:
+        children = {child for _, child in hierarchy_edges}
+        return len([key for key in theme_nodes if key not in children])
+
+    @staticmethod
+    def _build_theme_consolidation_constraints(
+        *,
+        max_root_themes: int,
+        target_total_themes: int,
+        aggressive: bool,
+    ) -> str:
+        extra = (
+            "- Be highly aggressive: collapse near-duplicates and subordinate variants unless analytically necessary.\n"
+            "- Do not keep narrow examples (specific jobs, incidents, or anecdotes) as Level-1 or Level-2 themes.\n"
+        ) if aggressive else ""
+        return (
+            "- Use 3 conceptual levels whenever possible:\n"
+            "  1) Domain-level themes (Level-1 roots).\n"
+            "  2) Analytical themes (Level-2).\n"
+            "  3) Granular subthemes (Level-3+) only for recurring dimensions.\n"
+            f"- Keep Level-1 roots at <= {max_root_themes} and prefer 6-10.\n"
+            f"- Keep total themes across all levels near {target_total_themes}.\n"
+            "- Parent-child compatibility rule: child must be a type, cause, consequence, example, or dimension "
+            "of parent.\n"
+            "- If a label is an anecdotal detail or one-off example, move it down or drop it.\n"
+            f"{extra}"
+        )
 
     @classmethod
     def _theme_paths_from_graph(

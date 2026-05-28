@@ -32,10 +32,10 @@ PROJECT_ID = "00000000-0000-0000-0000-000000000111"
 
 @pytest.fixture(autouse=True)
 def _stub_consolidation_calls(monkeypatch):
-    def _identity_code_consolidation(codes):
+    def _identity_code_consolidation(codes, *_, **__):
         return CodeConsolidationResult(codes=codes)
 
-    def _identity_theme_consolidation(themes):
+    def _identity_theme_consolidation(themes, *_, **__):
         return ThemeConsolidationResult(themes=themes)
 
     monkeypatch.setattr(
@@ -336,7 +336,7 @@ async def test_generate_codebook_post_processes_themes_with_llm_consolidation(
             ],
         )
 
-    def _fake_consolidate_generated_themes(_):
+    def _fake_consolidate_generated_themes(_, *__, **___):
         return ThemeConsolidationResult(
             themes=[
                 {

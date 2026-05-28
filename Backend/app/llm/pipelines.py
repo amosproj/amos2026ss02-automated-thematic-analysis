@@ -97,6 +97,7 @@ def consolidate_generated_codes(
 def consolidate_generated_themes(
     themes: list[GeneratedThemePath],
     *,
+    constraints: str | None = None,
     model: BaseChatModel | None = None,
 ) -> ThemeConsolidationResult:
     """Merge overlapping generated theme paths into a smaller coherent hierarchy."""
@@ -112,6 +113,12 @@ def consolidate_generated_themes(
         indent=2,
     )
     chain = build_theme_consolidation_prompt() | chat_model | parser
-    raw_result = chain.invoke({"themes": serialized_themes})
+    raw_result = chain.invoke(
+        {
+            "themes": serialized_themes,
+            "constraints": constraints
+            or "- Use domain-level roots only.\n- Target 6-10 root themes.\n- Keep total themes compact and non-overlapping.",
+        }
+    )
     return ThemeConsolidationResult(**raw_result)
 
