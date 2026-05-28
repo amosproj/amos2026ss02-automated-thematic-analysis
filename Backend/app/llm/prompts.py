@@ -196,3 +196,44 @@ def build_code_consolidation_prompt() -> ChatPromptTemplate:
         ]
     )
 
+
+THEME_CONSOLIDATION_SYSTEM_PROMPT = """You are an experienced qualitative researcher refining a draft theme tree.
+You receive theme paths (root theme -> subtheme -> subsubtheme, etc.) for one codebook.
+
+Rules:
+- Merge highly similar theme labels into a single canonical label.
+- Merge subordinate/specific variants into an appropriate parent level when warranted.
+- Merge reverse/opposite polarity labels that represent the same conceptual dimension.
+- Keep themes distinct and non-overlapping where possible.
+- Keep the hierarchy coherent and readable.
+- Keep path order meaningful from broader to more specific.
+- Preserve grounded meaning; do not invent unrelated concepts.
+- Return valid JSON only (no markdown, no comments).
+
+Return JSON with this exact shape:
+{{
+  "themes": [
+    {{
+      "path": [
+        {{"label": "Theme label", "description": "Optional short description"}},
+        {{"label": "Subtheme label", "description": "Optional short description"}}
+      ]
+    }}
+  ]
+}}"""
+
+THEME_CONSOLIDATION_USER_INSTRUCTION = """Consolidate this theme path list into a minimal coherent hierarchy.
+
+--- THEMES START ---
+{themes}
+--- THEMES END ---"""
+
+
+def build_theme_consolidation_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", THEME_CONSOLIDATION_SYSTEM_PROMPT),
+            ("user", THEME_CONSOLIDATION_USER_INSTRUCTION),
+        ]
+    )
+

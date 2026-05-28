@@ -9,12 +9,15 @@ from app.llm.prompts import (
     build_codebook_application_prompt,
     build_codebook_generation_prompt,
     build_thematic_analysis_prompt,
+    build_theme_consolidation_prompt,
 )
 from app.schemas.llm import (
     CodeConsolidationItem,
     CodeConsolidationResult,
+    GeneratedThemePath,
     InterviewAnalysisResult,
     PassageCodebookGeneration,
+    ThemeConsolidationResult,
 )
 
 
@@ -89,4 +92,26 @@ def consolidate_generated_codes(
     chain = build_code_consolidation_prompt() | chat_model | parser
     raw_result = chain.invoke({"codes": serialized_codes})
     return CodeConsolidationResult(**raw_result)
+
+
+def consolidate_generated_themes(
+    themes: list[GeneratedThemePath],
+    *,
+    model: BaseChatModel | None = None,
+) -> ThemeConsolidationResult:
+    """Merge overlapping generated theme paths into a smaller coherent hierarchy."""
+    if not themes:
+        return ThemeConsolidationResult(themes=[])
+
+    chat_model = model or build_chat_model()
+    parser = JsonOutputParser(pydantic_object=ThemeConsolidationResult)
+    # Serialize as formatted JSON so the model receives a stable, explicit list.
+    serialized_themes = json.dumps(
+        [theme.model_dump(mode="json") for theme in themes],
+        ensure_ascii=True,
+        indent=2,
+    )
+    chain = build_theme_consolidation_prompt() | chat_model | parser
+    raw_result = chain.invoke({"themes": serialized_themes})
+    return ThemeConsolidationResult(**raw_result)
 

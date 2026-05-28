@@ -13,7 +13,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import NotFoundError, UnprocessableError
-from app.llm.pipelines import consolidate_generated_codes, generate_codebook_for_passage
+from app.llm.pipelines import (
+    consolidate_generated_codes,
+    consolidate_generated_themes,
+    generate_codebook_for_passage,
+)
 from app.models import (
     Code,
     Codebook,
@@ -26,7 +30,12 @@ from app.models import (
     ThemeHierarchyRelationship,
 )
 from app.schemas.codebook import CodebookSchema, GeneratedCodebookResponse
-from app.schemas.llm import CodeConsolidationItem, PassageCodebookGeneration
+from app.schemas.llm import (
+    CodeConsolidationItem,
+    GeneratedThemeNode,
+    GeneratedThemePath,
+    PassageCodebookGeneration,
+)
 from app.services.theme_graph import ThemeGraphService
 
 
@@ -90,6 +99,10 @@ class CodebookGenerationService:
         )
         theme_nodes, code_nodes, hierarchy_edges = self._deduplicate_generation(generation_results)
         code_nodes = await self._post_process_codes(code_nodes)
+        theme_nodes, hierarchy_edges = await self._post_process_themes(
+            theme_nodes=theme_nodes,
+            hierarchy_edges=hierarchy_edges,
+        )
         if not theme_nodes:
             raise UnprocessableError(
                 "Codebook generation produced no themes from selected passages "
@@ -311,9 +324,8 @@ class CodebookGenerationService:
             return codes
 
         consolidated_labels = [code.label for code in consolidated_codes]
-        removed_labels = sorted(
-            {label for label in original_labels if label.lower() not in {kept.lower() for kept in consolidated_labels}}
-        )
+        kept_label_keys = {label.lower() for label in consolidated_labels}
+        removed_labels = sorted([label for label in original_labels if label.lower() not in kept_label_keys])
         logger.info(
             "Code consolidation finished: before={before}, after={after}, removed={removed}",
             before=len(original_labels),
@@ -323,6 +335,190 @@ class CodebookGenerationService:
         logger.debug("Code consolidation kept labels: {}", consolidated_labels)
         logger.debug("Code consolidation removed labels: {}", removed_labels)
         return consolidated_codes
+
+    async def _post_process_themes(
+        self,
+        *,
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+        hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
+    ) -> tuple[dict[tuple[str, ...], _ThemeNodeDraft], list[tuple[tuple[str, ...], tuple[str, ...]]]]:
+        """Consolidate theme paths and rebuild the theme tree from consolidated paths."""
+        if not theme_nodes:
+            return theme_nodes, hierarchy_edges
+
+        theme_paths = self._theme_paths_from_graph(
+            theme_nodes=theme_nodes,
+            hierarchy_edges=hierarchy_edges,
+        )
+        if len(theme_paths) <= 1:
+            return theme_nodes, hierarchy_edges
+
+        try:
+            consolidated = await asyncio.to_thread(
+                consolidate_generated_themes,
+                theme_paths,
+            )
+        except Exception:
+            logger.exception(
+                "Theme consolidation failed; using pre-consolidation theme tree (themes={count}, paths={paths})",
+                count=len(theme_nodes),
+                paths=len(theme_paths),
+            )
+            return theme_nodes, hierarchy_edges
+
+        consolidated_theme_nodes, consolidated_edges = self._build_theme_graph_from_paths(consolidated.themes)
+        if not consolidated_theme_nodes:
+            logger.warning(
+                "Theme consolidation returned no usable themes; using pre-consolidation tree (themes={count})",
+                count=len(theme_nodes),
+            )
+            return theme_nodes, hierarchy_edges
+
+        original_labels = sorted({node.label for node in theme_nodes.values()})
+        consolidated_labels = sorted({node.label for node in consolidated_theme_nodes.values()})
+        kept_label_keys = {label.lower() for label in consolidated_labels}
+        removed_labels = sorted([label for label in original_labels if label.lower() not in kept_label_keys])
+
+        logger.info(
+            "Theme consolidation finished: before_themes={before_themes}, after_themes={after_themes}, "
+            "before_paths={before_paths}, after_paths={after_paths}, removed_labels={removed}",
+            before_themes=len(theme_nodes),
+            after_themes=len(consolidated_theme_nodes),
+            before_paths=len(theme_paths),
+            after_paths=len(consolidated.themes),
+            removed=len(removed_labels),
+        )
+        logger.debug("Theme consolidation kept labels: {}", consolidated_labels)
+        logger.debug("Theme consolidation removed labels: {}", removed_labels)
+        logger.debug(
+            "Theme consolidation output paths: {}",
+            [
+                " > ".join(
+                    self._normalize_label(path_node.label)
+                    for path_node in theme_path.path
+                    if self._normalize_label(path_node.label)
+                )
+                for theme_path in consolidated.themes
+            ],
+        )
+        return consolidated_theme_nodes, consolidated_edges
+
+    @classmethod
+    def _theme_paths_from_graph(
+        cls,
+        *,
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+        hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
+    ) -> list[GeneratedThemePath]:
+        child_to_parent: dict[tuple[str, ...], tuple[str, ...]] = {}
+        children_by_parent: dict[tuple[str, ...], list[tuple[str, ...]]] = {}
+        for parent, child in hierarchy_edges:
+            child_to_parent[child] = parent
+            children_by_parent.setdefault(parent, []).append(child)
+
+        for children in children_by_parent.values():
+            children.sort(key=lambda key: (len(key), key))
+
+        roots = sorted(
+            [key for key in theme_nodes if key not in child_to_parent],
+            key=lambda key: (len(key), key),
+        )
+        paths: list[GeneratedThemePath] = []
+
+        def walk(current: tuple[str, ...], stack: list[tuple[str, ...]]) -> None:
+            next_stack = [*stack, current]
+            children = children_by_parent.get(current, [])
+            if not children:
+                paths.append(
+                    GeneratedThemePath(
+                        path=[
+                            GeneratedThemeNode(
+                                label=theme_nodes[node_key].label,
+                                description=theme_nodes[node_key].description,
+                            )
+                            for node_key in next_stack
+                        ]
+                    )
+                )
+                return
+            for child in children:
+                walk(child, next_stack)
+
+        for root in roots:
+            walk(root, [])
+
+        return paths
+
+    @classmethod
+    def _build_theme_graph_from_paths(
+        cls,
+        theme_paths: list[GeneratedThemePath],
+    ) -> tuple[dict[tuple[str, ...], _ThemeNodeDraft], list[tuple[tuple[str, ...], tuple[str, ...]]]]:
+        theme_nodes_by_key: dict[tuple[str, ...], _ThemeNodeDraft] = {}
+        raw_edges: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+
+        for theme_path in theme_paths:
+            normalized_labels = [cls._normalize_label(node.label) for node in theme_path.path]
+            normalized_labels = [label for label in normalized_labels if label]
+            if not normalized_labels:
+                continue
+
+            for index, label in enumerate(normalized_labels, start=1):
+                key = tuple(part.lower() for part in normalized_labels[:index])
+                description = theme_path.path[index - 1].description
+                existing = theme_nodes_by_key.get(key)
+                if existing is None:
+                    theme_nodes_by_key[key] = _ThemeNodeDraft(
+                        key=key,
+                        label=label,
+                        description=description.strip() if description else None,
+                    )
+                elif not existing.description and description and description.strip():
+                    existing.description = description.strip()
+                if index > 1:
+                    raw_edges.append((tuple(part.lower() for part in normalized_labels[: index - 1]), key))
+
+        canonical_key_by_label: dict[str, tuple[str, ...]] = {}
+        for key in sorted(theme_nodes_by_key.keys(), key=lambda item: (len(item), item)):
+            label_key = theme_nodes_by_key[key].label.lower()
+            canonical_key_by_label.setdefault(label_key, key)
+
+        canonical_theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft] = {}
+        canonical_key_by_original: dict[tuple[str, ...], tuple[str, ...]] = {}
+        for key, node in theme_nodes_by_key.items():
+            canonical_key = canonical_key_by_label[node.label.lower()]
+            canonical_key_by_original[key] = canonical_key
+            canonical_node = canonical_theme_nodes.get(canonical_key)
+            if canonical_node is None:
+                canonical_theme_nodes[canonical_key] = _ThemeNodeDraft(
+                    key=canonical_key,
+                    label=theme_nodes_by_key[canonical_key].label,
+                    description=node.description,
+                )
+            elif not canonical_node.description and node.description:
+                canonical_node.description = node.description
+
+        canonical_edges: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+        child_parent: dict[tuple[str, ...], tuple[str, ...]] = {}
+        seen_edges: set[tuple[tuple[str, ...], tuple[str, ...]]] = set()
+        for parent, child in sorted(raw_edges, key=lambda pair: (len(pair[0]), pair[0], len(pair[1]), pair[1])):
+            canonical_parent = canonical_key_by_original.get(parent)
+            canonical_child = canonical_key_by_original.get(child)
+            if canonical_parent is None or canonical_child is None:
+                continue
+            if canonical_parent == canonical_child:
+                continue
+            existing_parent = child_parent.get(canonical_child)
+            if existing_parent is not None and existing_parent != canonical_parent:
+                continue
+            edge = (canonical_parent, canonical_child)
+            if edge in seen_edges:
+                continue
+            seen_edges.add(edge)
+            child_parent[canonical_child] = canonical_parent
+            canonical_edges.append(edge)
+
+        return canonical_theme_nodes, canonical_edges
 
     @classmethod
     def _deduplicate_generation(

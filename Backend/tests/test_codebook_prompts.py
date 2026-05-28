@@ -8,8 +8,11 @@ from app.llm.prompts import (
     APPLY_CODEBOOK_USER_INSTRUCTION,
     CODE_CONSOLIDATION_SYSTEM_PROMPT,
     CODE_CONSOLIDATION_USER_INSTRUCTION,
+    THEME_CONSOLIDATION_SYSTEM_PROMPT,
+    THEME_CONSOLIDATION_USER_INSTRUCTION,
     build_code_consolidation_prompt,
     build_codebook_application_prompt,
+    build_theme_consolidation_prompt,
 )
 
 
@@ -77,3 +80,18 @@ class TestCodeConsolidationPrompt:
         prompt = build_code_consolidation_prompt()
         assert isinstance(prompt, ChatPromptTemplate)
         assert "codes" in prompt.input_variables
+
+
+class TestThemeConsolidationPrompt:
+    def test_system_prompt_mentions_merge_and_hierarchy(self) -> None:
+        prompt_text = THEME_CONSOLIDATION_SYSTEM_PROMPT.lower()
+        assert "merge" in prompt_text
+        assert "hierarchy" in prompt_text
+
+    def test_user_instruction_has_themes_placeholder(self) -> None:
+        assert "{themes}" in THEME_CONSOLIDATION_USER_INSTRUCTION
+
+    def test_build_prompt_accepts_themes_variable(self) -> None:
+        prompt = build_theme_consolidation_prompt()
+        assert isinstance(prompt, ChatPromptTemplate)
+        assert "themes" in prompt.input_variables

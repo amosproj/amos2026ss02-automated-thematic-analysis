@@ -53,3 +53,9 @@ class CodeConsolidationResult(BaseModel):
     codes: list[CodeConsolidationItem] = Field(
         description="Consolidated, non-overlapping codes for the generated codebook.",
     )
+
+
+class ThemeConsolidationResult(BaseModel):
+    themes: list[GeneratedThemePath] = Field(
+        description="Consolidated theme/subtheme paths for the generated codebook.",
+    )
