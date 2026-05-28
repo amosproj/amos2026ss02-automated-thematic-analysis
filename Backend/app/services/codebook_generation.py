@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from langchain_core.exceptions import OutputParserException
+from loguru import logger
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -270,6 +271,7 @@ class CodebookGenerationService:
             CodeConsolidationItem(label=code.label, description=code.description)
             for code in codes
         ]
+        original_labels = [code.label for code in codes]
         try:
             consolidated = await asyncio.to_thread(
                 consolidate_generated_codes,
@@ -277,6 +279,10 @@ class CodebookGenerationService:
             )
         except Exception:
             # Keep raw deduplicated codes if consolidation fails for any reason.
+            logger.exception(
+                "Code consolidation failed; using pre-consolidation code list (count={count})",
+                count=len(codes),
+            )
             return codes
 
         consolidated_codes: list[_CodeDraft] = []
@@ -297,7 +303,26 @@ class CodebookGenerationService:
                 )
             )
 
-        return consolidated_codes or codes
+        if not consolidated_codes:
+            logger.warning(
+                "Code consolidation returned no usable codes; using pre-consolidation list (count={count})",
+                count=len(codes),
+            )
+            return codes
+
+        consolidated_labels = [code.label for code in consolidated_codes]
+        removed_labels = sorted(
+            {label for label in original_labels if label.lower() not in {kept.lower() for kept in consolidated_labels}}
+        )
+        logger.info(
+            "Code consolidation finished: before={before}, after={after}, removed={removed}",
+            before=len(original_labels),
+            after=len(consolidated_labels),
+            removed=len(removed_labels),
+        )
+        logger.debug("Code consolidation kept labels: {}", consolidated_labels)
+        logger.debug("Code consolidation removed labels: {}", removed_labels)
+        return consolidated_codes
 
     @classmethod
     def _deduplicate_generation(
