@@ -148,13 +148,14 @@ mode_up() {
 
   local up_flags=()
   $DETACH && up_flags+=("-d")
-  if $REBUILD; then
-    up_flags+=(--build --no-cache)
-  elif $BUILD; then
+  if $BUILD || $REBUILD; then
     up_flags+=(--build)
   fi
 
-  if $BUILD || $REBUILD; then
+  if $REBUILD; then
+    log_info "Rebuilding images with --no-cache..."
+    run_compose build --no-cache
+  elif $BUILD; then
     log_info "Building images — first run can take 3–5 minutes..."
   fi
 
