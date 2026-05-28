@@ -254,10 +254,13 @@ function Invoke-Up {
 
   $upFlags = [System.Collections.ArrayList]@()
   if (-not $Foreground) { $null = $upFlags.Add('-d') }
-  if ($Rebuild)         { $null = $upFlags.Add('--build'); $null = $upFlags.Add('--no-cache') }
-  elseif (-not $NoBuild){ $null = $upFlags.Add('--build') }
+  if (-not $NoBuild)    { $null = $upFlags.Add('--build') }
 
-  if (-not $NoBuild) {
+  if ($Rebuild) {
+    Write-Info "Rebuilding images with --no-cache..."
+    Invoke-Compose @('build', '--no-cache')
+  }
+  elseif (-not $NoBuild) {
     Write-Info "Building images - first run can take 3-5 minutes..."
   }
 
