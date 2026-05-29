@@ -90,8 +90,20 @@ class TestThemeConsolidationPrompt:
 
     def test_user_instruction_has_themes_placeholder(self) -> None:
         assert "{themes}" in THEME_CONSOLIDATION_USER_INSTRUCTION
+        assert "{constraints}" in THEME_CONSOLIDATION_USER_INSTRUCTION
 
     def test_build_prompt_accepts_themes_variable(self) -> None:
         prompt = build_theme_consolidation_prompt()
         assert isinstance(prompt, ChatPromptTemplate)
         assert "themes" in prompt.input_variables
+        assert "constraints" in prompt.input_variables
+
+    def test_theme_prompt_can_format_with_required_variables(self) -> None:
+        prompt = build_theme_consolidation_prompt()
+        messages = prompt.format_messages(
+            themes='[{"path":[{"label":"Workflow Friction"}]}]',
+            constraints="- Keep Level-1 roots at <= 10.",
+        )
+        assert len(messages) == 2
+        assert "Workflow Friction" in messages[1].content
+        assert "Level-1 roots" in messages[1].content

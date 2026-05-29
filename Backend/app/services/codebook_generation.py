@@ -97,12 +97,16 @@ class CodebookGenerationService:
             on_progress=on_progress,
             should_cancel=should_cancel,
         )
+        await self._raise_if_cancelled(should_cancel)
         theme_nodes, code_nodes, hierarchy_edges = self._deduplicate_generation(generation_results)
-        code_nodes = await self._post_process_codes(code_nodes)
+        code_nodes = await self._post_process_codes(code_nodes, should_cancel=should_cancel)
+        await self._raise_if_cancelled(should_cancel)
         theme_nodes, hierarchy_edges = await self._post_process_themes(
             theme_nodes=theme_nodes,
             hierarchy_edges=hierarchy_edges,
+            should_cancel=should_cancel,
         )
+        await self._raise_if_cancelled(should_cancel)
         if not theme_nodes:
             raise UnprocessableError(
                 "Codebook generation produced no themes from selected passages "
@@ -272,8 +276,21 @@ class CodebookGenerationService:
     def _normalize_label(value: str) -> str:
         return " ".join(value.split()).strip()
 
-    async def _post_process_codes(self, codes: list[_CodeDraft]) -> list[_CodeDraft]:
+    @staticmethod
+    async def _raise_if_cancelled(
+        should_cancel: Callable[[], Awaitable[bool]] | None,
+    ) -> None:
+        if should_cancel is not None and await should_cancel():
+            raise CodebookGenerationCancelledError("Codebook generation was cancelled")
+
+    async def _post_process_codes(
+        self,
+        codes: list[_CodeDraft],
+        *,
+        should_cancel: Callable[[], Awaitable[bool]] | None = None,
+    ) -> list[_CodeDraft]:
         """Consolidate generated codes and keep a deterministic fallback."""
+        await self._raise_if_cancelled(should_cancel)
         if not codes:
             return []
         if len(codes) == 1:
@@ -290,6 +307,9 @@ class CodebookGenerationService:
                 consolidate_generated_codes,
                 consolidation_payload,
             )
+            await self._raise_if_cancelled(should_cancel)
+        except CodebookGenerationCancelledError:
+            raise
         except Exception:
             # Keep raw deduplicated codes if consolidation fails for any reason.
             logger.exception(
@@ -341,8 +361,10 @@ class CodebookGenerationService:
         *,
         theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
         hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
+        should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> tuple[dict[tuple[str, ...], _ThemeNodeDraft], list[tuple[tuple[str, ...], tuple[str, ...]]]]:
         """Consolidate theme paths and rebuild the theme tree from consolidated paths."""
+        await self._raise_if_cancelled(should_cancel)
         if not theme_nodes:
             return theme_nodes, hierarchy_edges
 
@@ -365,6 +387,9 @@ class CodebookGenerationService:
                 theme_paths,
                 constraints=first_pass_constraints,
             )
+            await self._raise_if_cancelled(should_cancel)
+        except CodebookGenerationCancelledError:
+            raise
         except Exception:
             logger.exception(
                 "Theme consolidation failed; using pre-consolidation theme tree (themes={count}, paths={paths})",
@@ -395,11 +420,14 @@ class CodebookGenerationService:
                     consolidated.themes,
                     constraints=strict_constraints,
                 )
+                await self._raise_if_cancelled(should_cancel)
                 strict_nodes, strict_edges = self._build_theme_graph_from_paths(strict_consolidated.themes)
                 if strict_nodes:
                     consolidated = strict_consolidated
                     consolidated_theme_nodes = strict_nodes
                     consolidated_edges = strict_edges
+            except CodebookGenerationCancelledError:
+                raise
             except Exception:
                 logger.exception("Strict theme consolidation pass failed; using first-pass consolidated tree")
 
