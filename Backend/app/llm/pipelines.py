@@ -1,8 +1,9 @@
 import json
+from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
-from langchain_core.runnables import Runnable
+from langchain_core.runnables import Runnable, RunnableConfig
 
 from app.llm.client import build_chat_model
 from app.llm.prompts import (
@@ -60,7 +61,7 @@ def apply_codebook_to_interview(
 def build_codebook_generation_chain(
     *,
     model: BaseChatModel | None = None,
-) -> Runnable:
+) -> Runnable[dict[str, str], dict[str, Any]]:
     chat_model = model or build_chat_model()
     parser = JsonOutputParser(pydantic_object=PassageCodebookGeneration)
     return build_codebook_generation_prompt() | chat_model | parser
@@ -83,7 +84,7 @@ def generate_codebook_for_passage(
 async def generate_codebook_for_passages(
     passages: list[str],
     *,
-    chain: Runnable | None = None,
+    chain: Runnable[dict[str, str], dict[str, Any]] | None = None,
     model: BaseChatModel | None = None,
     max_concurrency: int | None = None,
 ) -> list[PassageCodebookGeneration | Exception]:
@@ -94,10 +95,12 @@ async def generate_codebook_for_passages(
             raise ValueError("Passage is empty.")
 
     runnable = chain or build_codebook_generation_chain(model=model)
-    configs = {"max_concurrency": max_concurrency} if max_concurrency is not None else None
+    config: RunnableConfig | None = (
+        {"max_concurrency": max_concurrency} if max_concurrency is not None else None
+    )
     raw_results = await runnable.abatch(
         [{"passage": passage} for passage in passages],
-        config=configs,
+        config=config,
         return_exceptions=True,
     )
 

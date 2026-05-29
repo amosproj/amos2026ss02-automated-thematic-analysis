@@ -23,15 +23,48 @@ def _utc_now_naive() -> datetime:
 
 
 class CodebookGenerationJobRunner:
+    _TERMINAL_PHASES = frozenset({"succeeded", "failed", "cancelled"})
+    _TERMINAL_PHASE_TTL_S = 60.0 * 60.0
+    _MAX_PHASE_ENTRIES = 4096
+
     def __init__(self) -> None:
         self._tasks: dict[UUID, asyncio.Task[None]] = {}
         self._phases: dict[UUID, str] = {}
+        self._phase_updated_at: dict[UUID, float] = {}
 
     def get_phase(self, job_id: UUID, *, status: str) -> str:
+        self._prune_phases()
         return self._phases.get(job_id, status)
 
     def set_phase(self, job_id: UUID, phase: str) -> None:
+        self._prune_phases()
         self._phases[job_id] = phase
+        self._phase_updated_at[job_id] = time.monotonic()
+        self._prune_phases()
+
+    def _prune_phases(self) -> None:
+        now = time.monotonic()
+        expired_job_ids = [
+            phase_job_id
+            for phase_job_id, phase in self._phases.items()
+            if phase in self._TERMINAL_PHASES
+            and (now - self._phase_updated_at.get(phase_job_id, now)) >= self._TERMINAL_PHASE_TTL_S
+        ]
+        for expired_job_id in expired_job_ids:
+            self._phases.pop(expired_job_id, None)
+            self._phase_updated_at.pop(expired_job_id, None)
+
+        if len(self._phases) <= self._MAX_PHASE_ENTRIES:
+            return
+
+        terminal_job_ids = [
+            phase_job_id for phase_job_id, phase in self._phases.items() if phase in self._TERMINAL_PHASES
+        ]
+        terminal_job_ids.sort(key=lambda phase_job_id: self._phase_updated_at.get(phase_job_id, 0.0))
+        overflow = len(self._phases) - self._MAX_PHASE_ENTRIES
+        for evict_job_id in terminal_job_ids[:overflow]:
+            self._phases.pop(evict_job_id, None)
+            self._phase_updated_at.pop(evict_job_id, None)
 
     async def start(self) -> None:
         return
@@ -47,6 +80,7 @@ class CodebookGenerationJobRunner:
                 pass
         self._tasks.clear()
         self._phases.clear()
+        self._phase_updated_at.clear()
 
     async def enqueue(
         self,

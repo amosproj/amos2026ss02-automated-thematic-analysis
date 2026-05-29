@@ -373,8 +373,8 @@ class CodebookGenerationService:
             return 0.0
         capped_attempt = max(1, attempt)
         backoff = base_delay_s * (2 ** (capped_attempt - 1))
-        jitter = random.uniform(0.8, 1.2)
-        return min(max_delay_s, backoff * jitter)
+        jitter: float = random.uniform(0.8, 1.2)
+        return float(min(max_delay_s, backoff * jitter))
 
     @staticmethod
     def _normalize_label(value: str) -> str:
