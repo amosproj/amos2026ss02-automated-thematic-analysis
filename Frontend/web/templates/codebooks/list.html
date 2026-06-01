@@ -1,6 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Codebooks{% endblock %}
 {% block content %}
+  {% if corpus_id and corpus_options %}
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body">
+        <label for="corpus_selector" class="form-label fw-semibold mb-2">Selected corpus</label>
+        <select id="corpus_selector"
+                class="form-select"
+                data-switch-template="{{ url_for('codebooks.list_codebooks_for_corpus', corpus_id='__CORPUS_ID__') }}">
+          {% for corpus in corpus_options %}
+            <option value="{{ corpus.id }}" {% if corpus.id == corpus_id %}selected{% endif %}>
+              {{ corpus.name }} ({{ corpus.id }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  {% endif %}
+
   <h1 class="h3 mb-4">Codebooks</h1>
 
   {% if error %}
@@ -25,7 +42,7 @@
                 <td class="text-secondary">{{ cb.created_by }}</td>
                 <td>
                   <a class="btn btn-sm btn-outline-primary"
-                     href="{{ url_for('codebooks.codebook_themes', codebook_id=cb.id, name=cb.name, version=cb.version) }}">
+                     href="{{ url_for('codebooks.codebook_themes_for_corpus', corpus_id=corpus_id, codebook_id=cb.id, name=cb.name, version=cb.version) }}">
                     View themes
                   </a>
                 </td>
@@ -38,4 +55,18 @@
   {% else %}
     <p class="text-secondary">No codebooks found.</p>
   {% endif %}
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
+  <script>
+    (() => {
+      const selector = document.getElementById("corpus_selector");
+      if (!selector) return;
+      selector.addEventListener("change", () => {
+        const template = selector.dataset.switchTemplate;
+        const target = template.replace("__CORPUS_ID__", encodeURIComponent(selector.value));
+        window.location.href = target;
+      });
+    })();
+  </script>
 {% endblock %}

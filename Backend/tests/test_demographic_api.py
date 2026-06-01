@@ -158,14 +158,13 @@ async def test_demographic_upload_rejects_non_csv_extension_even_with_csv_mime_v
     assert "Unsupported file extension" in bad_response.json()["meta"]["detail"]
 
 
-async def test_demographic_upload_rejects_comma_delimited_csv(client):
+async def test_demographic_upload_accepts_comma_delimited_csv(client):
     corpus_id = await _create_corpus(client, "Corpus Delimiter")
     content = "username,segment\nuser_e,A\n"
 
     response = await _upload_csv(client, corpus_id, "demo.csv", content, content_type="text/csv")
-    assert response.status_code == 422
-    assert response.json()["success"] is False
-    assert "must include 'username' column" in response.json()["meta"]["detail"]
+    assert response.status_code == 201
+    assert response.json()["success"] is True
 
 
 async def test_demographic_upload_rejects_duplicate_username(client):

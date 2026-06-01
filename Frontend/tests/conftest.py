@@ -33,6 +33,10 @@ class FakeBackend:
 
     def __init__(self) -> None:
         self.corpus_id = "test-corpus-id"
+        self.corpora: list[dict] = [
+            {"id": self.corpus_id, "name": "Default Corpus"},
+        ]
+        self.last_created_corpus: dict | None = None
         self.documents: list[dict] = []
         self.upload_results: list[dict] = []
         self.uploaded_files: list[str] = []
@@ -57,7 +61,21 @@ class FakeBackend:
 
     def ensure_corpus(self, project_id: str, name: str) -> str:
         self._maybe_raise("ensure_corpus")
+        if not any(c.get("id") == self.corpus_id for c in self.corpora):
+            self.corpora.append({"id": self.corpus_id, "name": name})
         return self.corpus_id
+
+    def list_corpora(self, project_id: str) -> list[dict]:
+        self._maybe_raise("list_corpora")
+        return self.corpora
+
+    def create_corpus(self, project_id: str, name: str) -> dict:
+        self._maybe_raise("create_corpus")
+        new_id = f"new-corpus-{len(self.corpora) + 1}"
+        created = {"id": new_id, "name": name}
+        self.corpora.append(created)
+        self.last_created_corpus = created
+        return created
 
     def upload_files(self, corpus_id, files) -> list[dict]:
         self._maybe_raise("upload_files")
@@ -70,9 +88,16 @@ class FakeBackend:
 
     # ---- Codebooks / themes -------------------------------------------------
 
-    def list_codebooks(self) -> list[dict]:
+    def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
         self._maybe_raise("list_codebooks")
-        return self.codebooks
+        if not corpus_id:
+            return self.codebooks
+        scoped = []
+        for cb in self.codebooks:
+            cb_corpus = cb.get("corpus_id")
+            if cb_corpus is None or cb_corpus == corpus_id:
+                scoped.append(cb)
+        return scoped
 
     def get_theme_frequencies(self, codebook_id: str) -> list[dict]:
         self._maybe_raise("get_theme_frequencies")

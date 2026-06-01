@@ -6,21 +6,12 @@ from web.services.backend_client import (
     BackendValidationError,
     get_backend_client as _backend,
 )
+from web.services.corpus_context import (
+    resolve_active_corpus,
+    set_active_corpus_id,
+)
 
 bp = Blueprint("ingestion", __name__)
-
-
-def _resolve_workspace_corpus(client: BackendClient) -> str:
-    """MVP single-workspace: resolve or create the default corpus.
-
-    Only invoked from the no-arg landing routes. Every other view receives
-    the corpus_id from the URL, so the id is explicit and shareable rather
-    than hidden in an in-memory cache."""
-    cfg = current_app.config
-    return client.ensure_corpus(
-        project_id=cfg["DEFAULT_PROJECT_ID"],
-        name=cfg["DEFAULT_CORPUS_NAME"],
-    )
 
 
 # Landings — resolve the default corpus then redirect to the corpus-scoped URL.
@@ -32,7 +23,7 @@ def _landing_with_corpus(target_endpoint: str):
     transcript list with the user-facing error message — the only sensible
     fallback view when we don't yet know a corpus id."""
     try:
-        corpus_id = _resolve_workspace_corpus(_backend())
+        corpus_id, _, _ = resolve_active_corpus(_backend())
     except BackendError as exc:
         flash(exc.user_message, "danger")
         return render_template(
@@ -55,11 +46,26 @@ def upload_landing():
 
 
 def _render_upload_form(corpus_id: str) -> str:
+    cfg = current_app.config
+    try:
+        client = _backend()
+        active_corpus_id, corpus_options, active_corpus = resolve_active_corpus(
+            client,
+            requested_corpus_id=corpus_id,
+        )
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        active_corpus_id = corpus_id
+        active_corpus = {"id": corpus_id, "name": cfg["DEFAULT_CORPUS_NAME"]}
+        corpus_options = [active_corpus]
+
     return render_template(
         "ingestion/upload.html",
-        corpus_id=corpus_id,
-        max_size_mb=current_app.config["MAX_UPLOAD_SIZE_MB"],
-        accepted_extensions=sorted(current_app.config["ACCEPTED_EXTENSIONS"]),
+        corpus_id=active_corpus_id,
+        active_corpus_name=active_corpus.get("name"),
+        corpus_options=corpus_options,
+        max_size_mb=cfg["MAX_UPLOAD_SIZE_MB"],
+        accepted_extensions=sorted(cfg["ACCEPTED_EXTENSIONS"]),
     )
 
 
@@ -74,15 +80,69 @@ def _file_size(fileobj) -> int:
 
 @bp.get("/<corpus_id>/upload")
 def upload_form(corpus_id: str) -> str:
+    set_active_corpus_id(corpus_id)
     return _render_upload_form(corpus_id)
+
+
+@bp.post("/corpora")
+def create_corpus_submit():
+    """Create a new corpus from the uploads page selector flow.
+
+    The backend owns UUID creation; the frontend only collects a corpus name.
+    On success, redirect to the upload page scoped to the new corpus so both
+    transcript and demographic forms target it immediately.
+    """
+    cfg = current_app.config
+    name = (request.form.get("name") or "").strip()
+    current_corpus_id = (request.form.get("current_corpus_id") or "").strip()
+
+    if not name:
+        flash("Please enter a corpus name.", "danger")
+        if current_corpus_id:
+            return redirect(url_for("ingestion.upload_form", corpus_id=current_corpus_id))
+        return redirect(url_for("ingestion.upload_landing"))
+
+    try:
+        created = _backend().create_corpus(
+            project_id=cfg["DEFAULT_PROJECT_ID"],
+            name=name,
+        )
+    except BackendValidationError as exc:
+        flash(exc.user_message, "danger")
+        if current_corpus_id:
+            return redirect(url_for("ingestion.upload_form", corpus_id=current_corpus_id))
+        return redirect(url_for("ingestion.upload_landing"))
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        if current_corpus_id:
+            return redirect(url_for("ingestion.upload_form", corpus_id=current_corpus_id))
+        return redirect(url_for("ingestion.upload_landing"))
+
+    new_corpus_id = created["id"]
+    set_active_corpus_id(new_corpus_id)
+    flash(f"Created corpus '{created.get('name', name)}'.", "success")
+    return redirect(url_for("ingestion.upload_form", corpus_id=new_corpus_id))
 
 
 @bp.post("/<corpus_id>/upload")
 def upload_submit(corpus_id: str) -> str:
+    set_active_corpus_id(corpus_id)
+    active_corpus_name = current_app.config["DEFAULT_CORPUS_NAME"]
+    corpus_options: list[dict] = [{"id": corpus_id, "name": active_corpus_name}]
+    active_corpus_id = corpus_id
+    try:
+        active_corpus_id, corpus_options, active_corpus = resolve_active_corpus(
+            _backend(),
+            requested_corpus_id=corpus_id,
+        )
+        active_corpus_name = active_corpus.get("name", active_corpus_name)
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+
     files = [f for f in request.files.getlist("files") if f and f.filename]
     if not files:
         flash("Please select at least one file to upload.", "danger")
-        return _render_upload_form(corpus_id)
+        return _render_upload_form(active_corpus_id)
 
     max_bytes = current_app.config["MAX_UPLOAD_BYTES"]
     oversize = [f.filename for f in files if _file_size(f) > max_bytes]
@@ -92,22 +152,33 @@ def upload_submit(corpus_id: str) -> str:
             f"Each file must be at most {max_mb} MB. Too large: {', '.join(oversize)}.",
             "danger",
         )
-        return _render_upload_form(corpus_id)
+        return _render_upload_form(active_corpus_id)
 
     try:
-        results = _backend().upload_files(corpus_id, files)
+        results = _backend().upload_files(active_corpus_id, files)
     except BackendValidationError as exc:
         # Backend rejected the payload — re-render the form so the user
         # can fix it. The validation message names the offending field.
         flash(exc.user_message, "danger")
-        return _render_upload_form(corpus_id)
+        return _render_upload_form(active_corpus_id)
     except BackendError as exc:
         flash(exc.user_message, "danger")
         return render_template(
-            "ingestion/results.html", results=[], corpus_id=corpus_id, error=True
+            "ingestion/results.html",
+            results=[],
+            corpus_id=active_corpus_id,
+            corpus_options=corpus_options,
+            active_corpus_name=active_corpus_name,
+            error=True,
         )
 
-    return render_template("ingestion/results.html", results=results, corpus_id=corpus_id)
+    return render_template(
+        "ingestion/results.html",
+        results=results,
+        corpus_id=active_corpus_id,
+        corpus_options=corpus_options,
+        active_corpus_name=active_corpus_name,
+    )
 
 # List (corpus-scoped)
 
@@ -115,11 +186,31 @@ def upload_submit(corpus_id: str) -> str:
 
 @bp.get("/<corpus_id>/")
 def list_transcripts(corpus_id: str) -> str:
+    set_active_corpus_id(corpus_id)
+    active_corpus_name = current_app.config["DEFAULT_CORPUS_NAME"]
+    corpus_options: list[dict] = [{"id": corpus_id, "name": active_corpus_name}]
     try:
-        documents = _backend().list_documents(corpus_id)
+        client = _backend()
+        active_corpus_id, corpus_options, active_corpus = resolve_active_corpus(
+            client,
+            requested_corpus_id=corpus_id,
+        )
+        documents = client.list_documents(active_corpus_id)
+        active_corpus_name = active_corpus.get("name", active_corpus_name)
     except BackendError as exc:
         flash(exc.user_message, "danger")
         return render_template(
-            "ingestion/list.html", documents=[], corpus_id=corpus_id, error=True
+            "ingestion/list.html",
+            documents=[],
+            corpus_id=corpus_id,
+            corpus_options=corpus_options,
+            active_corpus_name=active_corpus_name,
+            error=True,
         )
-    return render_template("ingestion/list.html", documents=documents, corpus_id=corpus_id)
+    return render_template(
+        "ingestion/list.html",
+        documents=documents,
+        corpus_id=active_corpus_id,
+        corpus_options=corpus_options,
+        active_corpus_name=active_corpus_name,
+    )
