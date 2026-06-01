@@ -259,7 +259,18 @@ def export_codebook(corpus_id: str, codebook_id: str) -> Response | str:
 @bp.get("/<corpus_id>/upload")
 def upload_form(corpus_id: str) -> str:
     """Render the upload form (choose CSV or manual)."""
-    return render_template("codebooks/upload.html", corpus_id=corpus_id, error=None)
+    set_active_corpus_id(corpus_id)
+    try:
+        active_corpus_id, corpus_options, _ = resolve_active_corpus(
+            _backend(),
+            requested_corpus_id=corpus_id,
+        )
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        active_corpus_id = corpus_id
+        corpus_options = []
+
+    return render_template("codebooks/upload.html", corpus_id=active_corpus_id, corpus_options=corpus_options, error=None)
 
 @bp.post("/<corpus_id>/upload")
 def upload_submit(corpus_id: str) -> str:
