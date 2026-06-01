@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Literal, Union
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 
 from app.schemas.common import BaseSchema
 
@@ -44,7 +44,7 @@ class CodebookCreateRequest(BaseSchema):
 
     @field_validator("nodes", mode="before")
     @classmethod
-    def populate_nodes(cls, v: list[NodeInput] | None, info) -> list[NodeInput]:
+    def populate_nodes(cls, v: list[NodeInput] | None, info: ValidationInfo) -> list[NodeInput]:
         # Handle backward compatibility where payload has `themes` instead of `nodes`
         if v:
             return v

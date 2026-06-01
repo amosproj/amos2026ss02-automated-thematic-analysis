@@ -79,6 +79,7 @@ class CodebookService:
             themes: list[Theme] = []
             codes: list[Code] = []
             edges: list[ThemeHierarchyRelationship] = []
+            tc_edges: list[ThemeCodeRelationship] = []
             theme_by_name: dict[str, Theme] = {}
 
             for node_input in payload.nodes:
@@ -122,18 +123,19 @@ class CodebookService:
                             is_active=True,
                         )
                         self._session.add(tc_link)
+                        tc_edges.append(tc_link)
 
             for node_input in payload.nodes:
                 if node_input.node_type == NodeType.CODE:
                     continue
 
                 theme = theme_by_name[node_input.name]
-                link = CodebookThemeRelationship(
+                theme_link = CodebookThemeRelationship(
                     codebook_id=codebook.id,
                     theme_id=theme.id,
                     is_active=True,
                 )
-                self._session.add(link)
+                self._session.add(theme_link)
 
                 if node_input.parent_name:
                     parent_theme = theme_by_name.get(node_input.parent_name)
@@ -163,7 +165,7 @@ class CodebookService:
                 f"Failed to create codebook: {exc}"
             ) from exc
 
-        return codebook, themes, edges, codes
+        return codebook, themes, edges, codes, tc_edges
 
     # ------------------------------------------------------------------
     # Read

@@ -233,8 +233,8 @@ async def create_codebook(
 ) -> JSONResponse:
     """Create a new codebook and persist its themes atomically in the database."""
     service = CodebookService(session)
-    codebook, themes, edges, codes = await service.create_codebook(payload)
-    detail = CodebookService.build_detail_schema(codebook, themes, edges, codes)
+    codebook, themes, edges, codes, tc_edges = await service.create_codebook(payload)
+    detail = CodebookService.build_detail_schema(codebook, themes, edges, codes, tc_edges)
     return JSONResponse(
         status_code=201,
         content=ResponseEnvelope.ok(detail).model_dump(mode="json"),
