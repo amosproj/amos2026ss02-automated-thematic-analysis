@@ -40,7 +40,7 @@ def test_codebook_list_renders_codebooks(client, fake_backend):
     assert b"Focus Group Codebook" in resp.data
     assert b"alice" in resp.data
     assert b"bob" in resp.data
-    assert b'id="corpus_selector"' in resp.data
+    assert b'id="global-corpus-select"' in resp.data
 
 
 def test_codebook_list_renders_empty_state(client, fake_backend):
@@ -99,10 +99,10 @@ def test_codebook_themes_renders_frequency_and_tree(client, fake_backend):
         {"theme": {"id": "t-1", "label": "Work-Life Balance", "is_active": True},
          "children": []},
     ]
-    resp = client.get("/codebooks/cb-1/themes", follow_redirects=True)
+    resp = client.get("/codebooks/test-corpus-id/cb-1/themes", follow_redirects=True)
     assert resp.status_code == 200
     assert b"Work-Life Balance" in resp.data
-    assert b'id="corpus_selector"' in resp.data
+    assert b'id="global-corpus-select"' in resp.data
 
 
 def test_codebook_themes_renders_name_from_query_param(client, fake_backend):
@@ -113,7 +113,7 @@ def test_codebook_themes_renders_name_from_query_param(client, fake_backend):
     ]
     fake_backend.theme_frequencies = []
     fake_backend.theme_tree = []
-    resp = client.get("/codebooks/cb-1/themes?name=My+Codebook&version=3", follow_redirects=True)
+    resp = client.get("/codebooks/test-corpus-id/cb-1/themes?name=My+Codebook&version=3", follow_redirects=True)
     assert resp.status_code == 200
     assert b"My Codebook" in resp.data
 
@@ -126,7 +126,7 @@ def test_codebook_themes_renders_empty_state(client, fake_backend):
     ]
     fake_backend.theme_frequencies = []
     fake_backend.theme_tree = []
-    resp = client.get("/codebooks/cb-1/themes", follow_redirects=True)
+    resp = client.get("/codebooks/test-corpus-id/cb-1/themes", follow_redirects=True)
     assert resp.status_code == 200
     assert b"No themes found" in resp.data
 
@@ -138,7 +138,7 @@ def test_codebook_themes_renders_backend_error(client, fake_backend):
          "corpus_id": fake_backend.corpus_id},
     ]
     fake_backend.raise_on = "get_theme_frequencies"
-    resp = client.get("/codebooks/cb-1/themes", follow_redirects=True)
+    resp = client.get("/codebooks/test-corpus-id/cb-1/themes", follow_redirects=True)
     assert resp.status_code == 200
     assert b"simulated get_theme_frequencies failure" in resp.data
     assert b"Traceback" not in resp.data
@@ -153,7 +153,7 @@ def test_codebook_themes_shows_not_found_message_for_missing_codebook(client, fa
          "corpus_id": fake_backend.corpus_id},
     ]
     fake_backend.raise_on = ("get_theme_frequencies", BackendNotFoundError)
-    resp = client.get("/codebooks/missing-id/themes", follow_redirects=True)
+    resp = client.get("/codebooks/test-corpus-id/missing-id/themes", follow_redirects=True)
     assert resp.status_code == 200
     # Substring avoids apostrophe in "couldn't" — Jinja2 HTML-escapes it.
     assert b"may have been deleted" in resp.data

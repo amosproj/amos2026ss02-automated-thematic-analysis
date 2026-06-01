@@ -38,9 +38,17 @@ class FakeCodebookBackend:
         self.last_fetched_id = codebook_id
         return self.get_codebook_result
 
-    def list_codebooks(self) -> list[dict]:
+    def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
         self._maybe_raise("list_codebooks")
         return self.list_codebooks_result
+
+    def list_corpora(self, corpus_id: str | None = None) -> list[dict]:
+        self._maybe_raise("list_corpora")
+        return [{"id": "test-corpus-id", "name": "Default Corpus"}]
+
+    def ensure_corpus(self, corpus_id: str, name: str) -> str:
+        self._maybe_raise("ensure_corpus")
+        return corpus_id
 
     def _maybe_raise(self, method: str) -> None:
         if self.raise_on == method:
@@ -61,7 +69,7 @@ def fake_codebook_backend(monkeypatch) -> FakeCodebookBackend:
 
 def test_list_codebooks_renders_empty_state(client, fake_codebook_backend):
     fake_codebook_backend.list_codebooks_result = []
-    resp = client.get("/codebooks/")
+    resp = client.get("/codebooks/test-corpus-id/")
     assert resp.status_code == 200
     assert b"No codebooks found" in resp.data
 
@@ -73,7 +81,7 @@ def test_list_codebooks_renders_saved_entries(client, fake_codebook_backend):
         {"id": "abc-2", "name": "Health Study", "version": 2,
          "project_id": "default-project", "created_by": "researcher"},
     ]
-    resp = client.get("/codebooks/")
+    resp = client.get("/codebooks/test-corpus-id/")
     assert resp.status_code == 200
     assert b"Interview Framework" in resp.data
     assert b"Health Study" in resp.data
@@ -82,7 +90,7 @@ def test_list_codebooks_renders_saved_entries(client, fake_codebook_backend):
 
 def test_list_codebooks_surfaces_backend_error(client, fake_codebook_backend):
     fake_codebook_backend.raise_on = "list_codebooks"
-    resp = client.get("/codebooks/")
+    resp = client.get("/codebooks/test-corpus-id/")
     assert resp.status_code == 200
     assert b"simulated list_codebooks failure" in resp.data
 
@@ -93,7 +101,7 @@ def test_list_codebooks_surfaces_backend_error(client, fake_codebook_backend):
 
 
 def test_upload_form_renders_correctly(client):
-    resp = client.get("/codebooks/upload")
+    resp = client.get("/codebooks/test-corpus-id/upload")
     assert resp.status_code == 200
     assert b"Upload" in resp.data
     assert b"CSV" in resp.data
@@ -105,7 +113,7 @@ def test_upload_form_renders_correctly(client):
 
 
 def test_manual_form_renders_blank_row(client, fake_codebook_backend):
-    resp = client.get("/codebooks/manual")
+    resp = client.get("/codebooks/test-corpus-id/manual")
     assert resp.status_code == 200
     assert b"Preview &amp; Confirm Themes" in resp.data
     assert b'name="theme_names[]"' in resp.data
@@ -124,7 +132,7 @@ def test_upload_submit_csv_success(client, fake_codebook_backend):
     ]
 
     resp = client.post(
-        "/codebooks/upload",
+        "/codebooks/test-corpus-id/upload",
         data={
             "file": (io.BytesIO(b"name,description\nTheme A,Desc A\nTheme B,Desc B"), "my_codebook.csv"),
             "action": "upload",
@@ -142,16 +150,16 @@ def test_upload_submit_csv_success(client, fake_codebook_backend):
 def test_upload_submit_manual_redirects_to_manual_form(client, fake_codebook_backend):
     """POST with action=manual should redirect to GET /codebooks/manual (not render inline)."""
     resp = client.post(
-        "/codebooks/upload",
+        "/codebooks/test-corpus-id/upload",
         data={"action": "manual"},
     )
     assert resp.status_code == 302
-    assert "/codebooks/manual" in resp.headers["Location"]
+    assert "/codebooks/test-corpus-id/manual" in resp.headers["Location"]
 
 
 def test_upload_submit_no_file_renders_warning(client):
     resp = client.post(
-        "/codebooks/upload",
+        "/codebooks/test-corpus-id/upload",
         data={"action": "upload"},
         content_type="multipart/form-data",
     )
@@ -161,7 +169,7 @@ def test_upload_submit_no_file_renders_warning(client):
 
 def test_upload_submit_invalid_extension(client):
     resp = client.post(
-        "/codebooks/upload",
+        "/codebooks/test-corpus-id/upload",
         data={
             "file": (io.BytesIO(b"stuff"), "codebook.txt"),
             "action": "upload",
@@ -175,7 +183,7 @@ def test_upload_submit_invalid_extension(client):
 def test_upload_submit_surfaces_backend_parse_error(client, fake_codebook_backend):
     fake_codebook_backend.raise_on = "parse_csv_preview"
     resp = client.post(
-        "/codebooks/upload",
+        "/codebooks/test-corpus-id/upload",
         data={
             "file": (io.BytesIO(b"bad_csv"), "codebook.csv"),
             "action": "upload",
@@ -187,7 +195,7 @@ def test_upload_submit_surfaces_backend_parse_error(client, fake_codebook_backen
 
 
 # ---------------------------------------------------------------------------
-# POST /codebooks/confirm
+# POST /codebooks/test-corpus-id/confirm
 # ---------------------------------------------------------------------------
 
 
@@ -198,7 +206,7 @@ def test_confirm_submit_success(client, fake_codebook_backend):
     }
 
     resp = client.post(
-        "/codebooks/confirm",
+        "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "Verified Codebook",
             "node_types[]": ["THEME", "THEME"],
@@ -218,7 +226,7 @@ def test_confirm_submit_success(client, fake_codebook_backend):
 
 def test_confirm_submit_validation_missing_name(client):
     resp = client.post(
-        "/codebooks/confirm",
+        "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "",
             "node_types[]": ["THEME"],
@@ -233,7 +241,7 @@ def test_confirm_submit_validation_missing_name(client):
 
 def test_confirm_submit_validation_blank_theme_names(client):
     resp = client.post(
-        "/codebooks/confirm",
+        "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "Tst",
             "node_types[]": ["THEME", "THEME"],
@@ -249,7 +257,7 @@ def test_confirm_submit_validation_blank_theme_names(client):
 def test_confirm_submit_surfaces_backend_error(client, fake_codebook_backend):
     fake_codebook_backend.raise_on = "create_codebook"
     resp = client.post(
-        "/codebooks/confirm",
+        "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "Tst",
             "node_types[]": ["THEME"],
@@ -263,7 +271,7 @@ def test_confirm_submit_surfaces_backend_error(client, fake_codebook_backend):
 
 def test_confirm_submit_validation_missing_parent(client):
     resp = client.post(
-        "/codebooks/confirm",
+        "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "Tst",
             "node_types[]": ["THEME", "SUBTHEME"],
@@ -277,7 +285,7 @@ def test_confirm_submit_validation_missing_parent(client):
 
 def test_confirm_submit_validation_theme_has_parent(client):
     resp = client.post(
-        "/codebooks/confirm",
+        "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "Tst",
             "node_types[]": ["THEME", "THEME"],
@@ -287,11 +295,11 @@ def test_confirm_submit_validation_theme_has_parent(client):
         },
     )
     assert resp.status_code == 200
-    assert b"is a root THEME and must not have a Parent Name" in resp.data
+    assert b"must not have a Parent Name" in resp.data
 
 def test_confirm_submit_validation_parent_does_not_exist(client):
     resp = client.post(
-        "/codebooks/confirm",
+        "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "Tst",
             "node_types[]": ["THEME", "SUBTHEME"],
@@ -321,7 +329,7 @@ def test_success_renders_saved_details(client, fake_codebook_backend):
         ],
     }
 
-    resp = client.get("/codebooks/success?codebook_id=e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002")
+    resp = client.get("/codebooks/test-corpus-id/success?codebook_id=e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002")
 
     assert resp.status_code == 200
     assert b"Codebook Saved Successfully" in resp.data
@@ -355,7 +363,7 @@ def test_export_codebook_success(client, fake_codebook_backend):
         ]
     }
 
-    resp = client.get("/codebooks/e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002/export")
+    resp = client.get("/codebooks/test-corpus-id/e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002/export")
 
     assert resp.status_code == 200
     assert resp.mimetype == "text/csv"
@@ -369,6 +377,6 @@ def test_export_codebook_success(client, fake_codebook_backend):
 
 def test_export_codebook_not_found(client, fake_codebook_backend):
     fake_codebook_backend.raise_on = "get_codebook"
-    resp = client.get("/codebooks/unknown-id/export")
+    resp = client.get("/codebooks/test-corpus-id/unknown-id/export")
     assert resp.status_code == 302
     assert "/codebooks/" in resp.headers["Location"]

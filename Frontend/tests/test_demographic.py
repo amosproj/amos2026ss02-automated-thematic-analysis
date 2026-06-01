@@ -35,7 +35,7 @@ def test_list_renders_demographic_files(client, fake_backend):
     assert resp.status_code == 200
     assert b"participants" in resp.data
     assert b"View Data" in resp.data
-    assert b'id="corpus_selector"' in resp.data
+    assert b'id="global-corpus-select"' in resp.data
     assert b"No demographic data uploaded yet" not in resp.data
 
 

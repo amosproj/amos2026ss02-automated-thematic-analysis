@@ -59,20 +59,21 @@ class FakeBackend:
 
     # ---- Corpora / documents ------------------------------------------------
 
-    def ensure_corpus(self, project_id: str, name: str) -> str:
+    def ensure_corpus(self, corpus_id: str, name: str) -> str:
         self._maybe_raise("ensure_corpus")
-        if not any(c.get("id") == self.corpus_id for c in self.corpora):
-            self.corpora.append({"id": self.corpus_id, "name": name})
-        return self.corpus_id
+        if not any(c.get("id") == corpus_id for c in self.corpora):
+            self.corpora.append({"id": corpus_id, "name": name})
+        return corpus_id
 
-    def list_corpora(self, project_id: str) -> list[dict]:
+    def list_corpora(self, corpus_id: str | None = None) -> list[dict]:
         self._maybe_raise("list_corpora")
+        if corpus_id:
+            return [c for c in self.corpora if c.get("id") == corpus_id]
         return self.corpora
 
-    def create_corpus(self, project_id: str, name: str) -> dict:
+    def create_corpus(self, corpus_id: str, name: str) -> dict:
         self._maybe_raise("create_corpus")
-        new_id = f"new-corpus-{len(self.corpora) + 1}"
-        created = {"id": new_id, "name": name}
+        created = {"id": corpus_id, "name": name}
         self.corpora.append(created)
         self.last_created_corpus = created
         return created
@@ -98,6 +99,14 @@ class FakeBackend:
             if cb_corpus is None or cb_corpus == corpus_id:
                 scoped.append(cb)
         return scoped
+
+    def get_codebook(self, codebook_id: str) -> dict:
+        self._maybe_raise("get_codebook")
+        for cb in self.codebooks:
+            if cb.get("id") == codebook_id:
+                return cb
+        from web.services.backend_client import BackendNotFoundError
+        raise BackendNotFoundError(user_message="Codebook not found.")
 
     def get_theme_frequencies(self, codebook_id: str) -> list[dict]:
         self._maybe_raise("get_theme_frequencies")

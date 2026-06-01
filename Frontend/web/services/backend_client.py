@@ -155,9 +155,6 @@ class BackendClient:
 
     # ---- Codebooks ----------------------------------------------------------
 
-    def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
-        params = {"corpus_id": corpus_id} if corpus_id else None
-        return self._get("/codebooks/", params=params)
 
     def get_theme_frequencies(self, codebook_id: str) -> list[dict]:
         return self._get(f"/codebooks/{codebook_id}/themes")
@@ -257,9 +254,10 @@ class BackendClient:
         """Fetch details of a codebook by its unique UUID."""
         return self._get(f"/codebooks/{codebook_id}")
 
-    def list_codebooks(self, corpus_id: str) -> list[dict]:
+    def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
         """Return all persisted codebooks for a given corpus, ordered by descending version."""
-        result = self._get("/codebooks/", params={"corpus_id": corpus_id})
+        params = {"corpus_id": corpus_id} if corpus_id else None
+        result = self._get("/codebooks/", params=params)
         # The envelope `data` field is a list directly for this endpoint
         if isinstance(result, list):
             return result
@@ -324,7 +322,8 @@ class BackendClient:
                     source_exc=exc, status_code=status_code, path=path
                 )
             elif status_code == 422:
-                current_app.logger.error("422 Validation Error Payload: %s", exc.response.text)
+                if has_app_context():
+                    current_app.logger.error("422 Validation Error Payload: %s", exc.response.text)
                 error = BackendValidationError(
                     user_message=_parse_validation_detail(exc.response),
                     source_exc=exc,
