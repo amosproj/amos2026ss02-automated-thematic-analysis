@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Literal, Self, Union
 from uuid import UUID
 
 from pydantic import Field, field_validator
@@ -177,7 +177,7 @@ class ThemeInCodebookSchema(BaseSchema):
     node_type: NodeType = Field(default=NodeType.THEME)
     name: str  # maps from Theme.label
     description: str | None = None
-    children: list["ThemeInCodebookSchema" | CodeInCodebookSchema] = Field(default_factory=list)
+    children: list[Union["ThemeInCodebookSchema", CodeInCodebookSchema]] = Field(default_factory=list)
 
     @classmethod
     def from_theme(cls, theme: "Theme", is_subtheme: bool = False) -> "ThemeInCodebookSchema":
