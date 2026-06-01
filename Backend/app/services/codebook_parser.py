@@ -84,15 +84,8 @@ def parse_codebook_csv(content: bytes) -> list[NodeInput]:
                 f"Row {row_number}: 'node type' must be one of THEME, SUBTHEME, CODE; got '{node_type_val}'."
             ) from None
 
-        if node_type == NodeType.SUBTHEME and not parent_name_value:
-            raise UnprocessableError(
-                f"Row {row_number}: '{node_type.value}' must have a 'parent name'."
-            )
-
-        if node_type == NodeType.THEME and parent_name_value:
-            raise UnprocessableError(
-                f"Row {row_number}: '{node_type.value}' must not have a 'parent name'."
-            )
+        if node_type in (NodeType.THEME, NodeType.SUBTHEME):
+            node_type = NodeType.SUBTHEME if parent_name_value else NodeType.THEME
 
         nodes.append(NodeInput(
             node_type=node_type,
