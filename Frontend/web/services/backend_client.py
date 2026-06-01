@@ -107,8 +107,9 @@ class BackendClient:
 
     # ---- Corpora ------------------------------------------------------------
 
-    def list_corpora(self, corpus_id: str) -> list[dict]:
-        return self._get("/ingestion/corpora", params={"corpus_id": corpus_id}, sub_key="items")
+    def list_corpora(self, corpus_id: str | None = None) -> list[dict]:
+        params = {"corpus_id": corpus_id} if corpus_id else {}
+        return self._get("/ingestion/corpora", params=params, sub_key="items")
 
     def create_corpus(self, corpus_id: str, name: str) -> dict:
         return self._post("/ingestion/corpora", json={"corpus_id": corpus_id, "name": name})

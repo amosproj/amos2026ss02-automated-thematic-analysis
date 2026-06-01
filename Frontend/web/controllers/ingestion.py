@@ -1,3 +1,4 @@
+import uuid
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
 from web.services.backend_client import (
@@ -104,8 +105,9 @@ def create_corpus_submit():
         return redirect(url_for("ingestion.upload_landing"))
 
     try:
+        new_id = str(uuid.uuid4())
         created = _backend().create_corpus(
-            project_id=cfg["DEFAULT_PROJECT_ID"],
+            corpus_id=new_id,
             name=name,
         )
     except BackendValidationError as exc:

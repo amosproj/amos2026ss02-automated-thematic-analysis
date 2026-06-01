@@ -14,7 +14,7 @@ def list_workspace_corpora(client: BackendClient) -> list[dict]:
     """
     cfg = current_app.config
     corpus_id = cfg["DEFAULT_CORPUS_ID"]
-    corpora = client.list_corpora(corpus_id)
+    corpora = client.list_corpora()
     if corpora:
         return corpora
 
@@ -22,7 +22,7 @@ def list_workspace_corpora(client: BackendClient) -> list[dict]:
         corpus_id=corpus_id,
         name=cfg["DEFAULT_CORPUS_NAME"],
     )
-    corpora = client.list_corpora(corpus_id)
+    corpora = client.list_corpora()
     if corpora:
         return corpora
     return [{"id": ensured_id, "name": cfg["DEFAULT_CORPUS_NAME"]}]
