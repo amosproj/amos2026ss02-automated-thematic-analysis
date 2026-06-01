@@ -53,7 +53,7 @@ async def _wait_for_terminal_job_status(client, job_id: str, timeout_seconds: fl
         last_payload = payload
         if payload["status"] in {"succeeded", "failed", "cancelled"}:
             return payload
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.25)
     raise AssertionError(f"Job {job_id} did not reach terminal status. Last payload: {last_payload}")
 
 
