@@ -1,0 +1,10 @@
+Name,Description,Parent Name
+Communication barriers,Issues communicating remotely,
+Asynchronous communication issues,Delays or misunderstandings in async comms,Communication barriers
+Missed messages,Messages not seen in time,Asynchronous communication issues
+Lack of tone in text,Misinterpretation of text tone,Communication barriers
+Remote work reshapes daily life,Broad changes caused by remote work,
+Work-life boundary challenges,Difficulty separating work and personal life,Remote work reshapes daily life
+Difficulty separating work and home life,Specific struggles to detach from work,Work-life boundary challenges
+Working longer hours,Working past normal hours,Remote work reshapes daily life
+Family interruptions during meetings,Family members interrupting video calls,Remote work reshapes daily life

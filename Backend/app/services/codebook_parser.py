@@ -12,7 +12,7 @@ from app.exceptions import UnprocessableError
 from app.schemas.codebook import MAX_THEMES, MIN_THEMES, NodeInput, NodeType
 
 # Columns that every codebook CSV must contain (matched case-insensitively after stripping).
-REQUIRED_COLUMNS = {"node type", "name", "description", "parent name"}
+REQUIRED_COLUMNS = {"name", "description"}
 
 
 def parse_codebook_csv(content: bytes) -> list[NodeInput]:
@@ -57,32 +57,35 @@ def parse_codebook_csv(content: bytes) -> list[NodeInput]:
             f"Found: {', '.join(sorted(normalised.keys()))}."
         )
 
-    node_type_col = normalised["node type"]
+    node_type_col = normalised.get("node type")
     name_col = normalised["name"]
     description_col = normalised["description"]
-    parent_name_col = normalised["parent name"]
+    parent_name_col = normalised.get("parent name")
 
     # ----------------------------------------------------------------- collect
     nodes: list[NodeInput] = []
     seen_names: set[str] = set()
 
     for row_number, raw_row in enumerate(reader, start=2):  # row 1 is the header
-        node_type_val = (raw_row.get(node_type_col) or "").strip().upper()
+        node_type_val = (raw_row.get(node_type_col) or "").strip().upper() if node_type_col else ""
         name_value = (raw_row.get(name_col) or "").strip()
         description_value = (raw_row.get(description_col) or "").strip()
-        parent_name_value = (raw_row.get(parent_name_col) or "").strip()
+        parent_name_value = (raw_row.get(parent_name_col) or "").strip() if parent_name_col else ""
 
         if not name_value:
             raise UnprocessableError(
                 f"Row {row_number}: theme 'name' must not be empty."
             )
 
-        try:
-            node_type = NodeType(node_type_val)
-        except ValueError:
-            raise UnprocessableError(
-                f"Row {row_number}: 'node type' must be one of THEME, SUBTHEME, CODE; got '{node_type_val}'."
-            ) from None
+        if node_type_val:
+            try:
+                node_type = NodeType(node_type_val)
+            except ValueError:
+                raise UnprocessableError(
+                    f"Row {row_number}: 'node type' must be one of THEME, SUBTHEME, CODE; got '{node_type_val}'."
+                ) from None
+        else:
+            node_type = NodeType.THEME
 
         if node_type in (NodeType.THEME, NodeType.SUBTHEME):
             node_type = NodeType.SUBTHEME if parent_name_value else NodeType.THEME
