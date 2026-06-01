@@ -3,6 +3,7 @@ import io
 from flask import Blueprint, flash, redirect, render_template, request, url_for, current_app, Response
 
 from web.services.backend_client import (
+    BackendClient,
     BackendError,
     BackendNotFoundError,
     get_backend_client as _backend,
@@ -183,8 +184,8 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         codes=codes,
     )
 
-@bp.get("/<codebook_id>/export")
-def export_codebook(codebook_id: str) -> Response | str:
+@bp.get("/<corpus_id>/<codebook_id>/export")
+def export_codebook(corpus_id: str, codebook_id: str) -> Response | str:
     """Export a codebook and its hierarchical themes as a CSV file."""
     try:
         client = _backend()
@@ -233,36 +234,38 @@ def export_codebook(codebook_id: str) -> Response | str:
         )
     except BackendNotFoundError:
         flash("That codebook couldn't be found. It may have been deleted.", "danger")
-        return redirect(url_for("codebooks.list_codebooks"))
+        return redirect(url_for("codebooks.list_codebooks", corpus_id=corpus_id))
     except BackendError as exc:
         flash(exc.user_message, "danger")
-        return redirect(url_for("codebooks.list_codebooks"))
+        return redirect(url_for("codebooks.list_codebooks", corpus_id=corpus_id))
 
 
-@bp.get("/upload")
-def upload_form() -> str:
+@bp.get("/<corpus_id>/upload")
+def upload_form(corpus_id: str) -> str:
     """Render the upload form (choose CSV or manual)."""
-    return render_template("codebooks/upload.html", error=None)
+    return render_template("codebooks/upload.html", corpus_id=corpus_id, error=None)
 
-@bp.post("/upload")
-def upload_submit() -> str:
+@bp.post("/<corpus_id>/upload")
+def upload_submit(corpus_id: str) -> str:
     """Handle either CSV file upload or redirect to manual entry."""
     action = request.form.get("action", "upload")
 
     if action == "manual":
-        return redirect(url_for("codebooks.manual_form"))
+        return redirect(url_for("codebooks.manual_form", corpus_id=corpus_id))
 
     # CSV file upload path
     file = request.files.get("file")
     if not file or not file.filename:
         return render_template(
             "codebooks/upload.html",
+            corpus_id=corpus_id,
             error="Please select a CSV file to upload or choose manual entry.",
         )
 
     if not file.filename.lower().endswith(".csv"):
         return render_template(
             "codebooks/upload.html",
+            corpus_id=corpus_id,
             error="Only CSV files (.csv extension) are supported.",
         )
 
@@ -273,26 +276,28 @@ def upload_submit() -> str:
         default_name = file.filename.rsplit(".", 1)[0].replace("_", " ").title()
         return render_template(
             "codebooks/preview.html",
+            corpus_id=corpus_id,
             codebook_name=default_name,
             themes=parsed_themes,
             error=None,
         )
     except BackendError as exc:
-        return render_template("codebooks/upload.html", error=str(exc))
+        return render_template("codebooks/upload.html", corpus_id=corpus_id, error=str(exc))
 
-@bp.get("/manual")
-def manual_form() -> str:
+@bp.get("/<corpus_id>/manual")
+def manual_form(corpus_id: str) -> str:
     """Render the preview editor pre-filled with one blank node row."""
     empty_nodes = [{"node_type": "THEME", "name": "", "description": "", "parent_name": ""}]
     return render_template(
         "codebooks/preview.html",
+        corpus_id=corpus_id,
         codebook_name="New Codebook",
         themes=empty_nodes,
         error=None,
     )
 
-@bp.post("/confirm")
-def confirm_submit() -> str:
+@bp.post("/<corpus_id>/confirm")
+def confirm_submit(corpus_id: str) -> str:
     """Validate, customise, and confirm a codebook and its themes."""
     codebook_name = (request.form.get("codebook_name") or "").strip()
     node_types = request.form.getlist("node_types[]")
@@ -335,6 +340,7 @@ def confirm_submit() -> str:
     if error:
         return render_template(
             "codebooks/preview.html",
+            corpus_id=corpus_id,
             codebook_name=codebook_name,
             themes=themes,
             error=error,
@@ -342,28 +348,28 @@ def confirm_submit() -> str:
 
     try:
         client = _backend()
-        corpus_id = current_app.config["DEFAULT_CORPUS_ID"]
         res = client.create_codebook(corpus_id, codebook_name, themes)
         codebook_id = res["id"]
-        return redirect(url_for("codebooks.success", codebook_id=codebook_id))
+        return redirect(url_for("codebooks.success", corpus_id=corpus_id, codebook_id=codebook_id))
     except BackendError as exc:
         return render_template(
             "codebooks/preview.html",
+            corpus_id=corpus_id,
             codebook_name=codebook_name,
             themes=themes,
             error=str(exc),
         )
 
-@bp.get("/success")
-def success() -> str:
+@bp.get("/<corpus_id>/success")
+def success(corpus_id: str) -> str:
     """Show details of the successfully saved codebook."""
     codebook_id = request.args.get("codebook_id")
     if not codebook_id:
-        return redirect(url_for("codebooks.upload_form"))
+        return redirect(url_for("codebooks.upload_form", corpus_id=corpus_id))
 
     try:
         client = _backend()
         codebook = client.get_codebook(codebook_id)
-        return render_template("codebooks/success.html", codebook=codebook, error=None)
+        return render_template("codebooks/success.html", corpus_id=corpus_id, codebook=codebook, error=None)
     except BackendError as exc:
-        return render_template("codebooks/success.html", codebook=None, error=str(exc))
+        return render_template("codebooks/success.html", corpus_id=corpus_id, codebook=None, error=str(exc))

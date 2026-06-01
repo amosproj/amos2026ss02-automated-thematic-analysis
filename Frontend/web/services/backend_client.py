@@ -256,9 +256,9 @@ class BackendClient:
         """Fetch details of a codebook by its unique UUID."""
         return self._get(f"/codebooks/{codebook_id}")
 
-    def list_codebooks(self) -> list[dict]:
-        """Return all persisted codebooks, ordered by project then descending version."""
-        result = self._get("/codebooks/")
+    def list_codebooks(self, corpus_id: str) -> list[dict]:
+        """Return all persisted codebooks for a given corpus, ordered by descending version."""
+        result = self._get("/codebooks/", params={"corpus_id": corpus_id})
         # The envelope `data` field is a list directly for this endpoint
         if isinstance(result, list):
             return result
