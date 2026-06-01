@@ -2,20 +2,11 @@
 {% block title %}Transcripts{% endblock %}
 {% block content %}
   {% if corpus_id and corpus_options %}
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-body">
-        <label for="corpus_selector" class="form-label fw-semibold mb-2">Selected corpus</label>
-        <select id="corpus_selector"
-                class="form-select"
-                data-switch-template="{{ url_for('ingestion.list_transcripts', corpus_id='__CORPUS_ID__') }}">
-          {% for corpus in corpus_options %}
-            <option value="{{ corpus.id }}" {% if corpus.id == corpus_id %}selected{% endif %}>
-              {{ corpus.name }} ({{ corpus.id }})
-            </option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
+    {% set active_corpus_id = corpus_id %}
+    {% set switch_template_url = url_for('ingestion.list_transcripts', corpus_id='__CORPUS_ID__') %}
+    {% set helper_text = 'Showing transcripts for this corpus.' %}
+    {% set show_create_form = False %}
+    {% include "_corpus_select.html" %}
   {% endif %}
 
   <h1 class="h3 mb-4">Uploaded Transcripts</h1>
@@ -56,15 +47,4 @@
 {% endblock %}
 {% block scripts %}
   {{ super() }}
-  <script>
-    (() => {
-      const selector = document.getElementById("corpus_selector");
-      if (!selector) return;
-      selector.addEventListener("change", () => {
-        const template = selector.dataset.switchTemplate;
-        const target = template.replace("__CORPUS_ID__", encodeURIComponent(selector.value));
-        window.location.href = target;
-      });
-    })();
-  </script>
 {% endblock %}
