@@ -73,11 +73,24 @@ def test_codebook_list_shows_unavailable_message_when_backend_down(client, fake_
     assert b"No codebooks found" not in resp.data
 
 
+def test_codebook_list_shows_error_when_requested_corpus_missing(client, fake_backend):
+    fake_backend.corpora = [{"id": "existing-corpus", "name": "Existing Corpus"}]
+    resp = client.get("/codebooks/missing-corpus/", follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"selected corpus couldn" in resp.data
+    assert b"No codebooks found" not in resp.data
+
+
 # GET /codebooks/<id>/themes
 
 
 
 def test_codebook_themes_renders_frequency_and_tree(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
     fake_backend.theme_frequencies = [
         {"theme_id": "t-1", "theme_name": "Work-Life Balance",
          "occurrence_count": 5, "interview_coverage_percentage": 60.0},
@@ -93,6 +106,11 @@ def test_codebook_themes_renders_frequency_and_tree(client, fake_backend):
 
 
 def test_codebook_themes_renders_name_from_query_param(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 3,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
     fake_backend.theme_frequencies = []
     fake_backend.theme_tree = []
     resp = client.get("/codebooks/cb-1/themes?name=My+Codebook&version=3", follow_redirects=True)
@@ -101,6 +119,11 @@ def test_codebook_themes_renders_name_from_query_param(client, fake_backend):
 
 
 def test_codebook_themes_renders_empty_state(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
     fake_backend.theme_frequencies = []
     fake_backend.theme_tree = []
     resp = client.get("/codebooks/cb-1/themes", follow_redirects=True)
@@ -109,6 +132,11 @@ def test_codebook_themes_renders_empty_state(client, fake_backend):
 
 
 def test_codebook_themes_renders_backend_error(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
     fake_backend.raise_on = "get_theme_frequencies"
     resp = client.get("/codebooks/cb-1/themes", follow_redirects=True)
     assert resp.status_code == 200
@@ -119,10 +147,27 @@ def test_codebook_themes_renders_backend_error(client, fake_backend):
 def test_codebook_themes_shows_not_found_message_for_missing_codebook(client, fake_backend):
     from web.services.backend_client import BackendNotFoundError
 
+    fake_backend.codebooks = [
+        {"id": "missing-id", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
     fake_backend.raise_on = ("get_theme_frequencies", BackendNotFoundError)
     resp = client.get("/codebooks/missing-id/themes", follow_redirects=True)
     assert resp.status_code == 200
     # Substring avoids apostrophe in "couldn't" — Jinja2 HTML-escapes it.
     assert b"may have been deleted" in resp.data
     # Empty-state line must NOT appear alongside the error.
+    assert b"No themes found for this codebook" not in resp.data
+
+
+def test_codebook_themes_shows_error_for_codebook_outside_selected_corpus(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-2", "name": "Other Corpus Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "bob", "description": None,
+         "corpus_id": "other-corpus"},
+    ]
+    resp = client.get(f"/codebooks/{fake_backend.corpus_id}/cb-1/themes", follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"selected corpus" in resp.data
     assert b"No themes found for this codebook" not in resp.data

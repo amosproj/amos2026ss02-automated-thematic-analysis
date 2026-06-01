@@ -17,6 +17,7 @@ def list_codebooks() -> str:
         active_corpus_id, _, _ = resolve_active_corpus(
             _backend(),
             requested_corpus_id=requested_corpus_id,
+            strict_requested=bool(requested_corpus_id),
         )
     except BackendError as exc:
         flash(exc.user_message, "danger")
@@ -42,6 +43,7 @@ def list_codebooks_for_corpus(corpus_id: str) -> str:
         active_corpus_id, corpus_options, active_corpus = resolve_active_corpus(
             client,
             requested_corpus_id=corpus_id,
+            strict_requested=True,
         )
         corpus_name = active_corpus.get("name", corpus_name)
         codebooks = client.list_codebooks(corpus_id=active_corpus_id)
@@ -102,6 +104,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
     set_active_corpus_id(corpus_id)
     name = request.args.get("name", "")
     version = request.args.get("version", "")
+    active_codebook_id = codebook_id
     corpus_name = "Selected Corpus"
     corpus_options: list[dict] = [{"id": corpus_id, "name": corpus_name}]
     try:
@@ -109,18 +112,35 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         active_corpus_id, corpus_options, active_corpus = resolve_active_corpus(
             client,
             requested_corpus_id=corpus_id,
+            strict_requested=True,
         )
         corpus_name = active_corpus.get("name", corpus_name)
-        frequencies = client.get_theme_frequencies(codebook_id)
-        tree = client.get_theme_tree(codebook_id)
-    except BackendNotFoundError:
-        flash(
-            "That codebook couldn't be found. It may have been deleted.",
-            "danger",
+        codebooks = client.list_codebooks(corpus_id=active_corpus_id)
+        active_codebook = next(
+            (cb for cb in codebooks if str(cb.get("id")) == str(codebook_id)),
+            None,
         )
+        if active_codebook is None:
+            raise BackendNotFoundError(
+                user_message=(
+                    "That codebook couldn't be found in the selected corpus. "
+                    "Please choose another codebook."
+                )
+            )
+
+        active_codebook_id = str(active_codebook["id"])
+        if not name:
+            name = active_codebook.get("name", "")
+        if not version and active_codebook.get("version") is not None:
+            version = str(active_codebook["version"])
+
+        frequencies = client.get_theme_frequencies(active_codebook_id)
+        tree = client.get_theme_tree(active_codebook_id)
+    except BackendNotFoundError as exc:
+        flash(exc.user_message, "danger")
         return render_template(
             "codebooks/themes.html",
-            codebook_id=codebook_id,
+            codebook_id=active_codebook_id,
             name=name,
             version=version,
             corpus_id=corpus_id,
@@ -134,7 +154,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         flash(exc.user_message, "danger")
         return render_template(
             "codebooks/themes.html",
-            codebook_id=codebook_id,
+            codebook_id=active_codebook_id,
             name=name,
             version=version,
             corpus_id=corpus_id,
@@ -146,7 +166,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         )
     return render_template(
         "codebooks/themes.html",
-        codebook_id=codebook_id,
+        codebook_id=active_codebook_id,
         name=name,
         version=version,
         corpus_id=active_corpus_id,

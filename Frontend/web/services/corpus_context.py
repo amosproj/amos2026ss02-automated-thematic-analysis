@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import current_app, session
 
-from web.services.backend_client import BackendClient
+from web.services.backend_client import BackendClient, BackendNotFoundError
 
 ACTIVE_CORPUS_SESSION_KEY = "active_corpus_id"
 
@@ -36,6 +36,7 @@ def resolve_active_corpus(
     client: BackendClient,
     *,
     requested_corpus_id: str | None = None,
+    strict_requested: bool = False,
 ) -> tuple[str, list[dict], dict]:
     """Resolve the active corpus id and persist it in session.
 
@@ -43,9 +44,24 @@ def resolve_active_corpus(
     1. requested_corpus_id from route/query
     2. session-stored active corpus id
     3. first available corpus in the project
+
+    When strict_requested=True and requested_corpus_id is provided but missing,
+    raise BackendNotFoundError instead of silently falling back.
     """
     corpora = list_workspace_corpora(client)
     corpora_by_id = {str(c["id"]): c for c in corpora}
+
+    if (
+        strict_requested
+        and requested_corpus_id
+        and requested_corpus_id not in corpora_by_id
+    ):
+        raise BackendNotFoundError(
+            user_message=(
+                "The selected corpus couldn't be found. "
+                "Please choose another corpus."
+            )
+        )
 
     selected_id: str | None = None
     for candidate in (requested_corpus_id, session.get(ACTIVE_CORPUS_SESSION_KEY)):
