@@ -65,7 +65,7 @@ class CodebookGenerationService:
     ) -> GeneratedCodebookResponse:
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
 
-        corpus = await self._load_corpus(corpus_id)
+        await self._load_corpus(corpus_id)
         documents = await self._load_documents(
             corpus_id=corpus_id,
             transcript_document_ids=normalized_document_ids,

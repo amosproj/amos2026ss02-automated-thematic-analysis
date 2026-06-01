@@ -1,12 +1,12 @@
 import enum
 from datetime import datetime
-from typing import TYPE_CHECKING, Literal, Self, Union
+from typing import TYPE_CHECKING, Literal, Union
 from uuid import UUID
 
 from pydantic import Field, field_validator
 
-
 from app.schemas.common import BaseSchema
+
 
 class NodeType(enum.StrEnum):
     THEME = "THEME"

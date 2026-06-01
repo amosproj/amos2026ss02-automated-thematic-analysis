@@ -4,8 +4,8 @@ from app.schemas.codebook import (
     CodebookGenerateRequest,
     CodebookSchema,
     GeneratedCodebookResponse,
-    ThemeInCodebookSchema,
     NodeInput,
+    ThemeInCodebookSchema,
 )
 from app.schemas.common import (
     BaseSchema,

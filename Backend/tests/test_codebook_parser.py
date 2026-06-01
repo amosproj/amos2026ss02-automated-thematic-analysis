@@ -8,6 +8,7 @@ from __future__ import annotations
 import pytest
 
 from app.exceptions import UnprocessableError
+from app.schemas.codebook import NodeType
 from app.services.codebook_parser import parse_codebook_csv
 
 # ---------------------------------------------------------------------------

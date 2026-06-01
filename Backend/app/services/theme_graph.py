@@ -8,7 +8,15 @@ from anytree.node.exceptions import LoopError
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Code, Codebook, CodebookCodeRelationship, CodebookThemeRelationship, Theme, ThemeCodeRelationship, ThemeHierarchyRelationship
+from app.models import (
+    Code,
+    Codebook,
+    CodebookCodeRelationship,
+    CodebookThemeRelationship,
+    Theme,
+    ThemeCodeRelationship,
+    ThemeHierarchyRelationship,
+)
 from app.schemas.theme_graph import (
     ThemeDagValidation,
     ThemeDagView,
@@ -146,7 +154,7 @@ class ThemeGraphService:
             )
         )
         themes = list((await self._session.scalars(stmt_themes)).all())
-        
+
         stmt_codes = (
             select(Code)
             .join(
@@ -197,7 +205,7 @@ class ThemeGraphService:
             ThemeHierarchyRelationship.child_theme_id.in_(theme_ids),
         )
         theme_edges = list((await self._session.scalars(stmt)).all())
-        
+
         stmt_code = select(ThemeCodeRelationship).where(
             ThemeCodeRelationship.codebook_id == codebook_id,
             ThemeCodeRelationship.is_active.is_(True),
@@ -205,7 +213,7 @@ class ThemeGraphService:
             ThemeCodeRelationship.code_id.in_(theme_ids),
         )
         code_edges = list((await self._session.scalars(stmt_code)).all())
-        
+
         edges = [
             ThemeEdgeView(parent_theme_id=e.parent_theme_id, child_theme_id=e.child_theme_id)
             for e in theme_edges

@@ -1,9 +1,9 @@
 from __future__ import annotations
-import uuid
 
 import importlib.util
 import json
 import unittest
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -121,7 +121,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
 
             legacy_a = Codebook(
                 id=uuid4(),
-                project_id=str(corpus_a.project_id),
+                corpus_id=corpus_a.id,
                 name="Legacy A",
                 description="desc",
                 version=1,
@@ -129,7 +129,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
             )
             generated_a = Codebook(
                 id=uuid4(),
-                project_id=str(corpus_a.project_id),
+                corpus_id=corpus_a.id,
                 name="Generated A",
                 description="desc",
                 version=2,
@@ -137,7 +137,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
             )
             generated_b = Codebook(
                 id=uuid4(),
-                project_id=str(corpus_b.project_id),
+                corpus_id=corpus_b.id,
                 name="Generated B",
                 description="desc",
                 version=1,
@@ -145,7 +145,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
             )
             legacy_b = Codebook(
                 id=uuid4(),
-                project_id=str(corpus_b.project_id),
+                corpus_id=corpus_b.id,
                 name="Legacy B",
                 description="desc",
                 version=3,
@@ -188,7 +188,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
             )
             payload = json.loads(response.body)
             names = sorted(row["name"] for row in payload["data"])
-            self.assertEqual(names, ["Generated A"])
+            self.assertEqual(names, ["Generated A", "Legacy A"])
 
     async def test_themes_route_maps_not_found_error(self) -> None:
         async with self.session_factory() as session:

@@ -104,14 +104,14 @@ class CodebookService:
 
             await self._session.flush()  # get theme.id and code.id
 
-            for node_input, code in zip([n for n in payload.nodes if n.node_type == NodeType.CODE], codes):
+            for node_input, code in zip([n for n in payload.nodes if n.node_type == NodeType.CODE], codes, strict=True):
                 link = CodebookCodeRelationship(
                     codebook_id=codebook.id,
                     code_id=code.id,
                     is_active=True,
                 )
                 self._session.add(link)
-                
+
                 if node_input.parent_name:
                     parent_theme = theme_by_name.get(node_input.parent_name)
                     if parent_theme:

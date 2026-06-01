@@ -82,7 +82,7 @@ async def test_list_corpora_returns_created(client):
     resp = await client.get(f"{API}/corpora")
     assert resp.status_code == 200
     data = resp.json()["data"]
-    
+
     assert len(data["items"]) >= 2
     names = {c["name"] for c in data["items"]}
     assert "C1" in names

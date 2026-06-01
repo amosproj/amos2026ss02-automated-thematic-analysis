@@ -1,6 +1,6 @@
 from __future__ import annotations
-import uuid
 
+import uuid
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker

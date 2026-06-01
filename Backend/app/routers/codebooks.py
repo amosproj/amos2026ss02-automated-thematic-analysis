@@ -6,12 +6,12 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import JSONResponse
-from sqlalchemy import desc, exists, select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.dependencies import DbSession
 from app.exceptions import NotFoundError, UnprocessableError
-from app.models import Codebook, CodebookGenerationJob, Corpus
+from app.models import Codebook, CodebookGenerationJob
 from app.schemas.codebook import (
     CodebookCreateRequest,
     CodebookDetailSchema,
