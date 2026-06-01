@@ -9,21 +9,20 @@ import csv
 import io
 
 from app.exceptions import UnprocessableError
-from app.models.themes import NodeType
-from app.schemas.codebook import MAX_THEMES, MIN_THEMES, ThemeInput
+from app.schemas.codebook import MAX_THEMES, MIN_THEMES, NodeInput, NodeType
 
 # Columns that every codebook CSV must contain (matched case-insensitively after stripping).
 REQUIRED_COLUMNS = {"node type", "name", "description", "parent name"}
 
 
-def parse_codebook_csv(content: bytes) -> list[ThemeInput]:
+def parse_codebook_csv(content: bytes) -> list[NodeInput]:
     """Parse a codebook CSV file from raw bytes.
 
     Args:
         content: Raw file bytes — UTF-8 with or without BOM.
 
     Returns:
-        A list of ThemeInput objects (guaranteed 1 ≤ len ≤ 50).
+        A list of NodeInput objects (guaranteed 1 ≤ len ≤ 50).
 
     Raises:
         UnprocessableError: If the file cannot be decoded, columns are missing,
@@ -64,7 +63,7 @@ def parse_codebook_csv(content: bytes) -> list[ThemeInput]:
     parent_name_col = normalised["parent name"]
 
     # ----------------------------------------------------------------- collect
-    themes: list[ThemeInput] = []
+    nodes: list[NodeInput] = []
     seen_names: set[str] = set()
 
     for row_number, raw_row in enumerate(reader, start=2):  # row 1 is the header
@@ -85,17 +84,17 @@ def parse_codebook_csv(content: bytes) -> list[ThemeInput]:
                 f"Row {row_number}: 'node type' must be one of THEME, SUBTHEME, CODE; got '{node_type_val}'."
             ) from None
 
-        if node_type != NodeType.THEME and not parent_name_value:
+        if node_type == NodeType.SUBTHEME and not parent_name_value:
             raise UnprocessableError(
                 f"Row {row_number}: '{node_type.value}' must have a 'parent name'."
             )
 
-        if node_type == NodeType.THEME and parent_name_value:
+        if node_type in (NodeType.THEME, NodeType.CODE) and parent_name_value:
             raise UnprocessableError(
-                f"Row {row_number}: 'THEME' must not have a 'parent name'."
+                f"Row {row_number}: '{node_type.value}' must not have a 'parent name'."
             )
 
-        themes.append(ThemeInput(
+        nodes.append(NodeInput(
             node_type=node_type,
             name=name_value,
             description=description_value or " ",
@@ -104,17 +103,17 @@ def parse_codebook_csv(content: bytes) -> list[ThemeInput]:
         seen_names.add(name_value)
 
     # ----------------------------------------------------------------- hierarchy validation
-    for row_number, t in enumerate(themes, start=2):
+    for row_number, t in enumerate(nodes, start=2):
         if t.parent_name and t.parent_name not in seen_names:
             raise UnprocessableError(
                 f"Row {row_number}: parent '{t.parent_name}' does not exist in the CSV."
             )
 
     # ----------------------------------------------------------------- count
-    if not (MIN_THEMES <= len(themes) <= MAX_THEMES):
+    if not (MIN_THEMES <= len(nodes) <= MAX_THEMES):
         raise UnprocessableError(
             f"Codebook must contain between {MIN_THEMES} and {MAX_THEMES} nodes; "
-            f"found {len(themes)}."
+            f"found {len(nodes)}."
         )
 
-    return themes
+    return nodes

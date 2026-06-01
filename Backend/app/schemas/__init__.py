@@ -5,7 +5,7 @@ from app.schemas.codebook import (
     CodebookSchema,
     GeneratedCodebookResponse,
     ThemeInCodebookSchema,
-    ThemeInput,
+    NodeInput,
 )
 from app.schemas.common import (
     BaseSchema,
@@ -50,7 +50,7 @@ __all__ = [
     "CodebookCreateRequest",
     "CodebookDetailSchema",
     "ThemeInCodebookSchema",
-    "ThemeInput",
+    "NodeInput",
     "BulkDocumentIngestRequest",
     "CodebookSchema",
     "CodebookGenerateRequest",

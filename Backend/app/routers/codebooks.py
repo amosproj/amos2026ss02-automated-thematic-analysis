@@ -20,7 +20,7 @@ from app.schemas.codebook import (
     CodebookGenerationJobSchema,
     CodebookSchema,
     GeneratedCodebookResponse,
-    ThemeInput,
+    NodeInput,
 )
 from app.schemas.common import ResponseEnvelope
 from app.services.codebook import CodebookService
@@ -230,7 +230,7 @@ async def cancel_generate_codebook_job(
     )
 
 
-@router.post("/parse-csv", response_model=ResponseEnvelope[list[ThemeInput]])
+@router.post("/parse-csv", response_model=ResponseEnvelope[list[NodeInput]])
 async def parse_csv(
     file: UploadFile = File(...),
 ) -> JSONResponse:
@@ -259,8 +259,8 @@ async def create_codebook(
 ) -> JSONResponse:
     """Create a new codebook and persist its themes atomically in the database."""
     service = CodebookService(session)
-    codebook, themes, edges = await service.create_codebook(payload)
-    detail = CodebookService.build_detail_schema(codebook, themes, edges)
+    codebook, themes, edges, codes = await service.create_codebook(payload)
+    detail = CodebookService.build_detail_schema(codebook, themes, edges, codes)
     return JSONResponse(
         status_code=201,
         content=ResponseEnvelope.ok(detail).model_dump(mode="json"),
@@ -274,6 +274,6 @@ async def get_codebook_detail(
 ) -> JSONResponse:
     """Fetch details of a specific codebook, including all associated themes."""
     service = CodebookService(session)
-    codebook, themes, edges = await service.get_codebook_detail(codebook_id)
-    detail = CodebookService.build_detail_schema(codebook, themes, edges)
+    codebook, themes, edges, codes = await service.get_codebook_detail(codebook_id)
+    detail = CodebookService.build_detail_schema(codebook, themes, edges, codes)
     return JSONResponse(content=ResponseEnvelope.ok(detail).model_dump(mode="json"))

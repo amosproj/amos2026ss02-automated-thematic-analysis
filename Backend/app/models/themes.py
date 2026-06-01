@@ -1,19 +1,12 @@
 from __future__ import annotations
 
-import enum
 import uuid
 
-from sqlalchemy import Boolean, Enum, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
-
-
-class NodeType(enum.StrEnum):
-    THEME = "THEME"
-    SUBTHEME = "SUBTHEME"
-    CODE = "CODE"
 
 
 class Theme(Base, TimestampMixin):
@@ -28,7 +21,6 @@ class Theme(Base, TimestampMixin):
     codebook_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
     )
-    node_type: Mapped[NodeType] = mapped_column(Enum(NodeType), default=NodeType.THEME)
     label: Mapped[str] = mapped_column(String(255), index=True)
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean(), default=True)

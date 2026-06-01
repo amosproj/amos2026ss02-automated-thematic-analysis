@@ -185,6 +185,7 @@ def export_codebook(codebook_id: str) -> Response | str:
         client = _backend()
         codebook = client.get_codebook(codebook_id)
         themes = codebook.get("themes", [])
+        codes = codebook.get("codes", [])
 
         flat_rows = []
 
@@ -200,6 +201,14 @@ def export_codebook(codebook_id: str) -> Response | str:
 
         for t in themes:
             traverse(t, "")
+
+        for c in codes:
+            flat_rows.append({
+                "Node Type": "CODE",
+                "Name": c.get("name", ""),
+                "Description": c.get("description", ""),
+                "Parent Name": "",
+            })
 
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=["Node Type", "Name", "Description", "Parent Name"])
@@ -265,12 +274,12 @@ def upload_submit() -> str:
 
 @bp.get("/manual")
 def manual_form() -> str:
-    """Render the preview editor pre-filled with one blank theme row."""
-    empty_themes = [{"node_type": "THEME", "name": "", "description": "", "parent_name": ""}]
+    """Render the preview editor pre-filled with one blank node row."""
+    empty_nodes = [{"node_type": "THEME", "name": "", "description": "", "parent_name": ""}]
     return render_template(
         "codebooks/preview.html",
         codebook_name="New Codebook",
-        themes=empty_themes,
+        themes=empty_nodes,
         error=None,
     )
 
@@ -305,11 +314,11 @@ def confirm_submit() -> str:
         error = "All themes must have a name."
     else:
         for t in themes:
-            if t["node_type"] in ["SUBTHEME", "CODE"] and not t["parent_name"]:
-                error = f"Theme '{t['name']}' of type {t['node_type']} must have a Parent Name."
+            if t["node_type"] == "SUBTHEME" and not t["parent_name"]:
+                error = f"Node '{t['name']}' of type {t['node_type']} must have a Parent Name."
                 break
-            if t["node_type"] == "THEME" and t["parent_name"]:
-                error = f"Theme '{t['name']}' is a root THEME and must not have a Parent Name."
+            if t["node_type"] in ["THEME", "CODE"] and t["parent_name"]:
+                error = f"Node '{t['name']}' of type {t['node_type']} must not have a Parent Name."
                 break
             if t["parent_name"] and t["parent_name"] not in theme_names_set:
                 error = f"Parent '{t['parent_name']}' for theme '{t['name']}' does not exist in this codebook."

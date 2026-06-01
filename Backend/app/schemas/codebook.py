@@ -1,13 +1,20 @@
+import enum
 from datetime import datetime
 from typing import TYPE_CHECKING, Literal, Self
 from uuid import UUID
 
 from pydantic import Field, field_validator
 
-from app.models.themes import NodeType
+
 from app.schemas.common import BaseSchema
 
+class NodeType(enum.StrEnum):
+    THEME = "THEME"
+    SUBTHEME = "SUBTHEME"
+    CODE = "CODE"
+
 if TYPE_CHECKING:
+    from app.models.code import Code
     from app.models.themes import Theme
 
 # ---------------------------------------------------------------------------
@@ -18,7 +25,7 @@ MIN_THEMES = 1
 MAX_THEMES = 50
 
 
-class ThemeInput(BaseSchema):
+class NodeInput(BaseSchema):
     """One node supplied by the researcher (Theme, Subtheme, or Code)."""
 
     node_type: NodeType = Field(default=NodeType.THEME)
@@ -32,14 +39,23 @@ class CodebookCreateRequest(BaseSchema):
 
     name: str = Field(..., min_length=1, max_length=255)
     project_id: str = Field(..., min_length=1, max_length=64)
-    themes: list[ThemeInput]
+    themes: list[NodeInput] = Field(default_factory=list)
+    nodes: list[NodeInput] = Field(default_factory=list)
 
-    @field_validator("themes")
+    @field_validator("nodes", mode="before")
     @classmethod
-    def validate_theme_count(cls, v: list[ThemeInput]) -> list[ThemeInput]:
+    def populate_nodes(cls, v: list[NodeInput] | None, info) -> list[NodeInput]:
+        # Handle backward compatibility where payload has `themes` instead of `nodes`
+        if v:
+            return v
+        return info.data.get("themes") or []
+
+    @field_validator("nodes")
+    @classmethod
+    def validate_node_count(cls, v: list[NodeInput]) -> list[NodeInput]:
         if not (MIN_THEMES <= len(v) <= MAX_THEMES):
             raise ValueError(
-                f"Codebook must have between {MIN_THEMES} and {MAX_THEMES} themes; "
+                f"Codebook must have between {MIN_THEMES} and {MAX_THEMES} nodes; "
                 f"got {len(v)}."
             )
         return v
@@ -134,19 +150,36 @@ class ThemeInCodebookSchema(BaseSchema):
     """A single persisted theme node, potentially containing nested children."""
 
     id: UUID
-    node_type: NodeType
+    node_type: NodeType = Field(default=NodeType.THEME)
     name: str  # maps from Theme.label
     description: str | None = None
     children: list[Self] = Field(default_factory=list)
 
     @classmethod
-    def from_theme(cls, theme: "Theme") -> "ThemeInCodebookSchema":
+    def from_theme(cls, theme: "Theme", is_subtheme: bool = False) -> "ThemeInCodebookSchema":
         return cls(
             id=theme.id,
-            node_type=theme.node_type,
+            node_type=NodeType.SUBTHEME if is_subtheme else NodeType.THEME,
             name=theme.label,
             description=theme.description,
             children=[]
+        )
+
+class CodeInCodebookSchema(BaseSchema):
+    """A single persisted code node."""
+
+    id: UUID
+    node_type: NodeType = Field(default=NodeType.CODE)
+    name: str  # maps from Code.label
+    description: str | None = None
+
+    @classmethod
+    def from_code(cls, code: "Code") -> "CodeInCodebookSchema":
+        return cls(
+            id=code.id,
+            node_type=NodeType.CODE,
+            name=code.label,
+            description=code.description,
         )
 
 
@@ -154,3 +187,4 @@ class CodebookDetailSchema(CodebookSchema):
     """Full codebook read-back including its themes."""
 
     themes: list[ThemeInCodebookSchema] = Field(default_factory=list)
+    codes: list[CodeInCodebookSchema] = Field(default_factory=list)

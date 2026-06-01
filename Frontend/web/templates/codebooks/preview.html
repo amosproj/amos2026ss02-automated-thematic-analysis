@@ -231,7 +231,7 @@
                    name="parent_names[]"
                    value="{{ theme.parent_name or '' }}"
                    class="form-control"
-                   {% if not theme.parent_name and (theme.node_type == 'THEME' or not theme.node_type) %}readonly style="background-color: #f8fafc;"{% endif %}>
+                   {% if theme.node_type in ('THEME', 'CODE') or (not theme.parent_name and not theme.node_type) %}readonly style="background-color: #f8fafc;"{% endif %}>
           </div>
           <div>
             <label class="theme-label">Name</label>
@@ -266,7 +266,7 @@
     function handleTypeChange(selectElement) {
       const row = selectElement.closest('.theme-inputs');
       const parentInput = row.querySelector('input[name="parent_names[]"]');
-      if (selectElement.value === 'THEME') {
+      if (selectElement.value === 'THEME' || selectElement.value === 'CODE') {
         parentInput.value = '';
         parentInput.readOnly = true;
         parentInput.style.backgroundColor = '#f8fafc';
