@@ -38,7 +38,7 @@ class CodebookCreateRequest(BaseSchema):
     """Payload for creating a new codebook with its themes in one shot."""
 
     name: str = Field(..., min_length=1, max_length=255)
-    project_id: str = Field(..., min_length=1, max_length=64)
+    corpus_id: UUID = Field(..., description="Corpus ID to scope this codebook.")
     themes: list[NodeInput] = Field(default_factory=list)
     nodes: list[NodeInput] = Field(default_factory=list)
 
@@ -58,6 +58,11 @@ class CodebookCreateRequest(BaseSchema):
                 f"Codebook must have between {MIN_THEMES} and {MAX_THEMES} nodes; "
                 f"got {len(v)}."
             )
+        for node in v:
+            if node.node_type == NodeType.THEME and node.parent_name:
+                raise ValueError("'THEME' must not have a 'parent name'.")
+            if node.node_type == NodeType.SUBTHEME and not node.parent_name:
+                raise ValueError("'SUBTHEME' must have a 'parent name'.")
         return v
 
 
@@ -70,7 +75,7 @@ class CodebookSchema(BaseSchema):
     """Flat codebook read-back (used by the existing list endpoint)."""
 
     id: UUID
-    project_id: str
+    corpus_id: UUID
     name: str
     description: str | None = None
     version: int
@@ -146,25 +151,6 @@ class CodebookGenerationJobSchema(BaseSchema):
     finished_at: datetime | None = None
 
 
-class ThemeInCodebookSchema(BaseSchema):
-    """A single persisted theme node, potentially containing nested children."""
-
-    id: UUID
-    node_type: NodeType = Field(default=NodeType.THEME)
-    name: str  # maps from Theme.label
-    description: str | None = None
-    children: list[Self] = Field(default_factory=list)
-
-    @classmethod
-    def from_theme(cls, theme: "Theme", is_subtheme: bool = False) -> "ThemeInCodebookSchema":
-        return cls(
-            id=theme.id,
-            node_type=NodeType.SUBTHEME if is_subtheme else NodeType.THEME,
-            name=theme.label,
-            description=theme.description,
-            children=[]
-        )
-
 class CodeInCodebookSchema(BaseSchema):
     """A single persisted code node."""
 
@@ -180,6 +166,26 @@ class CodeInCodebookSchema(BaseSchema):
             node_type=NodeType.CODE,
             name=code.label,
             description=code.description,
+        )
+
+
+class ThemeInCodebookSchema(BaseSchema):
+    """A single persisted theme node, potentially containing nested children."""
+
+    id: UUID
+    node_type: NodeType = Field(default=NodeType.THEME)
+    name: str  # maps from Theme.label
+    description: str | None = None
+    children: list[Self | CodeInCodebookSchema] = Field(default_factory=list)
+
+    @classmethod
+    def from_theme(cls, theme: "Theme", is_subtheme: bool = False) -> "ThemeInCodebookSchema":
+        return cls(
+            id=theme.id,
+            node_type=NodeType.SUBTHEME if is_subtheme else NodeType.THEME,
+            name=theme.label,
+            description=theme.description,
+            children=[]
         )
 
 

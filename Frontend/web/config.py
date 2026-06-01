@@ -26,7 +26,7 @@ class Config(BaseSettings):
     BACKEND_TIMEOUT_S: float = 60.0
 
     # ---- Workspace (single-corpus MVP; UI selector when Projects exist) ----
-    DEFAULT_PROJECT_ID: str = "00000000-0000-0000-0000-000000000001"
+    DEFAULT_CORPUS_ID: str = "00000000-0000-0000-0000-000000000001"
     DEFAULT_CORPUS_NAME: str = "Interview Transcripts"
 
     MAX_UPLOAD_SIZE_MB: int = 10

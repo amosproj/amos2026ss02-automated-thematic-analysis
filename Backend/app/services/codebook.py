@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import NotFoundError, UnprocessableError
-from app.models.code import Code, CodebookCodeRelationship
+from app.models.code import Code, CodebookCodeRelationship, ThemeCodeRelationship
 from app.models.codebook import Codebook
 from app.models.themes import CodebookThemeRelationship, Theme, ThemeHierarchyRelationship
 from app.schemas.codebook import (
@@ -38,7 +38,7 @@ class CodebookService:
 
     async def create_codebook(
         self, payload: CodebookCreateRequest
-    ) -> tuple[Codebook, list[Theme], list[ThemeHierarchyRelationship], list[Code]]:
+    ) -> tuple[Codebook, list[Theme], list[ThemeHierarchyRelationship], list[Code], list[ThemeCodeRelationship]]:
         """Persist a new codebook and all its themes and codes atomically.
 
         Version is auto-incremented per project_id (starts at 1).
@@ -56,7 +56,7 @@ class CodebookService:
         try:
             # Auto-versioning: find the current max version for this project.
             version_q = select(func.max(Codebook.version)).where(
-                Codebook.project_id == payload.project_id
+                Codebook.corpus_id == payload.corpus_id
             )
             current_max: int | None = (
                 await self._session.execute(version_q)
@@ -65,7 +65,7 @@ class CodebookService:
 
             # Insert the codebook.
             codebook = Codebook(
-                project_id=payload.project_id,
+                corpus_id=payload.corpus_id,
                 name=payload.name,
                 description=None,
                 version=next_version,
@@ -104,13 +104,24 @@ class CodebookService:
 
             await self._session.flush()  # get theme.id and code.id
 
-            for code in codes:
+            for node_input, code in zip([n for n in payload.nodes if n.node_type == NodeType.CODE], codes):
                 link = CodebookCodeRelationship(
                     codebook_id=codebook.id,
                     code_id=code.id,
                     is_active=True,
                 )
                 self._session.add(link)
+                
+                if node_input.parent_name:
+                    parent_theme = theme_by_name.get(node_input.parent_name)
+                    if parent_theme:
+                        tc_link = ThemeCodeRelationship(
+                            codebook_id=codebook.id,
+                            theme_id=parent_theme.id,
+                            code_id=code.id,
+                            is_active=True,
+                        )
+                        self._session.add(tc_link)
 
             for node_input in payload.nodes:
                 if node_input.node_type == NodeType.CODE:
@@ -160,7 +171,7 @@ class CodebookService:
 
     async def get_codebook_detail(
         self, codebook_id: uuid.UUID
-    ) -> tuple[Codebook, list[Theme], list[ThemeHierarchyRelationship], list[Code]]:
+    ) -> tuple[Codebook, list[Theme], list[ThemeHierarchyRelationship], list[Code], list[ThemeCodeRelationship]]:
         """Fetch a codebook, its themes, and its codes.
 
         Raises:
@@ -198,6 +209,16 @@ class CodebookService:
         )
         edges = list(edges_result.scalars().all())
 
+        # Fetch ThemeCode edges
+        theme_code_edges_result = await self._session.execute(
+            select(ThemeCodeRelationship)
+            .where(
+                ThemeCodeRelationship.codebook_id == codebook_id,
+                ThemeCodeRelationship.is_active.is_(True),
+            )
+        )
+        theme_code_edges = list(theme_code_edges_result.scalars().all())
+
         # Fetch codes
         codes_result = await self._session.execute(
             select(Code)
@@ -214,7 +235,7 @@ class CodebookService:
         )
         codes = list(codes_result.scalars().all())
 
-        return codebook, themes, edges, codes
+        return codebook, themes, edges, codes, theme_code_edges
 
     # ------------------------------------------------------------------
     # Helpers
@@ -225,7 +246,8 @@ class CodebookService:
         codebook: Codebook,
         themes: list[Theme],
         edges: list[ThemeHierarchyRelationship] | None = None,
-        codes: list[Code] | None = None
+        codes: list[Code] | None = None,
+        theme_code_edges: list[ThemeCodeRelationship] | None = None
     ) -> CodebookDetailSchema:
         """Build a CodebookDetailSchema from ORM objects.
 
@@ -250,6 +272,16 @@ class CodebookService:
             if parent and child:
                 parent.children.append(child)
 
+        code_schemas = [CodeInCodebookSchema.from_code(c) for c in codes]
+        code_schema_by_id = {c.id: c for c in code_schemas}
+
+        theme_code_edges = theme_code_edges or []
+        for tc_edge in theme_code_edges:
+            parent = schema_by_id.get(tc_edge.theme_id)
+            child_code = code_schema_by_id.get(tc_edge.code_id)
+            if parent and child_code:
+                parent.children.append(child_code)
+
         root_themes = [
             schema for t_id, schema in schema_by_id.items() if t_id not in child_ids
         ]
@@ -258,7 +290,7 @@ class CodebookService:
 
         return CodebookDetailSchema(
             id=codebook.id,
-            project_id=codebook.project_id,
+            corpus_id=codebook.corpus_id,
             name=codebook.name,
             description=codebook.description,
             version=codebook.version,

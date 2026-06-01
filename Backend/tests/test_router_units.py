@@ -1,4 +1,5 @@
 from __future__ import annotations
+import uuid
 
 import importlib.util
 import json
@@ -77,7 +78,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
                 [
                     Codebook(
                         id=uuid4(),
-                        project_id="project_b",
+                        corpus_id=uuid.UUID("a4bdd546-5ab1-74a4-ea03-e7a0698f573c"),
                         name="B v1",
                         description="desc",
                         version=1,
@@ -85,7 +86,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
                     ),
                     Codebook(
                         id=uuid4(),
-                        project_id="project_a",
+                        corpus_id=uuid.UUID("56b03be5-503c-17f4-4b86-2ccba63add48"),
                         name="A v1",
                         description="desc",
                         version=1,
@@ -93,7 +94,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
                     ),
                     Codebook(
                         id=uuid4(),
-                        project_id="project_a",
+                        corpus_id=uuid.UUID("56b03be5-503c-17f4-4b86-2ccba63add48"),
                         name="A v2",
                         description="desc",
                         version=2,
@@ -105,10 +106,10 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
 
             response = await codebooks_router.get_codebooks(session=session)
             payload = json.loads(response.body)
-            ordered_pairs = [(row["project_id"], row["version"]) for row in payload["data"]]
+            ordered_pairs = [(row["corpus_id"], row["version"]) for row in payload["data"]]
             self.assertEqual(
                 ordered_pairs,
-                [("project_a", 2), ("project_a", 1), ("project_b", 1)],
+                [("56b03be5-503c-17f4-4b86-2ccba63add48", 2), ("56b03be5-503c-17f4-4b86-2ccba63add48", 1), ("a4bdd546-5ab1-74a4-ea03-e7a0698f573c", 1)],
             )
 
     async def test_codebooks_route_can_filter_by_corpus_id_only(self) -> None:
@@ -252,7 +253,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
             generated = GeneratedCodebookResponse(
                 codebook=CodebookSchema(
                     id=uuid4(),
-                    project_id="project_generated",
+                    corpus_id=uuid.UUID("c0c5e8bc-10dd-484e-c634-e444f20024e6"),
                     name="Generated Codebook",
                     description="LLM-generated codebook",
                     version=1,
@@ -329,7 +330,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
             session.add(
                 Codebook(
                     id=uuid4(),
-                    project_id="project_demo_selection",
+                    corpus_id=uuid.UUID("460003cc-8d50-86f2-715b-c7d552fcf8f1"),
                     name="Demo Selection v1",
                     description="desc",
                     version=1,
@@ -350,7 +351,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
 
             serialized = response.context["codebooks"]
             self.assertEqual(len(serialized), 1)
-            self.assertEqual(serialized[0]["project_id"], "project_demo_selection")
+            self.assertEqual(serialized[0]["corpus_id"], "460003cc-8d50-86f2-715b-c7d552fcf8f1")
             self.assertNotIn("status", serialized[0])
 
     async def test_demo_overview_uses_selected_codebook_and_loads_project_runs(self) -> None:
@@ -358,7 +359,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
             request = self._build_request("/demo/overview")
             selected_codebook = Codebook(
                 id=uuid4(),
-                project_id="project_demo_latest",
+                corpus_id=uuid.UUID("6eda854d-5ba2-0833-2874-a62f73d8db33"),
                 name="Demo Latest v1",
                 description="desc",
                 version=1,
@@ -366,7 +367,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
             )
             newer_codebook = Codebook(
                 id=uuid4(),
-                project_id="project_demo_latest",
+                corpus_id=uuid.UUID("6eda854d-5ba2-0833-2874-a62f73d8db33"),
                 name="Demo Latest v2",
                 description="desc",
                 version=2,

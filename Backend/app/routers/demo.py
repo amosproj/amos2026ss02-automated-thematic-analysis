@@ -22,14 +22,14 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 def _serialize_codebook(codebook: Codebook) -> dict[str, Any]:
     return {
         "id": str(codebook.id),
-        "project_id": codebook.project_id,
+        "corpus_id": str(codebook.corpus_id),
         "name": codebook.name,
         "version": codebook.version,
     }
 
 
 async def _load_codebooks(session: DbSession) -> list[Codebook]:
-    stmt = select(Codebook).order_by(Codebook.project_id.asc(), desc(Codebook.version))
+    stmt = select(Codebook).order_by(Codebook.corpus_id.asc(), desc(Codebook.version))
     return list((await session.scalars(stmt)).all())
 
 
@@ -66,7 +66,7 @@ async def theme_overview_screen(
 
     project_codebooks_stmt = (
         select(Codebook)
-        .where(Codebook.project_id == selected_codebook.project_id)
+        .where(Codebook.corpus_id == selected_codebook.corpus_id)
         .order_by(desc(Codebook.version))
     )
     project_codebooks = list((await session.scalars(project_codebooks_stmt)).all())
@@ -76,7 +76,7 @@ async def theme_overview_screen(
         name="demo/theme_overview.html",
         context={
             "api_prefix": get_settings().API_V1_PREFIX,
-            "project_id": selected_codebook.project_id,
+            "corpus_id": str(selected_codebook.corpus_id),
             "selected_codebook_id": str(selected_codebook.id),
             "selected_version": selected_codebook.version,
             "selected_codebook_name": selected_codebook.name,

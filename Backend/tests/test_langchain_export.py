@@ -9,7 +9,7 @@ P1 = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 async def test_load_returns_langchain_documents(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     # 20 words, chunk_size=10, overlap=2 → stride=8 → 3 chunks
     text = " ".join(str(i) for i in range(20))
@@ -24,7 +24,7 @@ async def test_load_returns_langchain_documents(db_session, test_settings):
 
 async def test_load_document_metadata_keys(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     await svc.ingest_documents(
         corpus_id=corpus.id,
@@ -39,7 +39,7 @@ async def test_load_document_metadata_keys(db_session, test_settings):
 
 async def test_load_metadata_corpus_id_correct(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     await svc.ingest_documents(
         corpus_id=corpus.id,
@@ -53,7 +53,7 @@ async def test_load_metadata_corpus_id_correct(db_session, test_settings):
 
 async def test_load_chunk_index_sequential(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     await svc.ingest_documents(
         corpus_id=corpus.id,
@@ -66,7 +66,7 @@ async def test_load_chunk_index_sequential(db_session, test_settings):
 
 async def test_load_page_content_is_text(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     await svc.ingest_documents(
         corpus_id=corpus.id,
@@ -81,7 +81,7 @@ async def test_load_page_content_is_text(db_session, test_settings):
 
 async def test_load_empty_corpus_returns_empty_list(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     docs = await load_corpus_chunks_as_langchain_documents(db_session, corpus.id)
     assert docs == []

@@ -75,11 +75,8 @@ async def get_codebooks(
     session: DbSession,
     corpus_id: UUID | None = None,
 ) -> JSONResponse:
-    # TODO: Completely refactor / replace this endpoint. This is just a quick implementation to get some working data
-    #  for the frontend.
-    # The user needs to be able to select a project_id in the frontend in order to load a themes tree
     if corpus_id is None:
-        stmt = select(Codebook).order_by(Codebook.project_id.asc(), desc(Codebook.version))
+        stmt = select(Codebook).order_by(Codebook.corpus_id.asc(), desc(Codebook.version))
     else:
         corpus_exists = (
             await session.execute(
@@ -100,7 +97,7 @@ async def get_codebooks(
         stmt = (
             select(Codebook)
             .where(generated_for_selected_corpus)
-            .order_by(Codebook.project_id.asc(), desc(Codebook.version))
+            .order_by(Codebook.corpus_id.asc(), desc(Codebook.version))
         )
     codebooks = list((await session.scalars(stmt)).all())
     payload = [CodebookSchema.model_validate(codebook) for codebook in codebooks]
@@ -274,6 +271,6 @@ async def get_codebook_detail(
 ) -> JSONResponse:
     """Fetch details of a specific codebook, including all associated themes."""
     service = CodebookService(session)
-    codebook, themes, edges, codes = await service.get_codebook_detail(codebook_id)
-    detail = CodebookService.build_detail_schema(codebook, themes, edges, codes)
+    codebook, themes, edges, codes, theme_code_edges = await service.get_codebook_detail(codebook_id)
+    detail = CodebookService.build_detail_schema(codebook, themes, edges, codes, theme_code_edges)
     return JSONResponse(content=ResponseEnvelope.ok(detail).model_dump(mode="json"))

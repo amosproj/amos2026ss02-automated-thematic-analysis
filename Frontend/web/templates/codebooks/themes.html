@@ -4,7 +4,8 @@
 {% block content %}
 <div id="theme-app"
      data-frequencies='{{ frequencies | tojson }}'
-     data-tree='{{ tree | tojson }}'>
+     data-tree='{{ tree | tojson }}'
+     data-codes='{{ codes | tojson }}'>
 
   {% if corpus_id and corpus_options %}
     <div class="card border-0 shadow-sm mb-4">
@@ -53,26 +54,32 @@
 
   {% if error %}
     <p class="text-secondary">Couldn't load themes for this codebook right now.</p>
-  {% elif frequencies or tree %}
+  {% elif frequencies or tree or codes %}
 
     {# Metric cards #}
     <div class="row g-3 mb-4">
-      <div class="col-12 col-md-4">
+      <div class="col-12 col-md-3">
         <div class="metric-card metric-card--indigo h-100">
           <p class="metric-label">Total Themes</p>
           <p id="total-themes-value" class="metric-value">—</p>
         </div>
       </div>
-      <div class="col-12 col-md-4">
+      <div class="col-12 col-md-3">
         <div class="metric-card metric-card--cyan h-100">
           <p class="metric-label">Root Themes</p>
           <p id="root-themes-value" class="metric-value">—</p>
         </div>
       </div>
-      <div class="col-12 col-md-4">
+      <div class="col-12 col-md-3">
         <div class="metric-card metric-card--teal h-100">
           <p class="metric-label">Sub-themes</p>
           <p id="sub-themes-value" class="metric-value">—</p>
+        </div>
+      </div>
+      <div class="col-12 col-md-3">
+        <div class="metric-card metric-card--purple h-100" style="border-left-color: var(--bs-purple); background: linear-gradient(145deg, rgba(111,66,193,0.03) 0%, rgba(111,66,193,0) 100%);">
+          <p class="metric-label" style="color: var(--bs-purple);">Codes</p>
+          <p id="codes-value" class="metric-value" style="color: var(--bs-purple);">—</p>
         </div>
       </div>
     </div>

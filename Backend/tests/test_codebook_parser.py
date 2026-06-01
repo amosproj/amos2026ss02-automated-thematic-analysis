@@ -90,12 +90,14 @@ def test_valid_hierarchy():
     data = _csv([
         {"node type": "THEME", "name": "Theme A", "description": "Desc A", "parent name": ""},
         {"node type": "SUBTHEME", "name": "Sub A1", "description": "Desc A1", "parent name": "Theme A"},
-        {"node type": "CODE", "name": "Code A1", "description": "Desc C", "parent name": "Sub A1"}
+        {"node type": "CODE", "name": "Code A1", "description": "Desc C", "parent name": ""},
+        {"node type": "CODE", "name": "Code A2", "description": "Desc C2", "parent name": "Theme A"}
     ])
     themes = parse_codebook_csv(data)
-    assert len(themes) == 3
+    assert len(themes) == 4
     assert themes[1].parent_name == "Theme A"
-    assert themes[2].parent_name == "Sub A1"
+    assert themes[2].parent_name is None
+    assert themes[3].parent_name == "Theme A"
 
 
 # ---------------------------------------------------------------------------

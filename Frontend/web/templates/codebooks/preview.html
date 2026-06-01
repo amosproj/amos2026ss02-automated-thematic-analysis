@@ -231,7 +231,8 @@
                    name="parent_names[]"
                    value="{{ theme.parent_name or '' }}"
                    class="form-control"
-                   {% if theme.node_type in ('THEME', 'CODE') or (not theme.parent_name and not theme.node_type) %}readonly style="background-color: #f8fafc;"{% endif %}>
+                   list="theme-list"
+                   {% if theme.node_type == 'THEME' or (not theme.parent_name and not theme.node_type) %}readonly style="background-color: #f8fafc;"{% endif %}>
           </div>
           <div>
             <label class="theme-label">Name</label>
@@ -260,13 +261,45 @@
     <button type="submit" class="btn btn-primary">Confirm &amp; Save Codebook</button>
   </div>
   </form>
+  <datalist id="theme-list"></datalist>
 </div>
 
 <script>
+    function updateThemeList() {
+      const themeList = document.getElementById('theme-list');
+      if (!themeList) return;
+      themeList.innerHTML = '';
+      
+      const themeInputs = document.querySelectorAll('input[name="theme_names[]"]');
+      const typeSelects = document.querySelectorAll('select[name="node_types[]"]');
+      
+      const availableParents = new Set();
+      themeInputs.forEach((input, index) => {
+        const type = typeSelects[index].value;
+        if ((type === 'THEME' || type === 'SUBTHEME') && input.value.trim() !== '') {
+          availableParents.add(input.value.trim());
+        }
+      });
+      
+      availableParents.forEach(parent => {
+        const option = document.createElement('option');
+        option.value = parent;
+        themeList.appendChild(option);
+      });
+    }
+
+    document.addEventListener('input', function(e) {
+      if (e.target && (e.target.name === 'theme_names[]' || e.target.name === 'node_types[]')) {
+        updateThemeList();
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', updateThemeList);
+
     function handleTypeChange(selectElement) {
       const row = selectElement.closest('.theme-inputs');
       const parentInput = row.querySelector('input[name="parent_names[]"]');
-      if (selectElement.value === 'THEME' || selectElement.value === 'CODE') {
+      if (selectElement.value === 'THEME') {
         parentInput.value = '';
         parentInput.readOnly = true;
         parentInput.style.backgroundColor = '#f8fafc';
@@ -274,6 +307,7 @@
         parentInput.readOnly = false;
         parentInput.style.backgroundColor = '';
       }
+      updateThemeList();
     }
 
     function addThemeRow() {
@@ -297,7 +331,7 @@
         </div>
         <div>
           <label class="theme-label">Parent Name</label>
-          <input type="text" name="parent_names[]" class="form-control" readonly style="background-color: #f8fafc;">
+          <input type="text" name="parent_names[]" class="form-control" list="theme-list" readonly style="background-color: #f8fafc;">
         </div>
         <div>
           <label class="theme-label">Name</label>
@@ -321,6 +355,7 @@
     }
     const row = button.closest('.theme-row');
     row.remove();
+    updateThemeList();
   }
 </script>
 {% endblock %}

@@ -89,7 +89,7 @@ def parse_codebook_csv(content: bytes) -> list[NodeInput]:
                 f"Row {row_number}: '{node_type.value}' must have a 'parent name'."
             )
 
-        if node_type in (NodeType.THEME, NodeType.CODE) and parent_name_value:
+        if node_type == NodeType.THEME and parent_name_value:
             raise UnprocessableError(
                 f"Row {row_number}: '{node_type.value}' must not have a 'parent name'."
             )

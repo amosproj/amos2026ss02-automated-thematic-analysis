@@ -107,22 +107,22 @@ class BackendClient:
 
     # ---- Corpora ------------------------------------------------------------
 
-    def list_corpora(self, project_id: str) -> list[dict]:
-        return self._get("/ingestion/corpora", params={"project_id": project_id}, sub_key="items")
+    def list_corpora(self, corpus_id: str) -> list[dict]:
+        return self._get("/ingestion/corpora", params={"corpus_id": corpus_id}, sub_key="items")
 
-    def create_corpus(self, project_id: str, name: str) -> dict:
-        return self._post("/ingestion/corpora", json={"project_id": project_id, "name": name})
+    def create_corpus(self, corpus_id: str, name: str) -> dict:
+        return self._post("/ingestion/corpora", json={"corpus_id": corpus_id, "name": name})
 
-    def ensure_corpus(self, project_id: str, name: str) -> str:
-        """Return the first corpus_id for `project_id`, creating one if none exists.
+    def ensure_corpus(self, corpus_id: str, name: str) -> str:
+        """Return the first corpus_id for `corpus_id`, creating one if none exists.
 
         Re-checks the backend on every call — no in-memory cache. The id is
         carried in the URL after the initial landing redirect, so this is only
         invoked once per session entry."""
-        existing = self.list_corpora(project_id)
+        existing = self.list_corpora(corpus_id)
         if existing:
             return existing[0]["id"]
-        return self.create_corpus(project_id, name)["id"]
+        return self.create_corpus(corpus_id, name)["id"]
 
     # ---- Documents ----------------------------------------------------------
 
@@ -245,11 +245,11 @@ class BackendClient:
         except (json.JSONDecodeError, KeyError) as exc:
             self._handle_exc(exc, "/codebooks/parse-csv", "POST", started_at)
 
-    def create_codebook(self, project_id: str, name: str, themes: list[dict]) -> dict:
+    def create_codebook(self, corpus_id: str, name: str, themes: list[dict]) -> dict:
         """Persist a new codebook and its themes in the backend database."""
         return self._post(
             "/codebooks/",
-            json={"project_id": project_id, "name": name, "themes": themes},
+            json={"corpus_id": corpus_id, "name": name, "nodes": themes},
         )
 
     def get_codebook(self, codebook_id: str) -> dict:
@@ -323,6 +323,7 @@ class BackendClient:
                     source_exc=exc, status_code=status_code, path=path
                 )
             elif status_code == 422:
+                current_app.logger.error("422 Validation Error Payload: %s", exc.response.text)
                 error = BackendValidationError(
                     user_message=_parse_validation_detail(exc.response),
                     source_exc=exc,

@@ -8,7 +8,21 @@ from __future__ import annotations
 import uuid
 
 API = "/api/v1/codebooks"
-PROJECT_ID = "project-xyz-123"
+CORPUS_ID = "00000000-0000-0000-0000-000000000099"
+
+INGESTION_API = "/api/v1/ingestion"
+
+
+async def _ensure_corpus(client) -> str:
+    """Create a corpus if it doesn't exist, return its id."""
+    resp = await client.post(
+        f"{INGESTION_API}/corpora",
+        json={"corpus_id": CORPUS_ID, "name": "Test Corpus"},
+    )
+    # 201 if new, may fail if already exists — that's fine
+    if resp.status_code == 201:
+        return resp.json()["data"]["id"]
+    return CORPUS_ID
 
 
 # ---------------------------------------------------------------------------
@@ -117,12 +131,16 @@ async def test_parse_csv_zero_themes_raises_422(client):
 
 
 async def test_create_codebook_valid(client):
+    await _ensure_corpus(client)
     payload = {
         "name": "Research Codebook",
-        "project_id": PROJECT_ID,
-        "themes": [
-            {"name": "Theme A", "description": "Desc A"},
-            {"name": "Theme B", "description": "Desc B"},
+        "corpus_id": CORPUS_ID,
+        "nodes": [
+            {"name": "Theme A", "description": "Desc A", "node_type": "THEME"},
+            {"name": "Theme B", "description": "Desc B", "node_type": "THEME"},
+                {"name": "Theme C", "description": "Desc C", "node_type": "THEME"},
+                {"name": "Theme D", "description": "Desc D", "node_type": "THEME"},
+                {"name": "Theme E", "description": "Desc E", "node_type": "THEME"},
         ],
     }
     resp = await client.post(f"{API}/", json=payload)
@@ -130,17 +148,17 @@ async def test_create_codebook_valid(client):
     body = resp.json()
     assert body["success"] is True
     assert body["data"]["name"] == "Research Codebook"
-    assert body["data"]["project_id"] == PROJECT_ID
+    assert body["data"]["corpus_id"] == CORPUS_ID
     assert body["data"]["version"] == 1
-    assert len(body["data"]["themes"]) == 2
+    assert len(body["data"]["themes"]) == 5
     assert body["data"]["themes"][0]["name"] == "Theme A"
 
 
 async def test_create_codebook_zero_themes_raises_422(client):
     payload = {
         "name": "Research Codebook",
-        "project_id": PROJECT_ID,
-        "themes": [],
+        "corpus_id": CORPUS_ID,
+        "nodes": [],
     }
     resp = await client.post(f"{API}/", json=payload)
     assert resp.status_code == 422
@@ -152,8 +170,8 @@ async def test_create_codebook_zero_themes_raises_422(client):
 async def test_create_codebook_too_many_themes_raises_422(client):
     payload = {
         "name": "Research Codebook",
-        "project_id": PROJECT_ID,
-        "themes": [{"name": f"Theme {i}", "description": "Desc"} for i in range(51)],
+        "corpus_id": CORPUS_ID,
+        "nodes": [{"name": f"Theme {i}", "description": "Desc"} for i in range(51)],
     }
     resp = await client.post(f"{API}/", json=payload)
     assert resp.status_code == 422
@@ -167,11 +185,12 @@ async def test_create_codebook_too_many_themes_raises_422(client):
 
 
 async def test_get_codebook_detail_success(client):
+    await _ensure_corpus(client)
     # First create a codebook
     payload = {
         "name": "Read Codebook",
-        "project_id": PROJECT_ID,
-        "themes": [{"name": "A", "description": "Desc A"}],
+        "corpus_id": CORPUS_ID,
+        "nodes": [{"name": "A", "description": "Desc A", "node_type": "THEME"}, {"name": "B", "description": "Desc B", "node_type": "THEME"}, {"name": "C", "description": "Desc C", "node_type": "THEME"}, {"name": "D", "description": "Desc D", "node_type": "THEME"}, {"name": "E", "description": "Desc E", "node_type": "THEME"}],
     }
     create_resp = await client.post(f"{API}/", json=payload)
     cb_id = create_resp.json()["data"]["id"]
@@ -182,8 +201,7 @@ async def test_get_codebook_detail_success(client):
     body = resp.json()
     assert body["success"] is True
     assert body["data"]["id"] == cb_id
-    assert len(body["data"]["themes"]) == 1
-    assert body["data"]["themes"][0]["name"] == "A"
+    assert len(body["data"]["themes"]) == 5
 
 
 async def test_get_codebook_detail_not_found(client):

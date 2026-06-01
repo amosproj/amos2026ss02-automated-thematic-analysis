@@ -138,6 +138,8 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
 
         frequencies = client.get_theme_frequencies(active_codebook_id)
         tree = client.get_theme_tree(active_codebook_id)
+        codebook = client.get_codebook(active_codebook_id)
+        codes = codebook.get("codes", [])
     except BackendNotFoundError as exc:
         flash(exc.user_message, "danger")
         return render_template(
@@ -150,6 +152,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             active_corpus_name=corpus_name,
             frequencies=[],
             tree=[],
+            codes=[],
             error=True,
         )
     except BackendError as exc:
@@ -164,6 +167,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             active_corpus_name=corpus_name,
             frequencies=[],
             tree=[],
+            codes=[],
             error=True,
         )
     return render_template(
@@ -176,6 +180,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         active_corpus_name=corpus_name,
         frequencies=frequencies,
         tree=tree,
+        codes=codes,
     )
 
 @bp.get("/<codebook_id>/export")
@@ -188,8 +193,10 @@ def export_codebook(codebook_id: str) -> Response | str:
         codes = codebook.get("codes", [])
 
         flat_rows = []
+        exported_ids = set()
 
         def traverse(node: dict, parent_name: str) -> None:
+            exported_ids.add(node.get("id"))
             flat_rows.append({
                 "Node Type": node.get("node_type", "THEME"),
                 "Name": node.get("name", ""),
@@ -203,12 +210,13 @@ def export_codebook(codebook_id: str) -> Response | str:
             traverse(t, "")
 
         for c in codes:
-            flat_rows.append({
-                "Node Type": "CODE",
-                "Name": c.get("name", ""),
-                "Description": c.get("description", ""),
-                "Parent Name": "",
-            })
+            if c.get("id") not in exported_ids:
+                flat_rows.append({
+                    "Node Type": "CODE",
+                    "Name": c.get("name", ""),
+                    "Description": c.get("description", ""),
+                    "Parent Name": "",
+                })
 
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=["Node Type", "Name", "Description", "Parent Name"])
@@ -317,7 +325,7 @@ def confirm_submit() -> str:
             if t["node_type"] == "SUBTHEME" and not t["parent_name"]:
                 error = f"Node '{t['name']}' of type {t['node_type']} must have a Parent Name."
                 break
-            if t["node_type"] in ["THEME", "CODE"] and t["parent_name"]:
+            if t["node_type"] == "THEME" and t["parent_name"]:
                 error = f"Node '{t['name']}' of type {t['node_type']} must not have a Parent Name."
                 break
             if t["parent_name"] and t["parent_name"] not in theme_names_set:
@@ -334,8 +342,8 @@ def confirm_submit() -> str:
 
     try:
         client = _backend()
-        project_id = current_app.config["DEFAULT_PROJECT_ID"]
-        res = client.create_codebook(project_id, codebook_name, themes)
+        corpus_id = current_app.config["DEFAULT_CORPUS_ID"]
+        res = client.create_codebook(corpus_id, codebook_name, themes)
         codebook_id = res["id"]
         return redirect(url_for("codebooks.success", codebook_id=codebook_id))
     except BackendError as exc:
