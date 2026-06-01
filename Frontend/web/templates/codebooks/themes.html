@@ -45,7 +45,7 @@
         {% if version %}
           <span class="theme-version-badge">v{{ version }}</span>
         {% endif %}
-        <a href="{{ url_for('codebooks.export_codebook', codebook_id=codebook_id) }}" class="btn btn-sm btn-outline-light ms-2">
+        <a href="{{ url_for('codebooks.export_codebook', corpus_id=corpus_id, codebook_id=codebook_id) }}" class="btn btn-sm btn-outline-light ms-2">
           Export CSV
         </a>
       </div>
