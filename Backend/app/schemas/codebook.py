@@ -177,7 +177,7 @@ class ThemeInCodebookSchema(BaseSchema):
     node_type: NodeType = Field(default=NodeType.THEME)
     name: str  # maps from Theme.label
     description: str | None = None
-    children: list[Self | CodeInCodebookSchema] = Field(default_factory=list)
+    children: list["ThemeInCodebookSchema" | CodeInCodebookSchema] = Field(default_factory=list)
 
     @classmethod
     def from_theme(cls, theme: "Theme", is_subtheme: bool = False) -> "ThemeInCodebookSchema":

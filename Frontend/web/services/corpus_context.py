@@ -13,19 +13,19 @@ def list_workspace_corpora(client: BackendClient) -> list[dict]:
     Ensures at least one corpus exists by creating the default corpus on demand.
     """
     cfg = current_app.config
-    project_id = cfg["DEFAULT_PROJECT_ID"]
-    corpora = client.list_corpora(project_id)
+    corpus_id = cfg["DEFAULT_CORPUS_ID"]
+    corpora = client.list_corpora(corpus_id)
     if corpora:
         return corpora
 
     ensured_id = client.ensure_corpus(
-        project_id=project_id,
+        corpus_id=corpus_id,
         name=cfg["DEFAULT_CORPUS_NAME"],
     )
-    corpora = client.list_corpora(project_id)
+    corpora = client.list_corpora(corpus_id)
     if corpora:
         return corpora
-    return [{"id": ensured_id, "name": cfg["DEFAULT_CORPUS_NAME"], "project_id": project_id}]
+    return [{"id": ensured_id, "name": cfg["DEFAULT_CORPUS_NAME"]}]
 
 
 def set_active_corpus_id(corpus_id: str) -> None:
