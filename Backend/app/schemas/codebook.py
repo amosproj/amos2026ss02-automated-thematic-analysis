@@ -59,10 +59,11 @@ class CodebookCreateRequest(BaseSchema):
                 f"got {len(v)}."
             )
         for node in v:
-            if node.node_type == NodeType.THEME and node.parent_name:
-                raise ValueError("'THEME' must not have a 'parent name'.")
-            if node.node_type == NodeType.SUBTHEME and not node.parent_name:
-                raise ValueError("'SUBTHEME' must have a 'parent name'.")
+            if node.node_type in (NodeType.THEME, NodeType.SUBTHEME):
+                if node.parent_name:
+                    node.node_type = NodeType.SUBTHEME
+                else:
+                    node.node_type = NodeType.THEME
         return v
 
 

@@ -41,7 +41,7 @@ class CodebookService:
     ) -> tuple[Codebook, list[Theme], list[ThemeHierarchyRelationship], list[Code], list[ThemeCodeRelationship]]:
         """Persist a new codebook and all its themes and codes atomically.
 
-        Version is auto-incremented per project_id (starts at 1).
+        Version is auto-incremented per corpus_id (starts at 1).
         Rolls back and raises UnprocessableError on any failure.
 
         Returns:

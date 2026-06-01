@@ -69,36 +69,13 @@ def _to_job_schema(job: CodebookGenerationJob) -> CodebookGenerationJobSchema:
     "/",
     response_model=ResponseEnvelope[list[CodebookSchema]],
     summary="List codebooks",
-    description="Return all codebooks ordered by project id and descending version.",
+    description="Return all codebooks for a given corpus ordered by descending version.",
 )
 async def get_codebooks(
+    corpus_id: UUID,
     session: DbSession,
-    corpus_id: UUID | None = None,
 ) -> JSONResponse:
-    if corpus_id is None:
-        stmt = select(Codebook).order_by(Codebook.corpus_id.asc(), desc(Codebook.version))
-    else:
-        corpus_exists = (
-            await session.execute(
-                select(exists().where(Corpus.id == corpus_id))
-            )
-        ).scalar_one()
-        if not corpus_exists:
-            return JSONResponse(content=ResponseEnvelope.ok([]).model_dump(mode="json"))
-
-        generated_for_selected_corpus = exists(
-            select(CodebookGenerationJob.id).where(
-                CodebookGenerationJob.codebook_id == Codebook.id,
-                CodebookGenerationJob.corpus_id == corpus_id,
-                CodebookGenerationJob.codebook_id.is_not(None),
-                CodebookGenerationJob.status == "succeeded",
-            )
-        )
-        stmt = (
-            select(Codebook)
-            .where(generated_for_selected_corpus)
-            .order_by(Codebook.corpus_id.asc(), desc(Codebook.version))
-        )
+    stmt = select(Codebook).where(Codebook.corpus_id == corpus_id).order_by(desc(Codebook.version))
     codebooks = list((await session.scalars(stmt)).all())
     payload = [CodebookSchema.model_validate(codebook) for codebook in codebooks]
     return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))
