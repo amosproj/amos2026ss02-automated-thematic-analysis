@@ -36,6 +36,22 @@ def list_codebooks() -> str:
     return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=active_corpus_id))
 
 
+@bp.get("/upload")
+def codebooks_upload_landing() -> str:
+    requested_corpus_id = request.args.get("corpus_id")
+    try:
+        active_corpus_id, _, _ = resolve_active_corpus(
+            _backend(),
+            requested_corpus_id=requested_corpus_id,
+            strict_requested=bool(requested_corpus_id),
+        )
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return redirect(url_for("codebooks.list_codebooks"))
+
+    return redirect(url_for("codebooks.upload_form", corpus_id=active_corpus_id))
+
+
 @bp.get("/<corpus_id>/")
 def list_codebooks_for_corpus(corpus_id: str) -> str:
     set_active_corpus_id(corpus_id)

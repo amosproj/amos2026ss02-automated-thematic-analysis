@@ -50,11 +50,11 @@
                href="{{ url_for('demographic.demographic_landing') }}">Demographic Data</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint in ('codebooks.list_codebooks', 'codebooks.codebook_themes', 'codebooks.export_codebook', 'codebooks.success') %}active{% endif %}"
-               href="{{ url_for('codebooks.codebooks_landing') }}">Codebooks</a>
+            <a class="nav-link {% if request.endpoint in ('codebooks.list_codebooks', 'codebooks.list_codebooks_for_corpus', 'codebooks.codebook_themes', 'codebooks.codebook_themes_for_corpus', 'codebooks.export_codebook', 'codebooks.success') %}active{% endif %}"
+               href="{{ url_for('codebooks.list_codebooks') }}">Codebooks</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint in ('codebooks.upload_form', 'codebooks.upload_submit', 'codebooks.manual_form', 'codebooks.confirm_submit') %}active{% endif %}"
+            <a class="nav-link {% if request.endpoint in ('codebooks.upload_form', 'codebooks.upload_submit', 'codebooks.manual_form', 'codebooks.confirm_submit', 'codebooks.codebooks_upload_landing') %}active{% endif %}"
                href="{{ url_for('codebooks.codebooks_upload_landing') }}">Upload Codebook</a>
           </li>
           <li class="nav-item">
