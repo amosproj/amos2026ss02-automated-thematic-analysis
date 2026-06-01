@@ -37,19 +37,9 @@ async def _create_corpus_with_docs(client, texts: list[str]) -> tuple[str, list[
     )
     assert ingest_response.status_code == 201
 
-    # Wait for ingestion jobs to complete so chunks are ready
-    started = time.monotonic()
-    document_ids = []
-    while time.monotonic() - started < 10.0:
-        document_response = await client.get(f"{API_INGESTION}/corpora/{corpus_id}/documents")
-        assert document_response.status_code == 200
-        items = document_response.json()["data"]["items"]
-        if all(item["status"] == "succeeded" for item in items):
-            document_ids = [row["id"] for row in items]
-            break
-        await asyncio.sleep(0.05)
-    else:
-        raise AssertionError("Documents did not finish ingestion in time.")
+    document_response = await client.get(f"{API_INGESTION}/corpora/{corpus_id}/documents")
+    assert document_response.status_code == 200
+    document_ids = [row["id"] for row in document_response.json()["data"]["items"]]
     return corpus_id, document_ids
 
 

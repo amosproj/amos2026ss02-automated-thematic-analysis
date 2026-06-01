@@ -39,7 +39,7 @@ def _payload(n_themes: int = 3, corpus_id: str = CORPUS_ID) -> CodebookCreateReq
 
 async def test_create_codebook_with_one_theme(db_session):
     svc = CodebookService(db_session)
-    codebook, themes, edges, _ = await svc.create_codebook(_payload(1))
+    codebook, themes, edges, _, _ = await svc.create_codebook(_payload(1))
 
     assert codebook.id is not None
     assert codebook.name == "Test Codebook"
@@ -52,15 +52,15 @@ async def test_create_codebook_with_one_theme(db_session):
 
 async def test_create_codebook_with_fifty_themes(db_session):
     svc = CodebookService(db_session)
-    codebook, themes, edges, _ = await svc.create_codebook(_payload(50))
+    codebook, themes, edges, _, _ = await svc.create_codebook(_payload(50))
     assert len(themes) == 50
 
 
 async def test_create_codebook_auto_increments_version(db_session):
     svc = CodebookService(db_session)
 
-    cb1, _, _, _ = await svc.create_codebook(_payload())
-    cb2, _, _, _ = await svc.create_codebook(_payload())
+    cb1, _, _, _, _ = await svc.create_codebook(_payload())
+    cb2, _, _, _, _ = await svc.create_codebook(_payload())
 
     assert cb1.version == 1
     assert cb2.version == 2
@@ -69,8 +69,8 @@ async def test_create_codebook_auto_increments_version(db_session):
 async def test_create_codebook_versions_are_scoped_per_corpus(db_session):
     svc = CodebookService(db_session)
 
-    cb_p1, _, _, _ = await svc.create_codebook(_payload(corpus_id=uuid.UUID("00000000-0000-0000-0000-000000000002")))
-    cb_p2, _, _, _ = await svc.create_codebook(_payload(corpus_id=uuid.UUID("00000000-0000-0000-0000-000000000003")))
+    cb_p1, _, _, _, _ = await svc.create_codebook(_payload(corpus_id=uuid.UUID("00000000-0000-0000-0000-000000000002")))
+    cb_p2, _, _, _, _ = await svc.create_codebook(_payload(corpus_id=uuid.UUID("00000000-0000-0000-0000-000000000003")))
 
     # Both are first codebooks for their respective projects → both version 1.
     assert cb_p1.version == 1
@@ -79,7 +79,7 @@ async def test_create_codebook_versions_are_scoped_per_corpus(db_session):
 
 async def test_create_codebook_persists_all_themes(db_session):
     svc = CodebookService(db_session)
-    _, themes, _, _ = await svc.create_codebook(_payload(5))
+    _, themes, _, _, _ = await svc.create_codebook(_payload(5))
 
     labels = {t.label for t in themes}
     assert labels == {"Theme 1", "Theme 2", "Theme 3", "Theme 4", "Theme 5"}
@@ -92,7 +92,7 @@ async def test_create_codebook_persists_all_themes(db_session):
 
 async def test_get_codebook_detail_returns_correct_themes(db_session):
     svc = CodebookService(db_session)
-    created_cb, created_themes, _, _ = await svc.create_codebook(_payload(3))
+    created_cb, created_themes, _, _, _ = await svc.create_codebook(_payload(3))
 
     fetched_cb, fetched_themes, _, _, _ = await svc.get_codebook_detail(created_cb.id)
 
@@ -116,7 +116,7 @@ async def test_get_codebook_detail_not_found_raises(db_session):
 
 async def test_build_detail_schema_shapes_output(db_session):
     svc = CodebookService(db_session)
-    codebook, themes, edges, _ = await svc.create_codebook(_payload(2))
+    codebook, themes, edges, _, _ = await svc.create_codebook(_payload(2))
     schema = CodebookService.build_detail_schema(codebook, themes, edges)
 
     assert schema.name == "Test Codebook"
