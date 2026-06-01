@@ -1,4 +1,5 @@
 import os
+import uuid as _uuid
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, patch
 
@@ -6,7 +7,6 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
 
 # Must be set before any app module is imported so Settings() can validate.
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
@@ -19,11 +19,19 @@ TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
 @pytest_asyncio.fixture
 async def db_engine():
+    # Use a named in-memory database with shared cache so that multiple
+    # concurrent connections (e.g. main session + background job runner
+    # + progress/cancel callbacks) all see the *same* database while each
+    # owning an independent transaction.  A plain :memory: URL with
+    # StaticPool forces every session onto a single shared connection,
+    # causing transaction conflicts when the async job runner opens its
+    # own sessions.
+    db_name = f"test_{_uuid.uuid4().hex[:8]}"
+    url = f"sqlite+aiosqlite:///file:{db_name}?mode=memory&cache=shared&uri=true"
     engine = create_async_engine(
-        TEST_DB_URL,
+        url,
         echo=False,
-        poolclass=StaticPool,
-        connect_args={"check_same_thread": False},
+        connect_args={"check_same_thread": False, "timeout": 10},
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
