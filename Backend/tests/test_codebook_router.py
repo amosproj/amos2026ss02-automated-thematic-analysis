@@ -219,7 +219,7 @@ async def test_get_codebook_detail_not_found(client):
 
 
 async def test_list_codebooks_empty(client):
-    resp = await client.get(f"{API}/")
+    resp = await client.get(f"{API}/?corpus_id={CORPUS_ID}")
     assert resp.status_code == 200
     body = resp.json()
     assert body["success"] is True

@@ -139,15 +139,18 @@ def test_invalid_node_type_raises():
     with pytest.raises(UnprocessableError, match="one of THEME, SUBTHEME, CODE"):
         parse_codebook_csv(data)
 
-def test_missing_parent_name_raises():
+def test_missing_parent_name_autocorrects():
     data = _csv([{"node type": "SUBTHEME", "name": "A", "description": "B", "parent name": ""}])
-    with pytest.raises(UnprocessableError, match="must have a 'parent name'"):
-        parse_codebook_csv(data)
+    themes = parse_codebook_csv(data)
+    assert themes[0].node_type == NodeType.THEME
 
-def test_theme_with_parent_name_raises():
-    data = _csv([{"node type": "THEME", "name": "A", "description": "B", "parent name": "B"}])
-    with pytest.raises(UnprocessableError, match="'THEME' must not have a 'parent name'"):
-        parse_codebook_csv(data)
+def test_theme_with_parent_name_autocorrects():
+    data = _csv([
+        {"node type": "THEME", "name": "A", "description": "B", "parent name": ""},
+        {"node type": "THEME", "name": "B", "description": "C", "parent name": "A"}
+    ])
+    themes = parse_codebook_csv(data)
+    assert themes[1].node_type == NodeType.SUBTHEME
 
 def test_missing_parent_in_csv_raises():
     data = _csv([{"node type": "SUBTHEME", "name": "A", "description": "B", "parent name": "Nonexistent"}])

@@ -104,12 +104,12 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
             )
             await session.commit()
 
-            response = await codebooks_router.get_codebooks(session=session)
+            response = await codebooks_router.get_codebooks(corpus_id=uuid.UUID("56b03be5-503c-17f4-4b86-2ccba63add48"), session=session)
             payload = json.loads(response.body)
             ordered_pairs = [(row["corpus_id"], row["version"]) for row in payload["data"]]
             self.assertEqual(
                 ordered_pairs,
-                [("56b03be5-503c-17f4-4b86-2ccba63add48", 2), ("56b03be5-503c-17f4-4b86-2ccba63add48", 1), ("a4bdd546-5ab1-74a4-ea03-e7a0698f573c", 1)],
+                [("56b03be5-503c-17f4-4b86-2ccba63add48", 2), ("56b03be5-503c-17f4-4b86-2ccba63add48", 1)],
             )
 
     async def test_codebooks_route_can_filter_by_corpus_id_only(self) -> None:
