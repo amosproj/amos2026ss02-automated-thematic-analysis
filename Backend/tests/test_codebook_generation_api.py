@@ -294,7 +294,7 @@ async def test_generate_codebook_post_processes_codes_with_llm_consolidation(
 ) -> None:
     corpus_id, document_ids = await _create_corpus_and_docs(client)
 
-    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+    def _fake_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
         return PassageCodebookGeneration(
             themes=[
                 GeneratedThemePath(
@@ -342,6 +342,7 @@ async def test_generate_codebook_post_processes_codes_with_llm_consolidation(
             "codebook_name": "Consolidated Codes",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 201
@@ -387,7 +388,7 @@ async def test_generate_codebook_post_processes_themes_with_llm_consolidation(
 ) -> None:
     corpus_id, document_ids = await _create_corpus_and_docs(client)
 
-    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+    def _fake_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
         return PassageCodebookGeneration(
             themes=[
                 GeneratedThemePath(
@@ -445,6 +446,7 @@ async def test_generate_codebook_post_processes_themes_with_llm_consolidation(
             "codebook_name": "Consolidated Themes",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 201
