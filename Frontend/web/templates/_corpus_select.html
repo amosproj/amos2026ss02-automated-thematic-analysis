@@ -1,0 +1,61 @@
+<div class="card border-0 shadow-sm rounded-4 mb-4">
+  <div class="card-body p-4">
+    <label for="global-corpus-select" class="form-label fw-semibold text-secondary mb-3">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="bi bi-folder2-open me-2" viewBox="0 0 16 16">
+        <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.311 1.184C7.985 3.648 8.48 4 9 4h4.5A1.5 1.5 0 0 1 15 5.5v.64c.57.265.94.876.856 1.546l-.64 5.124A2.5 2.5 0 0 1 12.733 15H3.266a2.5 2.5 0 0 1-2.481-2.19l-.64-5.124A1.5 1.5 0 0 1 1 6.14V3.5zM2 6h12v-.5a.5.5 0 0 0-.5-.5H9c-.964 0-1.71-.629-2.174-1.154C6.374 3.334 5.82 3 5.264 3H2.5a.5.5 0 0 0-.5.5V6zm-.367 1a.5.5 0 0 0-.496.562l.64 5.124A1.5 1.5 0 0 0 3.266 14h9.468a1.5 1.5 0 0 0 1.489-1.314l.64-5.124A.5.5 0 0 0 14.367 7H1.633z"/>
+      </svg>
+      Upload target corpus
+    </label>
+    <select id="global-corpus-select" class="form-select form-select-lg rounded-3 shadow-none bg-light"
+          data-switch-template="{{ switch_template_url }}">
+      {% for corpus in corpus_options %}
+        <option value="{{ corpus.id }}" {% if corpus.id == active_corpus_id %}selected{% endif %}>
+          {{ corpus.name }}
+        </option>
+      {% endfor %}
+    </select>
+    <div class="form-text mt-2 text-muted mb-0">
+      {{ helper_text }}
+    </div>
+
+    {% if show_create_form %}
+      <hr class="my-4 text-muted border-secondary opacity-25">
+      <form id="create-corpus-form"
+            method="post"
+            action="{{ url_for('ingestion.create_corpus_submit') }}">
+        <input type="hidden" id="current_corpus_id" name="current_corpus_id" value="{{ active_corpus_id }}">
+        <label for="new_corpus_name" class="form-label fw-semibold text-secondary mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-circle me-1 mb-1" viewBox="0 0 16 16">
+            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+          </svg>
+          Create new corpus
+        </label>
+        <div class="input-group input-group-lg">
+          <input type="text"
+                 id="new_corpus_name"
+                 name="name"
+                 class="form-control rounded-start-3 shadow-none bg-light"
+                 maxlength="255"
+                 placeholder="Enter corpus name"
+                 required>
+          <button type="submit" class="btn btn-outline-secondary rounded-end-3 px-4 fw-medium">Create</button>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  (() => {
+    const selector = document.getElementById("global-corpus-select");
+    if (!selector || selector.dataset.listenerAttached) return;
+    selector.dataset.listenerAttached = "true";
+
+    selector.addEventListener("change", () => {
+      const template = selector.dataset.switchTemplate;
+      const target = template.replace("__CORPUS_ID__", encodeURIComponent(selector.value));
+      window.location.href = target;
+    });
+  })();
+</script>

@@ -1,6 +1,6 @@
 from app.models.analysis import DocumentAnalysis, ThemeOccurrence
 from app.models.base import Base, IdMixin, TimestampMixin
-from app.models.code import Code, CodebookCodeRelationship
+from app.models.code import Code, CodebookCodeRelationship, ThemeCodeRelationship
 from app.models.codebook import Codebook
 from app.models.codebook_generation_job import CodebookGenerationJob
 from app.models.demographic import DemographicFiles, DemographicRow
@@ -23,6 +23,7 @@ __all__ = [
     "Codebook",
     "CodebookGenerationJob",
     "CodebookCodeRelationship",
+    "ThemeCodeRelationship",
     "CodebookThemeRelationship",
     "Theme",
     "ThemeHierarchyRelationship",

@@ -8,7 +8,15 @@ from anytree.node.exceptions import LoopError
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Codebook, CodebookThemeRelationship, Theme, ThemeHierarchyRelationship
+from app.models import (
+    Code,
+    Codebook,
+    CodebookCodeRelationship,
+    CodebookThemeRelationship,
+    Theme,
+    ThemeCodeRelationship,
+    ThemeHierarchyRelationship,
+)
 from app.schemas.theme_graph import (
     ThemeDagValidation,
     ThemeDagView,
@@ -130,7 +138,7 @@ class ThemeGraphService:
 
     async def _load_theme_nodes(self, *, codebook_id: UUID) -> dict[UUID, ThemeNodeView]:
         # Restrict to active themes that are active members of the target codebook.
-        stmt = (
+        stmt_themes = (
             select(Theme)
             .join(
                 CodebookThemeRelationship,
@@ -145,22 +153,48 @@ class ThemeGraphService:
                 Theme.codebook_id == codebook_id,
             )
         )
-        themes = list((await self._session.scalars(stmt)).all())
-        return {
-            theme.id: ThemeNodeView(
+        themes = list((await self._session.scalars(stmt_themes)).all())
+
+        stmt_codes = (
+            select(Code)
+            .join(
+                CodebookCodeRelationship,
+                and_(
+                    CodebookCodeRelationship.code_id == Code.id,
+                    CodebookCodeRelationship.codebook_id == codebook_id,
+                    CodebookCodeRelationship.is_active.is_(True),
+                ),
+            )
+            .where(
+                Code.is_active.is_(True),
+                Code.codebook_id == codebook_id,
+            )
+        )
+        codes = list((await self._session.scalars(stmt_codes)).all())
+
+        nodes = {}
+        for theme in themes:
+            nodes[theme.id] = ThemeNodeView(
                 id=theme.id,
                 label=theme.label,
                 is_active=theme.is_active,
+                node_type="THEME"
             )
-            for theme in themes
-        }
+        for code in codes:
+            nodes[code.id] = ThemeNodeView(
+                id=code.id,
+                label=code.label,
+                is_active=code.is_active,
+                node_type="CODE"
+            )
+        return nodes
 
     async def _load_hierarchy_edges(
         self,
         *,
         codebook_id: UUID,
         theme_ids: set[UUID],
-    ) -> list[ThemeHierarchyRelationship]:
+    ) -> list[ThemeEdgeView]:
         if not theme_ids:
             return []
         # Ignore dangling edges that reference nodes outside the active membership set.
@@ -170,7 +204,25 @@ class ThemeGraphService:
             ThemeHierarchyRelationship.parent_theme_id.in_(theme_ids),
             ThemeHierarchyRelationship.child_theme_id.in_(theme_ids),
         )
-        return list((await self._session.scalars(stmt)).all())
+        theme_edges = list((await self._session.scalars(stmt)).all())
+
+        stmt_code = select(ThemeCodeRelationship).where(
+            ThemeCodeRelationship.codebook_id == codebook_id,
+            ThemeCodeRelationship.is_active.is_(True),
+            ThemeCodeRelationship.theme_id.in_(theme_ids),
+            ThemeCodeRelationship.code_id.in_(theme_ids),
+        )
+        code_edges = list((await self._session.scalars(stmt_code)).all())
+
+        edges = [
+            ThemeEdgeView(parent_theme_id=e.parent_theme_id, child_theme_id=e.child_theme_id)
+            for e in theme_edges
+        ]
+        edges.extend([
+            ThemeEdgeView(parent_theme_id=e.theme_id, child_theme_id=e.code_id)
+            for e in code_edges
+        ])
+        return edges
 
     def _materialize_anytree(
         self,

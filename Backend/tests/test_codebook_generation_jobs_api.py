@@ -15,13 +15,13 @@ from app.schemas.llm import (
 
 API_INGESTION = "/api/v1/ingestion"
 API_CODEBOOKS = "/api/v1/codebooks"
-PROJECT_ID = "00000000-0000-0000-0000-000000000222"
+CORPUS_ID = "00000000-0000-0000-0000-000000000222"
 
 
 async def _create_corpus_with_docs(client, texts: list[str]) -> tuple[str, list[str]]:
     corpus_response = await client.post(
         f"{API_INGESTION}/corpora",
-        json={"project_id": PROJECT_ID, "name": "Generation Job Corpus"},
+        json={"corpus_id": CORPUS_ID, "name": "Generation Job Corpus"},
     )
     assert corpus_response.status_code == 201
     corpus_id = corpus_response.json()["data"]["id"]
@@ -53,7 +53,7 @@ async def _wait_for_terminal_job_status(client, job_id: str, timeout_seconds: fl
         last_payload = payload
         if payload["status"] in {"succeeded", "failed", "cancelled"}:
             return payload
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.25)
     raise AssertionError(f"Job {job_id} did not reach terminal status. Last payload: {last_payload}")
 
 
@@ -103,7 +103,7 @@ async def test_generate_codebook_job_completes_successfully(client, monkeypatch)
     assert created_job["status"] in {"queued", "running"}
 
     terminal_job = await _wait_for_terminal_job_status(client, created_job["id"])
-    assert terminal_job["status"] == "succeeded"
+    assert terminal_job["status"] == "succeeded", terminal_job.get("error_message")
     assert terminal_job["codebook_id"] is not None
     assert terminal_job["themes_created"] >= 1
     assert terminal_job["codes_created"] >= 1

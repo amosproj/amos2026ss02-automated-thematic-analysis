@@ -24,13 +24,10 @@ from app.schemas.llm import (
 
 API_INGESTION = "/api/v1/ingestion"
 API_CODEBOOKS = "/api/v1/codebooks"
-PROJECT_ID = "00000000-0000-0000-0000-000000000111"
-
-
 async def _create_corpus_and_docs(client) -> tuple[str, list[str]]:
     corpus_response = await client.post(
         f"{API_INGESTION}/corpora",
-        json={"project_id": PROJECT_ID, "name": "Generation Corpus"},
+        json={"corpus_id": str(uuid4()), "name": "Generation Corpus"},
     )
     assert corpus_response.status_code == 201
     corpus_id = corpus_response.json()["data"]["id"]

@@ -35,7 +35,8 @@ class IngestionService:
     async def create_corpus(self, payload: CorpusCreate) -> Corpus:
         """Insert a new corpus and return the refreshed ORM object."""
         corpus = Corpus(
-            project_id=payload.project_id, # TODO: Only placeholder for now. add Project Data Structure and wire correctly into Corpus
+            id=payload.corpus_id,
+            project_id=uuid.uuid4(), # TODO: Only placeholder for now. add Project Data Structure and wire correctly into Corpus
             name=payload.name,
         )
         self._session.add(corpus)
@@ -55,16 +56,16 @@ class IngestionService:
 
     async def list_corpora(
         self,
-        project_id: uuid.UUID | None = None,
+        corpus_id: uuid.UUID | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[Corpus], int]:
-        """Return a paginated list of corpora, optionally filtered by project_id."""
+        """Return a paginated list of corpora, optionally filtered by corpus_id."""
         base = select(Corpus)
         count_q = select(func.count()).select_from(Corpus)
-        if project_id is not None:
-            base = base.where(Corpus.project_id == project_id)
-            count_q = count_q.where(Corpus.project_id == project_id)
+        if corpus_id is not None:
+            base = base.where(Corpus.id == corpus_id)
+            count_q = count_q.where(Corpus.id == corpus_id)
 
         total: int = (await self._session.execute(count_q)).scalar_one()
 

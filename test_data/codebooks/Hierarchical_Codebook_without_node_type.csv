@@ -1,0 +1,10 @@
+Node Type,Name,Description,Parent Name
+THEME,Communication barriers,Issues communicating remotely,
+THEME,Asynchronous communication issues,Delays or misunderstandings in async comms,Communication barriers
+CODE,Missed messages,Messages not seen in time,Asynchronous communication issues
+CODE,Lack of tone in text,Misinterpretation of text tone,Communication barriers
+THEME,Remote work reshapes daily life,Broad changes caused by remote work,
+THEME,Work-life boundary challenges,Difficulty separating work and personal life,Remote work reshapes daily life
+CODE,Difficulty separating work and home life,Specific struggles to detach from work,Work-life boundary challenges
+CODE,Working longer hours,Working past normal hours,Remote work reshapes daily life
+CODE,Family interruptions during meetings,Family members interrupting video calls,Remote work reshapes daily life

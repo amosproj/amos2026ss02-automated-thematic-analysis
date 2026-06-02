@@ -15,7 +15,7 @@ P1_STR = "00000000-0000-0000-0000-000000000001"
 async def _create_corpus(client, name: str = "Corpus") -> str:
     response = await client.post(
         f"{INGESTION_API}/corpora",
-        json={"project_id": P1_STR, "name": name},
+        json={"corpus_id": str(uuid.uuid4()), "name": name},
     )
     assert response.status_code == 201
     return response.json()["data"]["id"]
