@@ -62,6 +62,19 @@ def test_codebook_list_shows_create_button(client, fake_backend):
     assert b'href="/codebooks/new"' in resp.data
 
 
+def test_codebook_list_row_shows_review_button(client, fake_backend):
+    # Permanent path to the review editor for any codebook, so users can
+    # always come back to edit even if they dismissed the completion toast.
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    resp = client.get("/codebooks/", follow_redirects=True)
+    assert b"Review &amp; edit" in resp.data
+    assert b'href="/codebooks/cb-1/review"' in resp.data
+
+
 def test_codebook_list_renders_backend_error(client, fake_backend):
     fake_backend.raise_on = "list_codebooks"
     resp = client.get("/codebooks/", follow_redirects=True)
@@ -280,14 +293,19 @@ def test_auto_submit_without_name_re_renders_with_flash(client, fake_backend):
     assert b"give your codebook a name" in resp.data
 
 
-def test_auto_submit_creates_job_and_redirects_to_progress(client, fake_backend):
+def test_auto_submit_creates_job_and_redirects_to_codebook_list(client, fake_backend):
     resp = client.post(
         "/codebooks/new/corpus-xyz/auto",
         data={"mode": "auto", "codebook_name": "Interview Codebook"},
     )
     assert resp.status_code == 302
-    assert "/codebooks/new/jobs/job-1" in resp.headers["Location"]
-    assert "mode=auto" in resp.headers["Location"]
+    loc = resp.headers["Location"]
+    # New flow: handoff to the codebook list with new-job params so the
+    # client-side tracker picks them up and polls in the background.
+    assert "/codebooks/corpus-xyz/" in loc
+    assert "new_job=job-1" in loc
+    assert "mode=auto" in loc
+    assert "name=Interview+Codebook" in loc
     assert fake_backend.last_generation_job_request == {
         "codebook_name": "Interview Codebook",
         "corpus_id": "corpus-xyz",
@@ -352,114 +370,185 @@ def test_progress_cancel_returns_updated_job(client, fake_backend):
 # Mode-2 review — renders our editor pre-filled from get_theme_tree --------
 
 
-def test_review_renders_editor_with_flattened_themes(client, fake_backend):
+def test_review_renders_unified_editor_with_themes_subthemes_and_codes(client, fake_backend):
+    # CodebookDetailSchema nests subthemes and attached codes inside each
+    # theme's children list; the controller walks this tree depth-first to
+    # produce editor rows tagged with indent + is_code.
     fake_backend.codebooks = [
         {"id": "cb-42", "name": "My Generated Codebook",
          "corpus_id": fake_backend.corpus_id, "version": 1,
-         "created_by": "alice", "description": None},
-    ]
-    fake_backend.theme_tree = [
-        {"theme": {"id": "t-1", "label": "Work-Life Balance",
-                   "description": "Balance between work and personal life",
-                   "node_type": "THEME", "is_active": True},
-         "children": [
-             {"theme": {"id": "t-2", "label": "Boundary issues",
-                        "description": "Difficulty separating",
-                        "node_type": "THEME", "is_active": True},
-              "children": []},
-         ]},
+         "created_by": "alice", "description": None,
+         "themes": [
+             {"id": "t-1", "node_type": "THEME", "name": "Work-Life Balance",
+              "description": "Balance between work and personal life",
+              "children": [
+                  {"id": "t-2", "node_type": "SUBTHEME",
+                   "name": "Boundary issues",
+                   "description": "Difficulty separating",
+                   "children": [
+                       {"id": "c-1", "node_type": "CODE",
+                        "name": "Late evenings",
+                        "description": "Works past 8pm"},
+                   ]},
+              ]},
+         ],
+         "codes": []},
     ]
     resp = client.get("/codebooks/cb-42/review")
     assert resp.status_code == 200
-    assert b"Review Codebook" in resp.data
-    assert b'action="/codebooks/cb-42/review"' in resp.data
     assert b"My Generated Codebook" in resp.data
+    # All three node types render in the unified editor.
     assert b'value="Work-Life Balance"' in resp.data
     assert b'value="Boundary issues"' in resp.data
-
-
-def test_review_skips_code_nodes_from_tree(client, fake_backend):
-    # Branch 9 mixes CODE nodes into the theme tree. Those come back via the
-    # codebook detail's codes[] field, so the flattener must skip them here.
-    fake_backend.codebooks = [
-        {"id": "cb-42", "name": "CB", "corpus_id": fake_backend.corpus_id,
-         "version": 1, "created_by": "alice", "description": None},
-    ]
-    fake_backend.theme_tree = [
-        {"theme": {"id": "t-1", "label": "Theme A",
-                   "node_type": "THEME", "is_active": True}, "children": []},
-        {"theme": {"id": "c-1", "label": "Code X",
-                   "node_type": "CODE", "is_active": True}, "children": []},
-    ]
-    resp = client.get("/codebooks/cb-42/review")
-    assert resp.status_code == 200
-    assert b'value="Theme A"' in resp.data
-    # Code rendered via the tree must NOT show up as a theme row.
-    assert b'name="theme_names[]" value="Code X"' not in resp.data
+    assert b'value="Late evenings"' in resp.data
+    # Hierarchy is reflected via data-indent (root=0, subtheme=1, code=2).
+    assert b'data-indent="0"' in resp.data
+    assert b'data-indent="1"' in resp.data
+    assert b'data-indent="2"' in resp.data
+    # The code row carries the is-code marker for the "Code" toggle.
+    assert b'data-is-code="1"' in resp.data
 
 
 def test_review_not_found_for_missing_codebook(client, fake_backend):
     # No entry in fake_backend.codebooks; branch 9's get_codebook raises NotFound.
     resp = client.get("/codebooks/missing/review")
     assert resp.status_code == 200
-    assert b"No themes found for this codebook" not in resp.data
     assert b"Codebook not found" in resp.data
 
 
 # Mode-2 review — Save flow (POST /codebooks/<id>/review) -----------------
 
 
-def test_review_submit_persists_edited_codebook_and_redirects(client, fake_backend):
+def test_review_submit_persists_unified_nodes_and_redirects(client, fake_backend):
+    # Two themes (one with a subtheme) and a code under the subtheme. The JS
+    # would emit row_parents[] and row_is_codes[] at submit time; the test
+    # provides them directly.
     resp = client.post("/codebooks/cb-42/review", data={
         "codebook_name": "Edited Codebook",
         "corpus_id": fake_backend.corpus_id,
-        "theme_names[]": ["Root Theme", "Child"],
-        "theme_descriptions[]": ["root desc", "child desc"],
-        "parent_names[]": ["", "Root Theme"],
+        "row_names[]": ["Root Theme", "Sub A", "Code 1"],
+        "row_descriptions[]": ["root desc", "sub desc", "code desc"],
+        "row_parents[]": ["", "Root Theme", "Sub A"],
+        "row_is_codes[]": ["0", "0", "1"],
     })
     assert resp.status_code == 302
     assert resp.headers["Location"].endswith("/codebooks/")
     sent = fake_backend.last_create_codebook_request
     assert sent is not None
     assert sent["name"] == "Edited Codebook"
-    assert sent["corpus_id"] == fake_backend.corpus_id
-    assert sent["themes"][1]["parent_name"] == "Root Theme"
-    # Root theme's empty parent_name normalises to None for the backend payload.
-    assert sent["themes"][0]["parent_name"] is None
+    nodes = sent["themes"]
+    assert [n["name"] for n in nodes] == ["Root Theme", "Sub A", "Code 1"]
+    assert nodes[0]["parent_name"] is None
+    assert nodes[1]["parent_name"] == "Root Theme"
+    assert nodes[2]["parent_name"] == "Sub A"
+    # Only the code row carries node_type=CODE; the others let the backend
+    # auto-promote between THEME and SUBTHEME by parent_name.
+    assert nodes[0].get("node_type") is None
+    assert nodes[1].get("node_type") is None
+    assert nodes[2]["node_type"] == "CODE"
 
 
-def test_review_submit_skips_blank_rows(client, fake_backend):
+def test_review_submit_rejects_blank_row_names(client, fake_backend):
+    # Mirrors preview/confirm_submit: blank-named rows are an error, not a
+    # silent skip. Forces the user to remove the row instead of submitting
+    # incomplete data.
     resp = client.post("/codebooks/cb-42/review", data={
         "codebook_name": "X",
         "corpus_id": fake_backend.corpus_id,
-        "theme_names[]": ["A", "  "],
-        "theme_descriptions[]": ["d1", "d2"],
-        "parent_names[]": ["", ""],
+        "row_names[]": ["A", "  "],
+        "row_descriptions[]": ["d1", "d2"],
+        "row_parents[]": ["", ""],
+        "row_is_codes[]": ["0", "0"],
     })
+    assert resp.status_code == 200
+    assert b"All themes must have a name" in resp.data
+
+
+def test_review_submit_rejects_orphan_code(client, fake_backend):
+    # The frontend mirrors the backend rule: a code must have a parent.
+    resp = client.post("/codebooks/cb-42/review", data={
+        "codebook_name": "X",
+        "corpus_id": fake_backend.corpus_id,
+        "row_names[]": ["Root Theme", "Stray Code"],
+        "row_descriptions[]": ["d", "d"],
+        "row_parents[]": ["", ""],
+        "row_is_codes[]": ["0", "1"],
+    })
+    assert resp.status_code == 200
+    assert b"Stray Code" in resp.data
+    assert b"must sit under a theme or subtheme" in resp.data
+
+
+# Demo flow — exercises the wizard without an LLM call ---------------------
+
+
+def test_auto_demo_creates_codebook_and_redirects_to_codebook_list(client, fake_backend):
+    resp = client.get(f"/codebooks/new/{fake_backend.corpus_id}/auto-demo")
     assert resp.status_code == 302
+    loc = resp.headers["Location"]
+    # Demo flow uses the same background-tracking handoff as a real run.
+    assert f"/codebooks/{fake_backend.corpus_id}/" in loc
+    assert "new_job=demo-" in loc
+    assert "mode=semi" in loc
     sent = fake_backend.last_create_codebook_request
-    assert [t["name"] for t in sent["themes"]] == ["A"]
+    assert sent is not None
+    assert sent["name"] == "Sample Codebook (demo)"
+    # Realistic content: at least one theme with a subtheme, at least one CODE.
+    themes = [n for n in sent["themes"] if n.get("node_type") != "CODE"]
+    codes = [n for n in sent["themes"] if n.get("node_type") == "CODE"]
+    assert any(t["parent_name"] for t in themes)
+    assert codes
+
+
+def test_auto_demo_status_progresses_to_succeeded(client, fake_backend):
+    from urllib.parse import parse_qs, urlparse
+
+    # Kick off a demo run.
+    resp = client.get(f"/codebooks/new/{fake_backend.corpus_id}/auto-demo")
+    qs = parse_qs(urlparse(resp.headers["Location"]).query)
+    job_id = qs["new_job"][0]
+
+    # Immediately after start, the scripted state is queued or running.
+    first = client.get(f"/codebooks/new/jobs/{job_id}.json").get_json()
+    assert first["status"] in ("queued", "running")
+
+    # Fast-forward the demo's started_at so the timeline reads as finished.
+    from web.controllers.codebooks import _DEMO_JOBS
+    _DEMO_JOBS[job_id]["started_at"] -= 10  # 10s in the past
+
+    final = client.get(f"/codebooks/new/jobs/{job_id}.json").get_json()
+    assert final["status"] == "succeeded"
+    assert final["codebook_id"] == "cb-new"  # FakeBackend.create_codebook returns this id
+
+
+def test_auto_demo_link_present_on_mode_select(client, fake_backend):
+    resp = client.get(f"/codebooks/new/{fake_backend.corpus_id}")
+    assert resp.status_code == 200
+    assert b"Try with sample data" in resp.data
+    assert b"/auto-demo" in resp.data
 
 
 def test_review_submit_rejects_blank_codebook_name(client, fake_backend):
     resp = client.post("/codebooks/cb-42/review", data={
         "codebook_name": "  ",
         "corpus_id": fake_backend.corpus_id,
-        "theme_names[]": ["A"],
-        "theme_descriptions[]": ["d"],
-        "parent_names[]": [""],
+        "row_names[]": ["A"],
+        "row_descriptions[]": ["d"],
+        "row_parents[]": [""],
+        "row_is_codes[]": ["0"],
     })
     assert resp.status_code == 200
-    assert b"Codebook name must not be blank" in resp.data
+    assert b"Codebook Name must not be blank" in resp.data
 
 
 def test_review_submit_rejects_dangling_parent_reference(client, fake_backend):
     resp = client.post("/codebooks/cb-42/review", data={
         "codebook_name": "X",
         "corpus_id": fake_backend.corpus_id,
-        "theme_names[]": ["Child"],
-        "theme_descriptions[]": ["d"],
-        "parent_names[]": ["Nonexistent"],
+        "row_names[]": ["Child"],
+        "row_descriptions[]": ["d"],
+        "row_parents[]": ["Nonexistent"],
+        "row_is_codes[]": ["0"],
     })
     assert resp.status_code == 200
     assert b"Parent &#39;Nonexistent&#39;" in resp.data
@@ -470,9 +559,10 @@ def test_review_submit_surfaces_backend_error(client, fake_backend):
     resp = client.post("/codebooks/cb-42/review", data={
         "codebook_name": "X",
         "corpus_id": fake_backend.corpus_id,
-        "theme_names[]": ["A"],
-        "theme_descriptions[]": ["d"],
-        "parent_names[]": [""],
+        "row_names[]": ["Root"],
+        "row_descriptions[]": ["d"],
+        "row_parents[]": [""],
+        "row_is_codes[]": ["0"],
     })
     assert resp.status_code == 200
     assert b"simulated create_codebook failure" in resp.data

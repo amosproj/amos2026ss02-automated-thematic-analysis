@@ -18,6 +18,9 @@
     </a>
   </div>
 
+  {# Populated by job_tracker.js with one card per in-progress generation. #}
+  <div id="ata-job-placeholders"></div>
+
   {% if error %}
     <p class="text-secondary">Couldn't load codebooks right now.</p>
   {% elif codebooks %}
@@ -42,6 +45,10 @@
                   <a class="btn btn-sm btn-outline-primary"
                      href="{{ url_for('codebooks.codebook_themes_for_corpus', corpus_id=corpus_id, codebook_id=cb.id, name=cb.name, version=cb.version) }}">
                     View themes
+                  </a>
+                  <a class="btn btn-sm btn-outline-primary ms-1"
+                     href="{{ url_for('codebooks.codebook_review', codebook_id=cb.id) }}">
+                    Review &amp; edit
                   </a>
                   <a class="btn btn-sm btn-outline-secondary ms-1"
                      href="{{ url_for('codebooks.export_codebook', corpus_id=corpus_id, codebook_id=cb.id) }}">

@@ -64,6 +64,16 @@ class CodebookCreateRequest(BaseSchema):
                     node.node_type = NodeType.SUBTHEME
                 else:
                     node.node_type = NodeType.THEME
+        # CSV codebook standard: a CODE must sit under a THEME or SUBTHEME.
+        # The DB schema accepts orphan codes (no parent) but they are
+        # semantically meaningless in qualitative thematic analysis, so
+        # reject them at the contract boundary.
+        for node in v:
+            if node.node_type == NodeType.CODE and not node.parent_name:
+                raise ValueError(
+                    f"Code '{node.name}' must have a parent theme or subtheme; "
+                    "orphan codes are not allowed."
+                )
         return v
 
 
