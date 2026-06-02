@@ -1,9 +1,20 @@
 import csv
 import io
-from flask import Blueprint, flash, redirect, render_template, request, url_for, current_app, Response
+import time
+from urllib.parse import quote_plus
+
+from flask import (
+    Blueprint,
+    Response,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 
 from web.services.backend_client import (
-    BackendClient,
     BackendError,
     BackendNotFoundError,
     get_backend_client as _backend,
@@ -11,6 +22,8 @@ from web.services.backend_client import (
 from web.services.corpus_context import resolve_active_corpus, set_active_corpus_id
 
 bp = Blueprint("codebooks", __name__)
+
+CODING_MODES = ("auto", "semi", "manual")
 
 
 @bp.get("/")
@@ -74,14 +87,27 @@ def list_codebooks_for_corpus(corpus_id: str) -> str:
             corpus_id=corpus_id,
             corpus_options=corpus_options,
             active_corpus_name=corpus_name,
+            running_jobs=[],
             error=True,
         )
+
+    # Fetch in-progress runs so they show in any session, not just the one
+    # that started them. Failures are non-fatal; the client-side tracker covers.
+    running_jobs: list[dict] = []
+    try:
+        running_jobs = client.list_generation_jobs(
+            corpus_id=active_corpus_id, statuses=["queued", "running"]
+        )
+    except BackendError:
+        running_jobs = []
+
     return render_template(
         "codebooks/list.html",
         codebooks=codebooks,
         corpus_id=active_corpus_id,
         corpus_options=corpus_options,
         active_corpus_name=corpus_name,
+        running_jobs=running_jobs,
     )
 
 
@@ -400,3 +426,303 @@ def success(corpus_id: str) -> str:
         return render_template("codebooks/success.html", corpus_id=corpus_id, codebook=codebook, error=None)
     except BackendError as exc:
         return render_template("codebooks/success.html", corpus_id=corpus_id, codebook=None, error=str(exc))
+
+
+# Wizard: Create New Codebook ------------------------------------------------
+
+
+@bp.get("/new")
+def new_codebook_landing():
+    try:
+        active_corpus_id, _, _ = resolve_active_corpus(_backend())
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return redirect(url_for("codebooks.list_codebooks"))
+    return redirect(url_for("codebooks.new_codebook_mode_select", corpus_id=active_corpus_id))
+
+
+@bp.get("/new/<corpus_id>")
+def new_codebook_mode_select(corpus_id: str) -> str:
+    set_active_corpus_id(corpus_id)
+    selected = request.args.get("mode") or ""
+    return render_template(
+        "codebooks/new/mode_select.html",
+        corpus_id=corpus_id,
+        selected=selected if selected in CODING_MODES else "",
+    )
+
+
+@bp.post("/new/<corpus_id>")
+def new_codebook_mode_submit(corpus_id: str):
+    mode = request.form.get("mode", "")
+    if mode not in CODING_MODES:
+        flash("Please select a coding mode before continuing.", "danger")
+        return render_template(
+            "codebooks/new/mode_select.html",
+            corpus_id=corpus_id,
+            selected="",
+        )
+
+    if mode in ("auto", "semi"):
+        return redirect(
+            url_for("codebooks.new_codebook_auto_form", corpus_id=corpus_id, mode=mode)
+        )
+
+    # mode == "manual": branch 9's upload form is corpus-scoped.
+    return redirect(url_for("codebooks.upload_form", corpus_id=corpus_id))
+
+
+def _resolve_mode(value: str) -> str:
+    return value if value in ("auto", "semi") else "auto"
+
+
+@bp.get("/new/<corpus_id>/auto")
+def new_codebook_auto_form(corpus_id: str) -> str:
+    mode = _resolve_mode(request.args.get("mode", ""))
+    return render_template(
+        "codebooks/new/auto_form.html",
+        corpus_id=corpus_id,
+        mode=mode,
+        codebook_name=request.args.get("name", ""),
+    )
+
+
+@bp.post("/new/<corpus_id>/auto")
+def new_codebook_auto_submit(corpus_id: str):
+    mode = _resolve_mode(request.form.get("mode", ""))
+    name = (request.form.get("codebook_name") or "").strip()
+    if not name:
+        flash("Please give your codebook a name.", "danger")
+        return render_template(
+            "codebooks/new/auto_form.html",
+            corpus_id=corpus_id,
+            mode=mode,
+            codebook_name="",
+        )
+
+    try:
+        job = _backend().create_generation_job(
+            codebook_name=name,
+            corpus_id=corpus_id,
+        )
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return render_template(
+            "codebooks/new/auto_form.html",
+            corpus_id=corpus_id,
+            mode=mode,
+            codebook_name=name,
+        )
+
+    encoded_job = quote_plus(str(job["id"]))
+    encoded_name = quote_plus(name)
+
+    if mode == "semi":
+        # Go straight to the progress page; it opens the review editor on
+        # success. Name (not new_job) is passed so the pagehide handler can
+        # register a background-tracker fallback if the user navigates away.
+        return redirect(
+            url_for("codebooks.new_codebook_job_progress", job_id=job["id"])
+            + f"?mode=semi&name={encoded_name}"
+        )
+
+    # auto: hand off to the codebook list; job_tracker.js picks up new_job
+    # and polls in the background while the user navigates freely.
+    return redirect(
+        url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id)
+        + f"?new_job={encoded_job}&mode={mode}&name={encoded_name}"
+    )
+
+
+@bp.get("/new/jobs/<job_id>")
+def new_codebook_job_progress(job_id: str) -> str:
+    mode = _resolve_mode(request.args.get("mode", ""))
+    name = request.args.get("name", "")
+    return render_template(
+        "codebooks/new/progress.html",
+        job_id=job_id,
+        mode=mode,
+        codebook_name=name,
+    )
+
+
+@bp.get("/new/jobs/<job_id>.json")
+def new_codebook_job_status(job_id: str):
+    # Errors come back as 200 with `{error: "..."}` so the poller doesn't need
+    # to distinguish HTTP failure modes.
+    if job_id.startswith(_DEMO_JOB_PREFIX):
+        return jsonify(_demo_job_state(job_id))
+    try:
+        job = _backend().get_generation_job(job_id)
+    except BackendError as exc:
+        return jsonify({"error": exc.user_message}), 200
+    return jsonify(job)
+
+
+# Demo flow -----------------------------------------------------------------
+#
+# Lets you walk the wizard end-to-end without burning LLM tokens. The route
+# creates a real codebook via `POST /codebooks/` with a hardcoded payload
+# (~6 themes, 4 codes, two-level hierarchy), then runs ~5 seconds of scripted
+# progress before the existing progress page redirects to the review editor.
+# The editor reads the actual persisted codebook, so the interface behaves
+# identically to a real run from there on.
+
+_DEMO_JOB_PREFIX = "demo-"
+_DEMO_TIMELINE_SECONDS = 5.0
+# Module-level: maps demo_job_id → {"started_at": ts, "codebook_id": str}.
+# Per-process and ephemeral by design — restart the frontend to clear.
+_DEMO_JOBS: dict[str, dict] = {}
+
+
+def _demo_codebook_nodes() -> list[dict]:
+    """Sample codebook content covering the editor's full surface.
+
+    Six themes with one level of nesting and four flat codes. Enough to
+    exercise drag-to-reorder, indent/outdent, the codes section, and the
+    backend's NodeInput auto-promotion to SUBTHEME on parent_name."""
+    return [
+        {"name": "Work-Life Balance",
+         "description": "How participants negotiate work and personal life.",
+         "parent_name": None},
+        {"name": "Boundary Difficulties",
+         "description": "Trouble separating work from home time.",
+         "parent_name": "Work-Life Balance"},
+        {"name": "Flexible Hours",
+         "description": "Working outside conventional 9-to-5 hours.",
+         "parent_name": "Work-Life Balance"},
+        {"name": "Team Collaboration",
+         "description": "Working with colleagues across functions.",
+         "parent_name": None},
+        {"name": "Remote Communication",
+         "description": "Tools and habits for distributed teamwork.",
+         "parent_name": "Team Collaboration"},
+        {"name": "Career Growth",
+         "description": "Professional development and skill-building.",
+         "parent_name": None},
+        {"node_type": "CODE", "name": "Late evenings",
+         "description": "Working past 8pm on a regular basis.",
+         "parent_name": "Boundary Difficulties"},
+        {"node_type": "CODE", "name": "Long meetings",
+         "description": "Synchronous calls exceeding one hour.",
+         "parent_name": "Remote Communication"},
+        {"node_type": "CODE", "name": "Async messaging",
+         "description": "Using chat or email for non-urgent updates.",
+         "parent_name": "Remote Communication"},
+        {"node_type": "CODE", "name": "Skill workshops",
+         "description": "Attending or hosting training sessions.",
+         "parent_name": "Career Growth"},
+    ]
+
+
+def _demo_job_state(job_id: str) -> dict:
+    entry = _DEMO_JOBS.get(job_id)
+    if entry is None:
+        return {"error": "Demo job expired — start a new one from the wizard."}
+    elapsed = time.monotonic() - entry["started_at"]
+    total = 8  # cosmetic; matches the number of themes+codes in the payload
+    if elapsed < 1:
+        return {"id": job_id, "status": "queued",
+                "passages_total": 0, "passages_done": 0}
+    if elapsed < _DEMO_TIMELINE_SECONDS:
+        done = min(total, int((elapsed - 1) / (_DEMO_TIMELINE_SECONDS - 1) * total))
+        return {"id": job_id, "status": "running",
+                "passages_total": total, "passages_done": done}
+    return {"id": job_id, "status": "succeeded",
+            "passages_total": total, "passages_done": total,
+            "codebook_id": entry["codebook_id"]}
+
+
+@bp.get("/new/<corpus_id>/auto-demo")
+def new_codebook_auto_demo(corpus_id: str):
+    """Create a hardcoded sample codebook and play a scripted progress UI.
+
+    Lets you exercise the full mode-2 wizard (progress → review editor → save)
+    without an LLM call. The codebook is real and persisted; only the
+    generation step is faked."""
+    try:
+        result = _backend().create_codebook(
+            corpus_id=corpus_id,
+            name="Sample Codebook (demo)",
+            themes=_demo_codebook_nodes(),
+        )
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return redirect(url_for("codebooks.new_codebook_mode_select", corpus_id=corpus_id))
+
+    codebook_id = str(result.get("id") or "")
+    job_id = f"{_DEMO_JOB_PREFIX}{codebook_id}"
+    _DEMO_JOBS[job_id] = {
+        "started_at": time.monotonic(),
+        "codebook_id": codebook_id,
+    }
+    return redirect(
+        url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id)
+        + f"?new_job={quote_plus(job_id)}&mode=semi"
+        + f"&name={quote_plus('Sample Codebook (demo)')}"
+    )
+
+
+@bp.post("/new/jobs/<job_id>/cancel")
+def new_codebook_job_cancel(job_id: str):
+    try:
+        job = _backend().cancel_generation_job(job_id)
+    except BackendError as exc:
+        return jsonify({"error": exc.user_message}), 200
+    return jsonify(job)
+
+
+def _flatten_codebook_for_preview(codebook: dict) -> list[dict]:
+    """Convert CodebookDetailSchema tree to flat rows for preview.html."""
+    rows: list[dict] = []
+
+    def walk(node: dict, parent_name: str | None) -> None:
+        raw_type = (node.get("node_type") or "THEME").upper()
+        rows.append({
+            "node_type": raw_type,
+            "name": node.get("name") or node.get("label") or "",
+            "description": node.get("description") or "",
+            "parent_name": parent_name or "",
+        })
+        if raw_type == "CODE":
+            return
+        for child in node.get("children") or []:
+            walk(child, node.get("name") or node.get("label") or "")
+
+    for theme in codebook.get("themes") or []:
+        walk(theme, None)
+    return rows
+
+
+@bp.get("/<codebook_id>/review")
+def codebook_review(codebook_id: str) -> str:
+    try:
+        codebook = _backend().get_codebook(codebook_id)
+    except BackendNotFoundError:
+        flash("That codebook couldn't be found. It may have been deleted.", "danger")
+        return render_template(
+            "codebooks/preview.html",
+            corpus_id="",
+            codebook_name="",
+            themes=[],
+            error="Codebook not found.",
+        )
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return render_template(
+            "codebooks/preview.html",
+            corpus_id="",
+            codebook_name="",
+            themes=[],
+            error=exc.user_message,
+        )
+
+    corpus_id = str(codebook.get("corpus_id", ""))
+    name = codebook.get("name") or "Generated Codebook"
+    return render_template(
+        "codebooks/preview.html",
+        corpus_id=corpus_id,
+        codebook_name=name,
+        themes=_flatten_codebook_for_preview(codebook),
+        error=None,
+    )

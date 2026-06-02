@@ -263,6 +263,44 @@ class BackendClient:
             return result
         return result.get("items", result) if isinstance(result, dict) else []
 
+    # ---- Codebook generation jobs -------------------------------------------
+
+    def create_generation_job(
+        self,
+        codebook_name: str,
+        corpus_id: str,
+        transcript_document_ids: list[str] | None = None,
+    ) -> dict:
+        payload: dict = {"codebook_name": codebook_name, "corpus_id": corpus_id}
+        if transcript_document_ids:
+            payload["transcript_document_ids"] = transcript_document_ids
+        return self._post("/codebooks/generate-jobs", json=payload)
+
+    def list_generation_jobs(
+        self,
+        corpus_id: str,
+        statuses: list[str] | None = None,
+    ) -> list[dict]:
+        """Return generation jobs for a corpus, optionally filtered by status.
+
+        Used to render in-progress runs in the codebook list as a server-side
+        source of truth (visible in any browser/session), independent of the
+        client-side localStorage tracker.
+        """
+        params: dict = {"corpus_id": corpus_id}
+        if statuses:
+            params["status"] = ",".join(statuses)
+        result = self._get("/codebooks/generate-jobs", params=params)
+        if isinstance(result, list):
+            return result
+        return result.get("items", result) if isinstance(result, dict) else []
+
+    def get_generation_job(self, job_id: str) -> dict:
+        return self._get(f"/codebooks/generate-jobs/{job_id}")
+
+    def cancel_generation_job(self, job_id: str) -> dict:
+        return self._post(f"/codebooks/generate-jobs/{job_id}/cancel")
+
     # ---- Helpers ------------------------------------------------------------
 
     def _unwrap(self, response: httpx.Response, *, sub_key: str | None = None):

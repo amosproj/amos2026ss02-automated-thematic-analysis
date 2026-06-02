@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Create New Codebook{% endblock %}
+{% block content %}
+  <div class="mb-4">
+    <h1 class="h3 mb-1">Create New Codebook</h1>
+    <p class="text-secondary mb-0">
+      Choose how much of the analysis the AI should structure for you.
+    </p>
+  </div>
+
+  <form id="mode-form"
+        method="post"
+        action="{{ url_for('codebooks.new_codebook_mode_submit', corpus_id=corpus_id) }}">
+    <div class="row g-3 mb-4">
+      {% set modes = [
+        ("auto",   "Fully automatic",  "The AI generates the codebook end-to-end. You confirm and the system produces themes from your transcripts."),
+        ("semi",   "Semi-automatic",   "The AI generates a draft codebook. You then review and edit themes before saving."),
+        ("manual", "User-instructed",  "Upload your own codebook (CSV) or create one manually. No AI generation.")
+      ] %}
+      {% for value, title, description in modes %}
+        <div class="col-md-4">
+          <label class="mode-card bg-white border rounded-2 p-4 h-100 d-flex flex-column gap-2 {% if selected == value %}border-primary border-2 shadow-sm{% endif %}"
+                 data-mode-card="{{ value }}">
+            <input class="visually-hidden mode-radio"
+                   type="radio"
+                   name="mode"
+                   value="{{ value }}"
+                   {% if selected == value %}checked{% endif %}>
+            <span class="fw-semibold">{{ title }}</span>
+            <span class="text-secondary small">{{ description }}</span>
+          </label>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="d-flex gap-2 align-items-center">
+      <a class="btn btn-outline-secondary"
+         href="{{ url_for('codebooks.list_codebooks') }}">Cancel</a>
+      <button id="mode-submit"
+              type="submit"
+              class="btn btn-primary"
+              {% if not selected %}disabled{% endif %}>
+        Continue
+      </button>
+      <a class="text-secondary small ms-2"
+         href="{{ url_for('codebooks.new_codebook_auto_demo', corpus_id=corpus_id) }}"
+         title="Walk the wizard with a pre-built sample codebook (no LLM call)">
+        Try with sample data &rarr;
+      </a>
+    </div>
+  </form>
+
+  <script>
+    (() => {
+      const form = document.getElementById("mode-form");
+      const submit = document.getElementById("mode-submit");
+      const cards = form.querySelectorAll("[data-mode-card]");
+      const radios = form.querySelectorAll(".mode-radio");
+
+      function paint() {
+        cards.forEach((card) => {
+          const value = card.getAttribute("data-mode-card");
+          const radio = form.querySelector(`.mode-radio[value="${value}"]`);
+          const on = radio && radio.checked;
+          card.classList.toggle("border-primary", on);
+          card.classList.toggle("border-2", on);
+          card.classList.toggle("shadow-sm", on);
+        });
+        submit.disabled = !form.querySelector(".mode-radio:checked");
+      }
+
+      radios.forEach((r) => r.addEventListener("change", paint));
+      paint();
+
+      // Encode the selected mode in this page's URL before navigating away, so
+      // that a later browser-back lands here with the card already highlighted.
+      form.addEventListener("submit", () => {
+        const selected = form.querySelector(".mode-radio:checked");
+        if (!selected) return;
+        const url = new URL(window.location.href);
+        url.searchParams.set("mode", selected.value);
+        window.history.replaceState(null, "", url.toString());
+      });
+    })();
+  </script>
+{% endblock %}

@@ -264,3 +264,43 @@ async def test_generate_codebook_job_records_partial_parse_failures_and_succeeds
     assert warning["type"] == "passage_generation_partial_failures"
     assert warning["passages_failed"] == 1
     assert len(warning["failed_passages"]) == 1
+
+
+async def test_list_generation_jobs_filters_by_corpus_and_status(client, db_session) -> None:
+    # Insert jobs directly (no runner/LLM) and assert the list endpoint scopes
+    # by corpus and honours the comma-separated status filter. This backs the
+    # server-rendered "running" rows on the codebook list page.
+    from uuid import UUID
+
+    from app.models import CodebookGenerationJob
+
+    corpus = UUID(CORPUS_ID)
+    other_corpus = UUID("00000000-0000-0000-0000-0000000009ff")
+    db_session.add_all([
+        CodebookGenerationJob(status="running", codebook_name="Running One",
+                              corpus_id=corpus, transcript_document_ids_json="[]"),
+        CodebookGenerationJob(status="queued", codebook_name="Queued One",
+                              corpus_id=corpus, transcript_document_ids_json="[]"),
+        CodebookGenerationJob(status="succeeded", codebook_name="Done One",
+                              corpus_id=corpus, transcript_document_ids_json="[]"),
+        CodebookGenerationJob(status="running", codebook_name="Other Corpus",
+                              corpus_id=other_corpus, transcript_document_ids_json="[]"),
+    ])
+    await db_session.commit()
+
+    # No status filter → every job for the corpus, and only that corpus.
+    response = await client.get(
+        f"{API_CODEBOOKS}/generate-jobs", params={"corpus_id": CORPUS_ID}
+    )
+    assert response.status_code == 200
+    names = {job["codebook_name"] for job in response.json()["data"]}
+    assert names == {"Running One", "Queued One", "Done One"}
+
+    # Status filter → only the active jobs.
+    response = await client.get(
+        f"{API_CODEBOOKS}/generate-jobs",
+        params={"corpus_id": CORPUS_ID, "status": "queued,running"},
+    )
+    assert response.status_code == 200
+    active = {job["codebook_name"] for job in response.json()["data"]}
+    assert active == {"Running One", "Queued One"}
