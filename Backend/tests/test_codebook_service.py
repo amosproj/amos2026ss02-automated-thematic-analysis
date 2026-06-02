@@ -7,10 +7,10 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from sqlalchemy import select
 
 from app.exceptions import NotFoundError
 from app.models.ingestion import Corpus
-from sqlalchemy import select
 from app.schemas.codebook import CodebookCreateRequest, NodeInput
 from app.services.codebook import CodebookService
 
