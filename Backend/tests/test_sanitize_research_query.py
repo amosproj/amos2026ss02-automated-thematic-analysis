@@ -1,8 +1,6 @@
 """Unit tests for the sanitize_research_query utility."""
 from __future__ import annotations
 
-import pytest
-
 from app.utils.sanitize import sanitize_research_query
 
 

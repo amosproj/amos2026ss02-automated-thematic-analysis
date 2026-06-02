@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-
 # Strip entire <script>...</script> and <style>...</style> blocks including their content.
 _SCRIPT_BLOCK_RE = re.compile(r"<(script|style)[^>]*>.*?</(script|style)>", re.IGNORECASE | re.DOTALL)
 _HTML_TAG_RE = re.compile(r"<[^>]*>")
