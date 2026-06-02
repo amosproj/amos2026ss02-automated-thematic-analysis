@@ -8,8 +8,8 @@ from app.exceptions import UnprocessableError
 from app.schemas.common import Page, PageMeta, ResponseEnvelope
 from app.schemas.ingestion import (
     BulkDocumentIngestRequest,
-    CorpusChunkSchema,
     CorpusCreate,
+    CorpusDocumentContentSchema,
     CorpusDocumentSchema,
     CorpusSchema,
     IngestResultSchema,
@@ -38,7 +38,6 @@ def _to_result_schema(result: IngestResult) -> IngestResultSchema:
     """Convert the internal IngestResult dataclass to the API response schema."""
     return IngestResultSchema(
         documents_created=len(result.documents),
-        chunks_created=result.chunks_created,
     )
 
 
@@ -53,7 +52,7 @@ async def create_corpus(
     session: DbSession,
     settings: AppSettings,
 ) -> ResponseEnvelope[CorpusSchema]:
-    service = IngestionService(session, settings)
+    service = IngestionService(session)
     corpus = await service.create_corpus(payload)
     return ResponseEnvelope.ok(CorpusSchema.model_validate(corpus))
 
@@ -66,7 +65,7 @@ async def list_corpora(
     page: int = 1,
     page_size: int = 20,
 ) -> ResponseEnvelope[Page[CorpusSchema]]:
-    service = IngestionService(session, settings)
+    service = IngestionService(session)
     corpora, total = await service.list_corpora(project_id=project_id, page=page, page_size=page_size)
     return ResponseEnvelope.ok(
         Page(
@@ -82,7 +81,7 @@ async def get_corpus(
     session: DbSession,
     settings: AppSettings,
 ) -> ResponseEnvelope[CorpusSchema]:
-    service = IngestionService(session, settings)
+    service = IngestionService(session)
     corpus = await service.get_corpus(corpus_id)
     return ResponseEnvelope.ok(CorpusSchema.model_validate(corpus))
 
@@ -104,7 +103,7 @@ async def bulk_ingest_documents(
     settings: AppSettings,
 ) -> ResponseEnvelope[IngestResultSchema]:
     """Ingest a list of documents provided directly in the request body."""
-    service = IngestionService(session, settings)
+    service = IngestionService(session)
     result = await service.ingest_documents(
         corpus_id=corpus_id,
         documents=payload.documents,
@@ -149,7 +148,6 @@ async def _process_one_upload(
             stored_filename=stored,
             success=True,
             documents_created=len(result.documents),
-            chunks_created=result.chunks_created,
         )
     except UnprocessableError as exc:
         return UploadFileResult(filename=filename, success=False, error=str(exc))
@@ -169,7 +167,7 @@ async def upload_documents(
     """Accept one or more uploaded transcripts (.txt / .docx / .pdf / .jsonl) and
     ingest their contents. Each file produces an independent result, so a single
     bad file does not block the others."""
-    service = IngestionService(session, settings)
+    service = IngestionService(session)
     results = [
         await _process_one_upload(
             service,
@@ -198,7 +196,7 @@ async def list_documents(
     page: int = 1,
     page_size: int = 20,
 ) -> ResponseEnvelope[Page[CorpusDocumentSchema]]:
-    service = IngestionService(session, settings)
+    service = IngestionService(session)
     documents, total = await service.list_documents(corpus_id=corpus_id, page=page, page_size=page_size)
     return ResponseEnvelope.ok(
         Page(
@@ -209,24 +207,16 @@ async def list_documents(
 
 
 @router.get(
-    "/corpora/{corpus_id}/chunks",
-    response_model=ResponseEnvelope[Page[CorpusChunkSchema]],
+    "/corpora/{corpus_id}/documents/{document_id}",
+    response_model=ResponseEnvelope[CorpusDocumentContentSchema],
 )
-async def list_chunks(
+async def get_document_content(
     corpus_id: uuid.UUID,
+    document_id: uuid.UUID,
     session: DbSession,
     settings: AppSettings,
-    document_id: uuid.UUID | None = None,  # optional filter to a single document
-    page: int = 1,
-    page_size: int = 20,
-) -> ResponseEnvelope[Page[CorpusChunkSchema]]:
-    service = IngestionService(session, settings)
-    chunks, total = await service.list_chunks(
-        corpus_id=corpus_id, document_id=document_id, page=page, page_size=page_size
-    )
-    return ResponseEnvelope.ok(
-        Page(
-            items=[CorpusChunkSchema.model_validate(c) for c in chunks],
-            meta=PageMeta(total=total, page=page, page_size=page_size, pages=_pages(total, page_size)),
-        )
-    )
+) -> ResponseEnvelope[CorpusDocumentContentSchema]:
+    """Fetch the full content of a single document within a corpus."""
+    service = IngestionService(session)
+    doc = await service.get_document(corpus_id=corpus_id, document_id=document_id)
+    return ResponseEnvelope.ok(CorpusDocumentContentSchema.model_validate(doc))

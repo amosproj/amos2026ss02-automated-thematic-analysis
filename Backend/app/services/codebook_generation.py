@@ -19,7 +19,6 @@ from app.models import (
     CodebookCodeRelationship,
     CodebookThemeRelationship,
     Corpus,
-    CorpusChunk,
     CorpusDocument,
     Theme,
     ThemeHierarchyRelationship,
