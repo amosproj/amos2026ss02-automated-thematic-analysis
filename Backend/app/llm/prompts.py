@@ -168,6 +168,8 @@ Rules:
 - Merge reverse/opposite polarity labels that describe the same underlying dimension.
 - Keep only orthogonal (non-overlapping) codes.
 - Keep labels concise and specific.
+- Every returned code must include exactly one theme_path from the input code list.
+- If you merge codes from different theme_paths, choose the path that best describes the consolidated code.
 - Preserve grounded meaning from the input; do not invent unrelated concepts.
 - Return valid JSON only (no markdown, no comments).
 
@@ -176,7 +178,8 @@ Return JSON with this exact shape:
   "codes": [
     {{
       "label": "Code label",
-      "description": "Optional short description"
+      "description": "Optional short description",
+      "theme_path": ["Theme label", "Subtheme label"]
     }}
   ]
 }}"""

@@ -47,6 +47,10 @@ class PassageCodebookGeneration(BaseModel):
 class CodeConsolidationItem(BaseModel):
     label: str = Field(description="Code label.")
     description: str | None = Field(None, description="Optional short code description.")
+    theme_path: list[str] = Field(
+        default_factory=list,
+        description="Theme path (root -> ... -> leaf theme) this code belongs to.",
+    )
 
 
 class CodeConsolidationResult(BaseModel):

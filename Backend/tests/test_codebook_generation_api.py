@@ -14,6 +14,7 @@ from app.models import (
     CodebookCodeRelationship,
     CodebookThemeRelationship,
     Theme,
+    ThemeCodeRelationship,
     ThemeHierarchyRelationship,
 )
 from app.schemas.llm import (
@@ -27,6 +28,7 @@ from app.schemas.llm import (
 
 API_INGESTION = "/api/v1/ingestion"
 API_CODEBOOKS = "/api/v1/codebooks"
+
 
 @pytest.fixture(autouse=True)
 def _stub_consolidation_calls(monkeypatch):
@@ -214,6 +216,21 @@ async def test_generate_codebook_creates_deduplicated_themes_and_codes(
             "Onboarding Unclear",
         ]
 
+        theme_code_rows = list(
+            (
+                await session.scalars(
+                    select(ThemeCodeRelationship).where(
+                        ThemeCodeRelationship.codebook_id == codebook.id
+                    )
+                )
+            ).all()
+        )
+        assert len(theme_code_rows) == 2
+        code_ids = {code.id for code in code_rows}
+        theme_ids = {theme.id for theme in theme_rows}
+        assert {row.code_id for row in theme_code_rows} == code_ids
+        assert {row.theme_id for row in theme_code_rows}.issubset(theme_ids)
+
 
 async def test_generate_codebook_post_processes_codes_with_llm_consolidation(
     client,
@@ -294,6 +311,18 @@ async def test_generate_codebook_post_processes_codes_with_llm_consolidation(
             ).all()
         )
         assert [code.label for code in code_rows] == ["Manual Bottleneck"]
+
+        theme_code_rows = list(
+            (
+                await session.scalars(
+                    select(ThemeCodeRelationship).where(
+                        ThemeCodeRelationship.codebook_id == codebook_id
+                    )
+                )
+            ).all()
+        )
+        assert len(theme_code_rows) == 1
+        assert theme_code_rows[0].code_id == code_rows[0].id
 
 
 async def test_generate_codebook_post_processes_themes_with_llm_consolidation(
@@ -396,6 +425,29 @@ async def test_generate_codebook_post_processes_themes_with_llm_consolidation(
             ).all()
         )
         assert len(hierarchy_rows) == 1
+
+        code_row = (
+            await session.scalars(
+                select(Code)
+                .join(
+                    CodebookCodeRelationship,
+                    and_(
+                        CodebookCodeRelationship.code_id == Code.id,
+                        CodebookCodeRelationship.codebook_id == codebook_id,
+                    ),
+                )
+            )
+        ).one()
+        theme_by_id = {theme.id: theme for theme in theme_rows}
+        theme_code_row = (
+            await session.scalars(
+                select(ThemeCodeRelationship).where(
+                    ThemeCodeRelationship.codebook_id == codebook_id
+                )
+            )
+        ).one()
+        assert theme_code_row.code_id == code_row.id
+        assert theme_by_id[theme_code_row.theme_id].label == "Manual Work"
 
 
 async def test_generate_codebook_rejects_documents_outside_selected_corpus(

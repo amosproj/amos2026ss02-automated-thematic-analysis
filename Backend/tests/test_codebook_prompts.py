@@ -72,6 +72,7 @@ class TestCodeConsolidationPrompt:
         prompt_text = CODE_CONSOLIDATION_SYSTEM_PROMPT.lower()
         assert "merge" in prompt_text
         assert "orthogonal" in prompt_text
+        assert "theme_path" in CODE_CONSOLIDATION_SYSTEM_PROMPT
 
     def test_user_instruction_has_codes_placeholder(self) -> None:
         assert "{codes}" in CODE_CONSOLIDATION_USER_INSTRUCTION

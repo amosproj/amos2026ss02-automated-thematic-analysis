@@ -100,13 +100,18 @@ class CodebookGenerationService:
         )
         await self._raise_if_cancelled(should_cancel)
         theme_nodes, code_nodes, hierarchy_edges = self._deduplicate_generation(generation_results)
-        code_nodes = await self._post_process_codes(code_nodes, should_cancel=should_cancel)
+        code_nodes = await self._post_process_codes(
+            code_nodes,
+            theme_nodes=theme_nodes,
+            should_cancel=should_cancel,
+        )
         await self._raise_if_cancelled(should_cancel)
         theme_nodes, hierarchy_edges = await self._post_process_themes(
             theme_nodes=theme_nodes,
             hierarchy_edges=hierarchy_edges,
             should_cancel=should_cancel,
         )
+        code_nodes = self._remap_code_parent_keys(code_nodes, theme_nodes=theme_nodes)
         await self._raise_if_cancelled(should_cancel)
         if not theme_nodes:
             raise UnprocessableError(
@@ -288,6 +293,7 @@ class CodebookGenerationService:
         self,
         codes: list[_CodeDraft],
         *,
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> list[_CodeDraft]:
         """Consolidate generated codes and keep a deterministic fallback."""
@@ -299,7 +305,11 @@ class CodebookGenerationService:
             return codes
 
         consolidation_payload = [
-            CodeConsolidationItem(label=code.label, description=code.description)
+            CodeConsolidationItem(
+                label=code.label,
+                description=code.description,
+                theme_path=self._theme_path_for_key(code.parent_theme_key, theme_nodes=theme_nodes),
+            )
             for code in codes
         ]
         original_labels = [code.label for code in codes]
@@ -339,11 +349,16 @@ class CodebookGenerationService:
                 continue
             seen_labels.add(code_key)
             description = code.description.strip() if code.description else None
+            returned_theme_key = self._theme_key_from_path(code.theme_path)
             consolidated_codes.append(
                 _CodeDraft(
                     label=normalized_label,
                     description=description or None,
-                    parent_theme_key=parent_theme_key_by_label.get(code_key, fallback_parent_theme_key),
+                    parent_theme_key=(
+                        returned_theme_key
+                        or parent_theme_key_by_label.get(code_key)
+                        or fallback_parent_theme_key
+                    ),
                 )
             )
 
@@ -366,6 +381,78 @@ class CodebookGenerationService:
         logger.debug("Code consolidation kept labels: {}", consolidated_labels)
         logger.debug("Code consolidation removed labels: {}", removed_labels)
         return consolidated_codes
+
+    @staticmethod
+    def _theme_key_from_path(theme_path: list[str] | tuple[str, ...] | None) -> tuple[str, ...] | None:
+        if not theme_path:
+            return None
+        normalized = [
+            CodebookGenerationService._normalize_label(path_item).lower()
+            for path_item in theme_path
+            if CodebookGenerationService._normalize_label(path_item)
+        ]
+        return tuple(normalized) if normalized else None
+
+    @staticmethod
+    def _theme_path_for_key(
+        parent_theme_key: tuple[str, ...] | None,
+        *,
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+    ) -> list[str]:
+        if parent_theme_key is None:
+            return []
+        path: list[str] = []
+        for index in range(1, len(parent_theme_key) + 1):
+            path_key = parent_theme_key[:index]
+            node = theme_nodes.get(path_key)
+            path.append(node.label if node is not None else parent_theme_key[index - 1])
+        return path
+
+    @classmethod
+    def _remap_code_parent_keys(
+        cls,
+        codes: list[_CodeDraft],
+        *,
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+    ) -> list[_CodeDraft]:
+        """Ensure every code parent key points at a theme in the final tree."""
+        if not codes or not theme_nodes:
+            return codes
+
+        leaf_keys = cls._leaf_theme_keys(theme_nodes)
+        leaf_key_by_label = {
+            theme_nodes[key].label.lower(): key
+            for key in leaf_keys
+        }
+        fallback_key = leaf_keys[0] if leaf_keys else sorted(theme_nodes, key=lambda key: (len(key), key))[0]
+
+        remapped: list[_CodeDraft] = []
+        for code in codes:
+            parent_key = code.parent_theme_key
+            if parent_key in theme_nodes:
+                resolved_key = parent_key
+            elif parent_key and parent_key[-1] in leaf_key_by_label:
+                resolved_key = leaf_key_by_label[parent_key[-1]]
+            else:
+                resolved_key = fallback_key
+            remapped.append(
+                _CodeDraft(
+                    label=code.label,
+                    description=code.description,
+                    parent_theme_key=resolved_key,
+                )
+            )
+        return remapped
+
+    @staticmethod
+    def _leaf_theme_keys(
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+    ) -> list[tuple[str, ...]]:
+        parent_keys = {key[:-1] for key in theme_nodes if len(key) > 1}
+        return sorted(
+            [key for key in theme_nodes if key not in parent_keys],
+            key=lambda key: (len(key), key),
+        )
 
     async def _post_process_themes(
         self,
