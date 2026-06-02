@@ -649,50 +649,26 @@ def new_codebook_job_cancel(job_id: str):
     return jsonify(job)
 
 
-def _flatten_codebook_for_editor(codebook: dict) -> list[dict]:
-    """Walk CodebookDetailSchema into a flat ordered list of editor rows.
-
-    Each row is `{name, description, indent, is_code}`. Hierarchy is captured
-    as depth: indent 0 = root theme, deeper = subtheme. Code nodes (leaves
-    attached to themes via ThemeCodeRelationship) carry is_code=True so the
-    editor can render and round-trip them with the right type badge."""
+def _flatten_codebook_for_preview(codebook: dict) -> list[dict]:
+    """Convert CodebookDetailSchema tree to flat rows for preview.html."""
     rows: list[dict] = []
 
-    def walk(node: dict, depth: int) -> None:
-        is_code = (node.get("node_type") or "").upper() == "CODE"
+    def walk(node: dict, parent_name: str | None) -> None:
+        raw_type = (node.get("node_type") or "THEME").upper()
         rows.append({
+            "node_type": raw_type,
             "name": node.get("name") or node.get("label") or "",
             "description": node.get("description") or "",
-            "indent": depth,
-            "is_code": is_code,
+            "parent_name": parent_name or "",
         })
-        # Codes are leaves; only walk children of non-code nodes.
-        if is_code:
+        if raw_type == "CODE":
             return
         for child in node.get("children") or []:
-            walk(child, depth + 1)
+            walk(child, node.get("name") or node.get("label") or "")
 
     for theme in codebook.get("themes") or []:
-        walk(theme, 0)
+        walk(theme, None)
     return rows
-
-
-def _render_review(codebook_id: str, codebook_name: str, corpus_id: str,
-                   nodes: list[dict], error: str | None = None) -> str:
-    return render_template(
-        "codebooks/new/review.html",
-        codebook_id=codebook_id,
-        codebook_name=codebook_name,
-        corpus_id=corpus_id,
-        nodes=nodes,
-        error=error,
-    )
-
-
-# Branch 9's NodeInput requires description min_length=1; the LLM occasionally
-# produces nodes with null description and the editor allows blank rows. Fill
-# with a placeholder rather than reject so the save succeeds end-to-end.
-_DESCRIPTION_PLACEHOLDER = "(no description)"
 
 
 @bp.get("/<codebook_id>/review")
@@ -701,103 +677,29 @@ def codebook_review(codebook_id: str) -> str:
         codebook = _backend().get_codebook(codebook_id)
     except BackendNotFoundError:
         flash("That codebook couldn't be found. It may have been deleted.", "danger")
-        return _render_review(codebook_id, "", "", [], error="Codebook not found.")
+        return render_template(
+            "codebooks/preview.html",
+            corpus_id="",
+            codebook_name="",
+            themes=[],
+            error="Codebook not found.",
+        )
     except BackendError as exc:
         flash(exc.user_message, "danger")
-        return _render_review(codebook_id, "", "", [], error=exc.user_message)
+        return render_template(
+            "codebooks/preview.html",
+            corpus_id="",
+            codebook_name="",
+            themes=[],
+            error=exc.user_message,
+        )
 
     corpus_id = str(codebook.get("corpus_id", ""))
     name = codebook.get("name") or "Generated Codebook"
-    return _render_review(
-        codebook_id, name, corpus_id, _flatten_codebook_for_editor(codebook),
+    return render_template(
+        "codebooks/preview.html",
+        corpus_id=corpus_id,
+        codebook_name=name,
+        themes=_flatten_codebook_for_preview(codebook),
+        error=None,
     )
-
-
-@bp.post("/<codebook_id>/review")
-def codebook_review_submit(codebook_id: str):
-    codebook_name = (request.form.get("codebook_name") or "").strip()
-    corpus_id = (request.form.get("corpus_id") or "").strip()
-    names = request.form.getlist("row_names[]")
-    descs = request.form.getlist("row_descriptions[]")
-    parents = request.form.getlist("row_parents[]")
-    is_codes = request.form.getlist("row_is_codes[]")
-
-    # Mirror the preview/confirm_submit pattern: assemble all rows first,
-    # then validate. Don't silently skip blank-named rows — preview errors
-    # on them so they get the same treatment here.
-    def at(seq: list[str], i: int) -> str:
-        return seq[i] if i < len(seq) else ""
-
-    rows: list[dict] = []
-    for i, name in enumerate(names):
-        rows.append({
-            "name": name.strip(),
-            "description": at(descs, i).strip(),
-            "parent_name": at(parents, i).strip() or None,
-            "is_code": at(is_codes, i) == "1",
-        })
-
-    # Editor-shaped rows for the redisplay path so a re-render preserves
-    # what the user typed, including the Code toggle.
-    redisplay_rows = [
-        {
-            "name": r["name"],
-            "description": r["description"],
-            "indent": 0 if not r["parent_name"] else 1,
-            "is_code": r["is_code"],
-        }
-        for r in rows
-    ]
-
-    error: str | None = None
-    if not codebook_name:
-        error = "Codebook Name must not be blank."
-    elif not corpus_id:
-        error = "Missing corpus context — refresh the page and try again."
-    elif not rows:
-        error = "A codebook must contain at least one theme."
-    elif any(not r["name"] for r in rows):
-        error = "All themes must have a name."
-    else:
-        # Parent lookups span themes and subthemes only — a code can't be a
-        # parent.
-        valid_parents = {r["name"] for r in rows if not r["is_code"]}
-        for r in rows:
-            if r["is_code"] and not r["parent_name"]:
-                error = (
-                    f"Code '{r['name']}' must sit under a theme or subtheme. "
-                    "Either indent it under one, or untoggle 'Code'."
-                )
-                break
-            if r["parent_name"] and r["parent_name"] not in valid_parents:
-                error = (
-                    f"Parent '{r['parent_name']}' for '{r['name']}' "
-                    "does not exist in this codebook."
-                )
-                break
-
-    if error:
-        return _render_review(codebook_id, codebook_name, corpus_id, redisplay_rows, error=error)
-
-    # Build the backend payload: descriptions default to a placeholder so the
-    # backend's NodeInput.description (min_length=1) doesn't reject the row.
-    payload_nodes: list[dict] = []
-    for r in rows:
-        entry: dict = {
-            "name": r["name"],
-            "description": r["description"] or _DESCRIPTION_PLACEHOLDER,
-            "parent_name": r["parent_name"],
-        }
-        if r["is_code"]:
-            entry["node_type"] = "CODE"
-        payload_nodes.append(entry)
-
-    try:
-        _backend().create_codebook(
-            corpus_id=corpus_id, name=codebook_name, themes=payload_nodes,
-        )
-    except BackendError as exc:
-        return _render_review(codebook_id, codebook_name, corpus_id, redisplay_rows, error=exc.user_message)
-
-    flash(f"Saved '{codebook_name}' as a new codebook version.", "success")
-    return redirect(url_for("codebooks.list_codebooks"))
