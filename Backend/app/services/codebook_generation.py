@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -419,12 +420,11 @@ class CodebookGenerationService:
         if not codes or not theme_nodes:
             return codes
 
-        leaf_keys = cls._leaf_theme_keys(theme_nodes)
+        candidate_keys = cls._candidate_theme_keys(theme_nodes)
         leaf_key_by_label = {
             theme_nodes[key].label.lower(): key
-            for key in leaf_keys
+            for key in candidate_keys
         }
-        fallback_key = leaf_keys[0] if leaf_keys else sorted(theme_nodes, key=lambda key: (len(key), key))[0]
 
         remapped: list[_CodeDraft] = []
         for code in codes:
@@ -433,26 +433,110 @@ class CodebookGenerationService:
                 resolved_key = parent_key
             elif parent_key and parent_key[-1] in leaf_key_by_label:
                 resolved_key = leaf_key_by_label[parent_key[-1]]
+                logger.warning(
+                    "Remapped generated code to final theme by leaf label: code_label={code_label!r}, "
+                    "original_parent_key={original_parent_key}, resolved_parent_key={resolved_parent_key}",
+                    code_label=code.label,
+                    original_parent_key=parent_key,
+                    resolved_parent_key=resolved_key,
+                )
             else:
-                resolved_key = fallback_key
+                resolved_key = cls._best_matching_theme_key(
+                    code=code,
+                    theme_nodes=theme_nodes,
+                    candidate_keys=candidate_keys,
+                )
+                if resolved_key is not None:
+                    logger.warning(
+                        "Remapped generated code to final theme by token fallback: code_label={code_label!r}, "
+                        "original_parent_key={original_parent_key}, resolved_parent_key={resolved_parent_key}",
+                        code_label=code.label,
+                        original_parent_key=parent_key,
+                        resolved_parent_key=resolved_key,
+                    )
+                else:
+                    logger.warning(
+                        "Generated code could not be mapped to a final theme and will remain unattached: "
+                        "code_label={code_label!r}, original_parent_key={original_parent_key}",
+                        code_label=code.label,
+                        original_parent_key=parent_key,
+                    )
             remapped.append(
                 _CodeDraft(
                     label=code.label,
                     description=code.description,
                     parent_theme_key=resolved_key,
                 )
-            )
+        )
         return remapped
 
+    @classmethod
+    def _best_matching_theme_key(
+        cls,
+        *,
+        code: _CodeDraft,
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+        candidate_keys: list[tuple[str, ...]],
+    ) -> tuple[str, ...] | None:
+        if not candidate_keys:
+            return None
+
+        source_labels = [code.label]
+        if code.parent_theme_key:
+            source_labels.extend(code.parent_theme_key)
+        source_text = " ".join(source_labels)
+        source_tokens = cls._label_tokens(source_text)
+        if not source_tokens:
+            return None
+
+        best_key: tuple[str, ...] | None = None
+        best_score = 0
+        for candidate_key in candidate_keys:
+            candidate_path = [
+                theme_nodes[path_key].label
+                for index in range(1, len(candidate_key) + 1)
+                if (path_key := candidate_key[:index]) in theme_nodes
+            ]
+            candidate_tokens = cls._label_tokens(" ".join(candidate_path))
+            score = cls._token_overlap_score(source_tokens, candidate_tokens)
+            if score > best_score:
+                best_score = score
+                best_key = candidate_key
+
+        return best_key if best_score > 0 else None
+
     @staticmethod
-    def _leaf_theme_keys(
+    def _candidate_theme_keys(
         theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
     ) -> list[tuple[str, ...]]:
         parent_keys = {key[:-1] for key in theme_nodes if len(key) > 1}
+        leaf_keys = [key for key in theme_nodes if key not in parent_keys]
+        root_keys = [key for key in theme_nodes if len(key) == 1]
         return sorted(
-            [key for key in theme_nodes if key not in parent_keys],
+            [*leaf_keys, *[key for key in root_keys if key not in leaf_keys]],
             key=lambda key: (len(key), key),
         )
+
+    @staticmethod
+    def _label_tokens(value: str) -> set[str]:
+        return {
+            token
+            for token in re.findall(r"[a-z0-9]+", value.lower())
+            if len(token) >= 3
+        }
+
+    @staticmethod
+    def _token_overlap_score(source_tokens: set[str], candidate_tokens: set[str]) -> int:
+        score = 0
+        for source in source_tokens:
+            for candidate in candidate_tokens:
+                if source == candidate:
+                    score += 3
+                elif len(source) >= 5 and len(candidate) >= 5 and (
+                    source in candidate or candidate in source
+                ):
+                    score += 1
+        return score
 
     async def _post_process_themes(
         self,

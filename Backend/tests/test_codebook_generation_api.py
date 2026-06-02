@@ -25,6 +25,7 @@ from app.schemas.llm import (
     PassageCodebookGeneration,
     ThemeConsolidationResult,
 )
+from app.services.codebook_generation import CodebookGenerationService, _CodeDraft, _ThemeNodeDraft
 
 API_INGESTION = "/api/v1/ingestion"
 API_CODEBOOKS = "/api/v1/codebooks"
@@ -46,6 +47,59 @@ def _stub_consolidation_calls(monkeypatch):
         "app.services.codebook_generation.consolidate_generated_themes",
         _identity_theme_consolidation,
     )
+
+
+def test_remap_code_parent_keys_uses_best_matching_final_theme() -> None:
+    theme_nodes = {
+        ("work, employment & economic wellbeing",): _ThemeNodeDraft(
+            key=("work, employment & economic wellbeing",),
+            label="Work, Employment & Economic Wellbeing",
+        ),
+        ("work, employment & economic wellbeing", "employment outlook & job security"): _ThemeNodeDraft(
+            key=("work, employment & economic wellbeing", "employment outlook & job security"),
+            label="Employment Outlook & Job Security",
+        ),
+        ("ai governance, regulation & policy",): _ThemeNodeDraft(
+            key=("ai governance, regulation & policy",),
+            label="AI Governance, Regulation & Policy",
+        ),
+        ("ai governance, regulation & policy", "ai safety & ethics"): _ThemeNodeDraft(
+            key=("ai governance, regulation & policy", "ai safety & ethics"),
+            label="AI Safety & Ethics",
+        ),
+    }
+    codes = [
+        _CodeDraft(
+            label="Concerns about AI-driven job displacement and security",
+            description=None,
+            parent_theme_key=("labor market impacts", "job security"),
+        )
+    ]
+
+    remapped = CodebookGenerationService._remap_code_parent_keys(codes, theme_nodes=theme_nodes)
+
+    assert remapped[0].parent_theme_key == (
+        "work, employment & economic wellbeing",
+        "employment outlook & job security",
+    )
+
+
+def test_remap_code_parent_keys_does_not_force_unmatched_codes_to_first_theme() -> None:
+    theme_nodes = {
+        ("alpha",): _ThemeNodeDraft(key=("alpha",), label="Alpha"),
+        ("beta",): _ThemeNodeDraft(key=("beta",), label="Beta"),
+    }
+    codes = [
+        _CodeDraft(
+            label="Completely unrelated concept",
+            description=None,
+            parent_theme_key=("missing",),
+        )
+    ]
+
+    remapped = CodebookGenerationService._remap_code_parent_keys(codes, theme_nodes=theme_nodes)
+
+    assert remapped[0].parent_theme_key is None
 
 
 async def _create_corpus_and_docs(client) -> tuple[str, list[str]]:
