@@ -2,7 +2,7 @@ from pathlib import Path
 
 API = "/api/v1/ingestion"
 
-# Synthesized content — long enough to substantively exercise the chunker.
+# Synthesized content — substantive enough to exercise the ingestion pipeline.
 _LONG_TEXT = (
     b"The participant described their daily workflow in some detail. "
     b"They mentioned working with contracts, performing document review, "
@@ -123,7 +123,6 @@ async def test_bulk_ingest_documents(client):
 
     data = resp.json()["data"]
     assert data["documents_created"] == 2
-    assert data["chunks_created"] > 0
 
 
 async def test_bulk_ingest_skips_empty_documents(client):
@@ -156,31 +155,41 @@ async def test_get_documents_paginated(client):
 
 
 # ---------------------------------------------------------------------------
-# GET /ingestion/corpora/{corpus_id}/chunks
+# GET /ingestion/corpora/{corpus_id}/documents/{document_id}
 # ---------------------------------------------------------------------------
 
 
-async def test_get_chunks(client):
+async def test_get_document_content(client):
     create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
-    await client.post(
+    ingest = await client.post(
         f"{API}/corpora/{corpus_id}/documents/bulk",
-        json={"documents": [{"title": "T", "text": "word " * 15}]},
+        json={"documents": [{"title": "Interview A", "text": "the full interview text goes here"}]},
     )
+    assert ingest.status_code == 201
 
-    resp = await client.get(f"{API}/corpora/{corpus_id}/chunks")
+    docs_resp = await client.get(f"{API}/corpora/{corpus_id}/documents")
+    document_id = docs_resp.json()["data"]["items"][0]["id"]
+
+    resp = await client.get(f"{API}/corpora/{corpus_id}/documents/{document_id}")
     assert resp.status_code == 200
     data = resp.json()["data"]
-    assert data["meta"]["total"] > 0
-    chunk = data["items"][0]
-    assert "chunk_index" in chunk
-    assert "text" in chunk
+    assert data["id"] == document_id
+    assert data["content"] == "the full interview text goes here"
+    assert "title" in data
+
+
+async def test_get_document_content_not_found(client):
+    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    corpus_id = create.json()["data"]["id"]
+
+    resp = await client.get(f"{API}/corpora/{corpus_id}/documents/{MISSING_STR}")
+    assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
-# POST /ingestion/corpora/{corpus_id}/upload — one test per format, using the
-# bundled real-transcript fixtures.
+# POST /ingestion/corpora/{corpus_id}/upload — one test per format
 # ---------------------------------------------------------------------------
 
 
@@ -198,7 +207,6 @@ async def test_upload_txt_real_fixture(client):
     result = resp.json()["data"]["results"][0]
     log.check(result["success"] is True, f"per-file success=True for {_TXT_FIXTURE.name}")
     log.check(result["documents_created"] == 1, "exactly one document created")
-    log.check(result["chunks_created"] >= 1, f"at least one chunk created ({result['chunks_created']})")
     log.report(f"Upload .txt real fixture [{_TXT_FIXTURE.name}, {len(content)} bytes]")
 
 
@@ -219,13 +227,11 @@ async def test_upload_docx_real_fixture(client):
     result = resp.json()["data"]["results"][0]
     log.check(result["success"] is True, f"per-file success=True for {_DOCX_FIXTURE.name}")
     log.check(result["documents_created"] == 1, "exactly one document created")
-    log.check(result["chunks_created"] >= 1, f"at least one chunk created ({result['chunks_created']})")
     log.report(f"Upload .docx real fixture [{_DOCX_FIXTURE.name}, {len(content)} bytes]")
 
 
 async def test_upload_pdf_real_fixture(client):
-    """Also verifies the full upload → chunks pipeline preserves text content.
-    PDF is chosen because its extraction is the most prone to silent failure."""
+    """Also verifies the full upload pipeline preserves text content."""
     log = _AssertionLog()
     create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
@@ -239,16 +245,14 @@ async def test_upload_pdf_real_fixture(client):
     result = resp.json()["data"]["results"][0]
     log.check(result["success"] is True, f"per-file success=True for {_PDF_FIXTURE.name}")
     log.check(result["documents_created"] == 1, "exactly one document created")
-    log.check(result["chunks_created"] >= 1, f"at least one chunk created ({result['chunks_created']})")
 
-    # Fetch chunks back and confirm uploaded text reassembled into substantive content.
-    chunks_resp = await client.get(
-        f"{API}/corpora/{corpus_id}/chunks", params={"page_size": 1000}
-    )
-    reassembled = " ".join(c["text"] for c in chunks_resp.json()["data"]["items"])
+    docs_resp = await client.get(f"{API}/corpora/{corpus_id}/documents")
+    document_id = docs_resp.json()["data"]["items"][0]["id"]
+    content_resp = await client.get(f"{API}/corpora/{corpus_id}/documents/{document_id}")
+    text = content_resp.json()["data"]["content"]
     log.check(
-        len(reassembled.strip()) > 200,
-        f"chunks reassembled into {len(reassembled)} chars of readable text",
+        len(text.strip()) > 200,
+        f"document content is {len(text)} chars of readable text",
     )
     log.report(f"Upload .pdf real fixture [{_PDF_FIXTURE.name}, {len(content)} bytes]")
 
@@ -270,7 +274,6 @@ async def test_upload_jsonl_real_fixture(client):
         result["documents_created"] >= 1,
         f"at least one document created (got {result['documents_created']})",
     )
-    log.check(result["chunks_created"] >= 1, f"at least one chunk created ({result['chunks_created']})")
     log.report(f"Upload .jsonl real fixture [{_JSONL_FIXTURE.name}, {len(content)} bytes]")
 
 

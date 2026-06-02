@@ -16,7 +16,6 @@ from app.models import (
     Codebook,
     CodebookThemeRelationship,
     Corpus,
-    CorpusChunk,
     CorpusDocument,
     DocumentAnalysis,
     Theme,
@@ -76,14 +75,10 @@ async def seed_db():
             rel = CodebookThemeRelationship(codebook_id=codebook.id, theme_id=theme.id)
             session.add(rel)
 
-        # Create Documents and Chunks for multiple users
+        # Create Documents for multiple users
         for user, text in INTERVIEWS.items():
-            doc = CorpusDocument(corpus_id=corpus.id, title=f"Participant {user}")
+            doc = CorpusDocument(corpus_id=corpus.id, title=f"Participant {user}", content=text.strip())
             session.add(doc)
-            await session.flush()
-
-            chunk = CorpusChunk(document_id=doc.id, text=text.strip(), chunk_index=0)
-            session.add(chunk)
 
         await session.commit()
 
@@ -114,16 +109,16 @@ async def _analyze_single_document(session, doc_id: uuid.UUID, codebook_id: uuid
         print("Old analysis deleted. Proceeding...\n")
 
     # 2. Load Document Text
-    chunks_result = await session.execute(
-        select(CorpusChunk).where(CorpusChunk.document_id == doc_id).order_by(CorpusChunk.chunk_index)
+    doc_result = await session.execute(
+        select(CorpusDocument).where(CorpusDocument.id == doc_id)
     )
-    chunks = chunks_result.scalars().all()
+    doc = doc_result.scalar_one_or_none()
 
-    if not chunks:
-        print(f"Error: Document '{doc_id}' has no text chunks.")
+    if not doc or not doc.content:
+        print(f"Error: Document '{doc_id}' has no content.")
         return False
 
-    transcript = "\n".join([c.text for c in chunks])
+    transcript = doc.content
 
     # 3. Load Codebook Themes
     theme_rels_result = await session.execute(

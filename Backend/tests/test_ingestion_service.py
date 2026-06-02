@@ -15,29 +15,29 @@ P2 = uuid.UUID("00000000-0000-0000-0000-000000000002")
 # ---------------------------------------------------------------------------
 
 
-async def test_create_corpus(db_session, test_settings):
-    svc = IngestionService(db_session, test_settings)
+async def test_create_corpus(db_session):
+    svc = IngestionService(db_session)
     corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="Test Corpus"))
     assert corpus.id
     assert corpus.project_id == P1
     assert corpus.name == "Test Corpus"
 
 
-async def test_get_corpus_not_found_raises(db_session, test_settings):
-    svc = IngestionService(db_session, test_settings)
+async def test_get_corpus_not_found_raises(db_session):
+    svc = IngestionService(db_session)
     with pytest.raises(NotFoundError):
         await svc.get_corpus(uuid.uuid4())
 
 
-async def test_list_corpora_empty(db_session, test_settings):
-    svc = IngestionService(db_session, test_settings)
+async def test_list_corpora_empty(db_session):
+    svc = IngestionService(db_session)
     corpora, total = await svc.list_corpora(project_id=P1)
     assert corpora == []
     assert total == 0
 
 
-async def test_list_corpora_filters_by_project(db_session, test_settings):
-    svc = IngestionService(db_session, test_settings)
+async def test_list_corpora_filters_by_project(db_session):
+    svc = IngestionService(db_session)
     await svc.create_corpus(CorpusCreate(project_id=P1, name="A"))
     await svc.create_corpus(CorpusCreate(project_id=P2, name="B"))
 
@@ -51,8 +51,8 @@ async def test_list_corpora_filters_by_project(db_session, test_settings):
 # ---------------------------------------------------------------------------
 
 
-async def test_ingest_one_valid_document(db_session, test_settings):
-    svc = IngestionService(db_session, test_settings)
+async def test_ingest_one_valid_document(db_session):
+    svc = IngestionService(db_session)
     corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
 
     result = await svc.ingest_documents(
@@ -62,41 +62,11 @@ async def test_ingest_one_valid_document(db_session, test_settings):
 
     assert len(result.documents) == 1
     assert result.documents[0].title == "Doc"
-    assert result.chunks_created >= 1
+    assert result.documents[0].content == "one two three four five"
 
 
-async def test_ingest_creates_chunks(db_session, test_settings):
-    # test_settings: chunk_size=10, overlap=2 → stride=8
-    svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
-
-    # 18 words → chunk 0: [0..10), chunk 1: [8..18)
-    text = " ".join(str(i) for i in range(18))
-    result = await svc.ingest_documents(
-        corpus_id=corpus.id,
-        documents=[DocumentInput(title="T", text=text)],
-    )
-
-    assert result.chunks_created == 2
-
-
-async def test_chunk_order_correct(db_session, test_settings):
-    svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
-
-    text = " ".join(str(i) for i in range(15))
-    await svc.ingest_documents(
-        corpus_id=corpus.id,
-        documents=[DocumentInput(title="T", text=text)],
-    )
-
-    chunks, _ = await svc.list_chunks(corpus_id=corpus.id)
-    indices = [c.chunk_index for c in chunks]
-    assert indices == list(range(len(chunks)))
-
-
-async def test_ingest_skips_empty_documents(db_session, test_settings):
-    svc = IngestionService(db_session, test_settings)
+async def test_ingest_skips_empty_documents(db_session):
+    svc = IngestionService(db_session)
     corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
 
     result = await svc.ingest_documents(
@@ -108,8 +78,8 @@ async def test_ingest_skips_empty_documents(db_session, test_settings):
     assert result.documents[0].title == "V"
 
 
-async def test_ingest_title_falls_back_to_filename(db_session, test_settings):
-    svc = IngestionService(db_session, test_settings)
+async def test_ingest_title_falls_back_to_filename(db_session):
+    svc = IngestionService(db_session)
     corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
 
     result = await svc.ingest_documents(
@@ -122,12 +92,12 @@ async def test_ingest_title_falls_back_to_filename(db_session, test_settings):
 
 
 # ---------------------------------------------------------------------------
-# list_documents / list_chunks
+# list_documents / get_document
 # ---------------------------------------------------------------------------
 
 
-async def test_list_documents_paginated(db_session, test_settings):
-    svc = IngestionService(db_session, test_settings)
+async def test_list_documents_paginated(db_session):
+    svc = IngestionService(db_session)
     corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
 
     docs = [DocumentInput(title=f"Doc {i}", text=f"Document number {i}") for i in range(5)]
@@ -141,30 +111,23 @@ async def test_list_documents_paginated(db_session, test_settings):
     assert len(page2) == 2
 
 
-async def test_list_chunks_for_corpus(db_session, test_settings):
-    svc = IngestionService(db_session, test_settings)
+async def test_get_document_returns_content(db_session):
+    svc = IngestionService(db_session)
     corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
 
-    text = " ".join(str(i) for i in range(20))
     result = await svc.ingest_documents(
         corpus_id=corpus.id,
-        documents=[DocumentInput(title="T", text=text)],
+        documents=[DocumentInput(title="T", text="hello world")],
     )
-
-    chunks, total = await svc.list_chunks(corpus_id=corpus.id)
-    assert total == result.chunks_created
-
-
-async def test_list_chunks_filter_by_document(db_session, test_settings):
-    svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
-
-    text = " ".join(str(i) for i in range(20))
-    result = await svc.ingest_documents(
-        corpus_id=corpus.id,
-        documents=[DocumentInput(title="A", text=text), DocumentInput(title="B", text="short text here now")],
-    )
-
     doc_id = result.documents[0].id
-    chunks, _ = await svc.list_chunks(corpus_id=corpus.id, document_id=doc_id)
-    assert all(c.document_id == doc_id for c in chunks)
+
+    doc = await svc.get_document(corpus_id=corpus.id, document_id=doc_id)
+    assert doc.content == "hello world"
+
+
+async def test_get_document_not_found_raises(db_session):
+    svc = IngestionService(db_session)
+    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+
+    with pytest.raises(NotFoundError):
+        await svc.get_document(corpus_id=corpus.id, document_id=uuid.uuid4())

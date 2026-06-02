@@ -38,8 +38,6 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
 def test_settings() -> Settings:
     return Settings(
         DATABASE_URL=TEST_DB_URL,
-        INGESTION_CHUNK_SIZE_WORDS=10,
-        INGESTION_CHUNK_OVERLAP_WORDS=2,
     )
 
 
