@@ -10,23 +10,15 @@ from flask import (
 )
 
 from web.services.backend_client import (
-    BackendClient,
     BackendError,
     BackendNotFoundError,
     BackendValidationError,
     get_backend_client as _backend,
 )
+from web.services.corpus_context import resolve_active_corpus, set_active_corpus_id
 
 bp = Blueprint("demographic", __name__)
 
-
-def _resolve_workspace_corpus(client: BackendClient) -> str:
-    """MVP single-workspace: resolve or create the default corpus."""
-    cfg = current_app.config
-    return client.ensure_corpus(
-        project_id=cfg["DEFAULT_PROJECT_ID"],
-        name=cfg["DEFAULT_CORPUS_NAME"],
-    )
 
 
 # ---- Landings ---------------------------------------------------------------
@@ -35,7 +27,7 @@ def _resolve_workspace_corpus(client: BackendClient) -> str:
 def _landing_with_corpus(target_endpoint: str):
     """Resolve the default corpus then redirect to a corpus-scoped view."""
     try:
-        corpus_id = _resolve_workspace_corpus(_backend())
+        corpus_id, _, _ = resolve_active_corpus(_backend())
     except BackendError as exc:
         flash(exc.user_message, "danger")
         return render_template(
@@ -61,16 +53,33 @@ def upload_landing():
 
 @bp.get("/<corpus_id>/")
 def list_files(corpus_id: str) -> str:
+    set_active_corpus_id(corpus_id)
     corpus_name = current_app.config["DEFAULT_CORPUS_NAME"]
+    corpus_options: list[dict] = [{"id": corpus_id, "name": corpus_name}]
     try:
-        files = _backend().list_demographic_files(corpus_id)
+        client = _backend()
+        active_corpus_id, corpus_options, active_corpus = resolve_active_corpus(
+            client,
+            requested_corpus_id=corpus_id,
+        )
+        files = client.list_demographic_files(active_corpus_id)
+        corpus_name = active_corpus.get("name", corpus_name)
     except BackendError as exc:
         flash(exc.user_message, "danger")
         return render_template(
-            "demographic/list.html", files=[], corpus_id=corpus_id, error=True, corpus_name=corpus_name
+            "demographic/list.html",
+            files=[],
+            corpus_id=corpus_id,
+            corpus_options=corpus_options,
+            error=True,
+            corpus_name=corpus_name,
         )
     return render_template(
-        "demographic/list.html", files=files, corpus_id=corpus_id, corpus_name=corpus_name
+        "demographic/list.html",
+        files=files,
+        corpus_id=active_corpus_id,
+        corpus_options=corpus_options,
+        corpus_name=corpus_name,
     )
 
 
@@ -107,6 +116,7 @@ def upload_form(corpus_id: str):
 
 @bp.post("/<corpus_id>/upload")
 def upload_submit(corpus_id: str):
+    set_active_corpus_id(corpus_id)
     f = request.files.get("file")
     if not f or not f.filename:
         flash("Please select a CSV file to upload.", "danger")
@@ -146,6 +156,7 @@ def upload_submit(corpus_id: str):
 
 @bp.get("/<corpus_id>/preview/<import_id>")
 def preview_upload(corpus_id: str, import_id: str) -> str:
+    set_active_corpus_id(corpus_id)
     preview_data = session.get(f"demo_preview_{import_id}")
     if not preview_data:
         flash("Preview data expired or not found. Please upload again.", "warning")
@@ -162,6 +173,7 @@ def preview_upload(corpus_id: str, import_id: str) -> str:
 
 @bp.post("/<corpus_id>/preview/<import_id>")
 def preview_confirm(corpus_id: str, import_id: str):
+    set_active_corpus_id(corpus_id)
     action = request.form.get("action", "discard")
     confirm = action == "confirm"
 
@@ -186,7 +198,10 @@ def preview_confirm(corpus_id: str, import_id: str):
 
 @bp.get("/<corpus_id>/view/<file_id>")
 def view_data(corpus_id: str, file_id: str) -> str:
+    set_active_corpus_id(corpus_id)
     page = request.args.get("page", 1, type=int)
+    corpus_name = current_app.config["DEFAULT_CORPUS_NAME"]
+    corpus_options: list[dict] = [{"id": corpus_id, "name": corpus_name}]
     # Render the same error-state shell from either except branch so the
     # template doesn't have to know which exception class fired.
     error_kwargs = dict(
@@ -196,16 +211,23 @@ def view_data(corpus_id: str, file_id: str) -> str:
         columns=[],
         transcript_lookup={},
         corpus_id=corpus_id,
+        corpus_options=corpus_options,
+        corpus_name=corpus_name,
         file_id=file_id,
         error=True,
     )
     try:
         client = _backend()
-        files = client.list_demographic_files(corpus_id)
-        rows_page = client.list_demographic_rows(corpus_id, file_id, page=page, page_size=100)
+        active_corpus_id, corpus_options, active_corpus = resolve_active_corpus(
+            client,
+            requested_corpus_id=corpus_id,
+        )
+        corpus_name = active_corpus.get("name", corpus_name)
+        files = client.list_demographic_files(active_corpus_id)
+        rows_page = client.list_demographic_rows(active_corpus_id, file_id, page=page, page_size=100)
         rows = rows_page.get("items", [])
         meta = rows_page.get("meta", {})
-        link_summary = client.get_demographic_link_summary(corpus_id)
+        link_summary = client.get_demographic_link_summary(active_corpus_id)
     except BackendNotFoundError:
         # Specific user-facing message when a stale link points at a file
         # that no longer exists — same pattern as codebook_themes uses.
@@ -239,6 +261,8 @@ def view_data(corpus_id: str, file_id: str) -> str:
         meta=meta,
         columns=columns,
         transcript_lookup=transcript_lookup,
-        corpus_id=corpus_id,
+        corpus_id=active_corpus_id,
+        corpus_options=corpus_options,
+        corpus_name=corpus_name,
         file_id=file_id,
     )

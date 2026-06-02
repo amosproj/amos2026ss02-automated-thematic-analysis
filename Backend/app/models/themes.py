@@ -2,25 +2,23 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
 
 
 class Theme(Base, TimestampMixin):
-    """Simplified theme artifact."""
-    """TODO: Unfinished placeholder model; feel free to change whatever you want. Versioning is intentionally not implemented."""
+    """A single node in a codebook hierarchy (Theme, Subtheme, or Code)."""
 
     __tablename__ = "themes"
     __table_args__ = (
         UniqueConstraint("codebook_id", "label", name="uq_theme_codebook_label"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     codebook_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
+        Uuid(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
     )
     label: Mapped[str] = mapped_column(String(255), index=True)
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
@@ -32,15 +30,15 @@ class CodebookThemeRelationship(Base, TimestampMixin):
 
     __tablename__ = "codebook_theme_relationships"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # Link each membership row to an existing codebook and theme;
     # cascading delete removes memberships automatically when a parent is deleted.
     codebook_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
+        Uuid(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
     )
     theme_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("themes.id", ondelete="CASCADE"), index=True
+        Uuid(as_uuid=True), ForeignKey("themes.id", ondelete="CASCADE"), index=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean(), default=True)
 
@@ -50,14 +48,14 @@ class ThemeHierarchyRelationship(Base, TimestampMixin):
 
     __tablename__ = "theme_hierarchy_relationships"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     codebook_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
+        Uuid(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
     )
     parent_theme_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("themes.id", ondelete="CASCADE"), index=True
+        Uuid(as_uuid=True), ForeignKey("themes.id", ondelete="CASCADE"), index=True
     )
     child_theme_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("themes.id", ondelete="CASCADE"), index=True
+        Uuid(as_uuid=True), ForeignKey("themes.id", ondelete="CASCADE"), index=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean(), default=True)

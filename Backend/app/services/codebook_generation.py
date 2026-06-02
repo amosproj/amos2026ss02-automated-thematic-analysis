@@ -27,6 +27,7 @@ from app.models import (
     CorpusChunk,
     CorpusDocument,
     Theme,
+    ThemeCodeRelationship,
     ThemeHierarchyRelationship,
 )
 from app.schemas.codebook import CodebookSchema, GeneratedCodebookResponse
@@ -50,6 +51,7 @@ class _ThemeNodeDraft:
 class _CodeDraft:
     label: str
     description: str | None
+    parent_theme_key: tuple[str, ...] | None = None
 
 
 class CodebookGenerationCancelledError(Exception):
@@ -73,8 +75,7 @@ class CodebookGenerationService:
     ) -> GeneratedCodebookResponse:
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
 
-        corpus = await self._load_corpus(corpus_id)
-        project_id = str(corpus.project_id)
+        await self._load_corpus(corpus_id)
         documents = await self._load_documents(
             corpus_id=corpus_id,
             transcript_document_ids=normalized_document_ids,
@@ -115,7 +116,7 @@ class CodebookGenerationService:
 
         created_codebook, themes_created, codes_created = await self._persist_generated_codebook(
             codebook_name=codebook_name,
-            project_id=project_id,
+            corpus_id=corpus_id,
             theme_nodes=theme_nodes,
             code_nodes=code_nodes,
             hierarchy_edges=hierarchy_edges,
@@ -302,6 +303,15 @@ class CodebookGenerationService:
             for code in codes
         ]
         original_labels = [code.label for code in codes]
+        parent_theme_key_by_label = {
+            code.label.lower(): code.parent_theme_key
+            for code in codes
+            if code.parent_theme_key is not None
+        }
+        fallback_parent_theme_key = next(
+            (code.parent_theme_key for code in codes if code.parent_theme_key is not None),
+            None,
+        )
         try:
             consolidated = await asyncio.to_thread(
                 consolidate_generated_codes,
@@ -333,6 +343,7 @@ class CodebookGenerationService:
                 _CodeDraft(
                     label=normalized_label,
                     description=description or None,
+                    parent_theme_key=parent_theme_key_by_label.get(code_key, fallback_parent_theme_key),
                 )
             )
 
@@ -665,6 +676,7 @@ class CodebookGenerationService:
                     codes_by_key[code_key] = _CodeDraft(
                         label=normalized_code_label,
                         description=generated_code.description.strip() if generated_code.description else None,
+                        parent_theme_key=theme_key if theme_key else None,
                     )
                 elif not existing_code.description and generated_code.description:
                     description = generated_code.description.strip()
@@ -721,16 +733,16 @@ class CodebookGenerationService:
         self,
         *,
         codebook_name: str,
-        project_id: str,
+        corpus_id: UUID,
         theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
         code_nodes: list[_CodeDraft],
         hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
     ) -> tuple[Codebook, int, int]:
         try:
-            version = await self._next_codebook_version(project_id=project_id)
+            version = await self._next_codebook_version(corpus_id=corpus_id)
             codebook = Codebook(
                 id=uuid.uuid4(),
-                project_id=project_id,
+                corpus_id=corpus_id,
                 name=codebook_name,
                 description="LLM-generated codebook",
                 version=version,
@@ -816,6 +828,18 @@ class CodebookGenerationService:
                         is_active=True,
                     )
                 )
+                if code_node.parent_theme_key:
+                    parent_theme_id = theme_id_by_key.get(code_node.parent_theme_key)
+                    if parent_theme_id:
+                        self._session.add(
+                            ThemeCodeRelationship(
+                                id=uuid.uuid4(),
+                                codebook_id=codebook.id,
+                                theme_id=parent_theme_id,
+                                code_id=code.id,
+                                is_active=True,
+                            )
+                        )
                 codes_created += 1
 
             validation = await ThemeGraphService(self._session).validate_theme_dag(codebook_id=codebook.id)
@@ -830,10 +854,10 @@ class CodebookGenerationService:
             await self._session.rollback()
             raise
 
-    async def _next_codebook_version(self, *, project_id: str) -> int:
+    async def _next_codebook_version(self, *, corpus_id: UUID) -> int:
         latest_version = (
             await self._session.execute(
-                select(func.max(Codebook.version)).where(Codebook.project_id == project_id)
+                select(func.max(Codebook.version)).where(Codebook.corpus_id == corpus_id)
             )
         ).scalar_one_or_none()
         return int((latest_version or 0) + 1)

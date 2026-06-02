@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -48,7 +49,7 @@ class ThemeFixtureSeed:
 async def _seed_codebook_with_theme_graph(
     session: AsyncSession,
     *,
-    project_id: str,
+    corpus_id: str,
     name: str,
     theme_labels: list[str],
     edges_by_label: list[tuple[str, str]],
@@ -62,7 +63,7 @@ async def _seed_codebook_with_theme_graph(
     session.add(
         Codebook(
             id=codebook_id,
-            project_id=project_id,
+            corpus_id=UUID(corpus_id) if isinstance(corpus_id, str) else corpus_id,
             name=name,
             description="Fixture",
             version=1,
@@ -121,7 +122,7 @@ async def seed_unbalanced_dummy_tree(session: AsyncSession) -> DummyTreeIds:
     """Seed a codebook with two roots and an unbalanced theme tree."""
     seed = await _seed_codebook_with_theme_graph(
         session,
-        project_id="project_theme_tree",
+        corpus_id=uuid.UUID("ffc5bae6-6fbc-5a72-03af-614be2c168c0"),
         name="Theme Tree Codebook",
         theme_labels=[
             "Product Delivery",
@@ -153,7 +154,7 @@ async def seed_three_theme_codebook(session: AsyncSession) -> ThemeFixtureSeed:
     """DoD fixture: small codebook with 3 themes."""
     return await _seed_codebook_with_theme_graph(
         session,
-        project_id="project_theme_tree_small",
+        corpus_id=uuid.UUID("f4c22d90-ae85-ad74-4b32-fc4e5aab575a"),
         name="Theme Tree Small (3)",
         theme_labels=[
             "Delivery Confidence",
@@ -171,7 +172,7 @@ async def seed_fifteen_theme_codebook(session: AsyncSession) -> ThemeFixtureSeed
     """DoD fixture: larger codebook with 15 themes."""
     return await _seed_codebook_with_theme_graph(
         session,
-        project_id="project_theme_tree_medium",
+        corpus_id=uuid.UUID("f945e801-8fc4-9f2e-bb53-3681801bea5e"),
         name="Theme Tree Medium (15)",
         theme_labels=[
             "Strategy Alignment",
@@ -218,7 +219,7 @@ async def seed_zero_occurrence_theme_corpus(session: AsyncSession) -> ThemeFixtu
     """
     return await _seed_codebook_with_theme_graph(
         session,
-        project_id="project_theme_tree_zero_occurrence",
+        corpus_id=uuid.UUID("c56d23b2-518e-c221-a43b-572f2d09b14c"),
         name="Theme Tree Zero Occurrence",
         theme_labels=[
             "Coordination Quality",
@@ -250,7 +251,7 @@ async def seed_long_theme_names_codebook(session: AsyncSession) -> ThemeFixtureS
     """DoD fixture: very long labels to validate UI truncation/wrapping behavior."""
     return await _seed_codebook_with_theme_graph(
         session,
-        project_id="project_theme_tree_long_names",
+        corpus_id=uuid.UUID("7c8dd893-e49d-b1f7-8d1c-cff3906a7d45"),
         name="Theme Tree Long Labels",
         theme_labels=[
             "Cross-Functional Collaboration Breakdowns During High-Urgency Release Cutovers Across Distributed Teams",

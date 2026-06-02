@@ -150,6 +150,54 @@ def test_upload_submit_re_renders_form_on_validation_error(client, fake_backend)
     assert b"Upload Results" not in resp.data
 
 
+def test_upload_form_shows_corpus_selector_for_both_upload_forms(client, fake_backend):
+    fake_backend.corpora = [
+        {"id": CORPUS, "name": "Main Corpus"},
+        {"id": "second-corpus-id", "name": "Pilot Corpus"},
+    ]
+
+    resp = client.get(f"/transcripts/{CORPUS}/upload")
+
+    assert resp.status_code == 200
+    assert b'id="global-corpus-select"' in resp.data
+    assert b"Main Corpus" in resp.data
+    assert b"Pilot Corpus" in resp.data
+    assert b"data-switch-template" in resp.data
+    assert b"/transcripts/test-corpus-id/upload" in resp.data
+    assert b"/demographic/test-corpus-id/upload" in resp.data
+    assert b'id="create-corpus-form"' in resp.data
+    assert b"/transcripts/corpora" in resp.data
+
+
+def test_create_corpus_from_upload_page_redirects_to_new_corpus(client, fake_backend):
+    fake_backend.corpora = [{"id": CORPUS, "name": "Main Corpus"}]
+
+    resp = client.post(
+        "/transcripts/corpora",
+        data={"name": "Pilot Corpus", "current_corpus_id": CORPUS},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 302
+    assert fake_backend.last_created_corpus is not None
+    new_id = fake_backend.last_created_corpus["id"]
+    assert resp.headers["Location"].endswith(f"/transcripts/{new_id}/upload")
+
+    follow = client.get(resp.headers["Location"])
+    assert follow.status_code == 200
+    assert b"Pilot Corpus" in follow.data
+
+
+def test_create_corpus_requires_name_and_stays_on_current_upload(client, fake_backend):
+    resp = client.post(
+        "/transcripts/corpora",
+        data={"name": "   ", "current_corpus_id": CORPUS},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith(f"/transcripts/{CORPUS}/upload")
+
+
 def test_upload_rejects_oversize_file(client, fake_backend):
     """Per-file cap is enforced in the controller before forwarding."""
     huge = b"x" * (11 * 1024 * 1024)

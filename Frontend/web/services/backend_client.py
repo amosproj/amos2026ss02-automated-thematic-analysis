@@ -107,22 +107,23 @@ class BackendClient:
 
     # ---- Corpora ------------------------------------------------------------
 
-    def list_corpora(self, project_id: str) -> list[dict]:
-        return self._get("/ingestion/corpora", params={"project_id": project_id}, sub_key="items")
+    def list_corpora(self, corpus_id: str | None = None) -> list[dict]:
+        params = {"corpus_id": corpus_id} if corpus_id else {}
+        return self._get("/ingestion/corpora", params=params, sub_key="items")
 
-    def create_corpus(self, project_id: str, name: str) -> dict:
-        return self._post("/ingestion/corpora", json={"project_id": project_id, "name": name})
+    def create_corpus(self, corpus_id: str, name: str) -> dict:
+        return self._post("/ingestion/corpora", json={"corpus_id": corpus_id, "name": name})
 
-    def ensure_corpus(self, project_id: str, name: str) -> str:
-        """Return the first corpus_id for `project_id`, creating one if none exists.
+    def ensure_corpus(self, corpus_id: str, name: str) -> str:
+        """Return the first corpus_id for `corpus_id`, creating one if none exists.
 
         Re-checks the backend on every call — no in-memory cache. The id is
         carried in the URL after the initial landing redirect, so this is only
         invoked once per session entry."""
-        existing = self.list_corpora(project_id)
+        existing = self.list_corpora(corpus_id)
         if existing:
             return existing[0]["id"]
-        return self.create_corpus(project_id, name)["id"]
+        return self.create_corpus(corpus_id, name)["id"]
 
     # ---- Documents ----------------------------------------------------------
 
@@ -154,8 +155,6 @@ class BackendClient:
 
     # ---- Codebooks ----------------------------------------------------------
 
-    def list_codebooks(self) -> list[dict]:
-        return self._get("/codebooks/")
 
     def get_theme_frequencies(self, codebook_id: str) -> list[dict]:
         return self._get(f"/codebooks/{codebook_id}/themes")
@@ -227,6 +226,43 @@ class BackendClient:
         """Get transcript ↔ demographic linking status."""
         return self._get(f"/demographic/{corpus_id}/link-summary")
 
+    # ---- Codebook Upload & Parsing ------------------------------------------
+
+    def parse_csv_preview(self, file: FileStorage) -> list[dict]:
+        """Send a CSV file to the backend parser to get a theme preview list."""
+        multipart = {
+            "file": (file.filename, file.stream, file.mimetype or "text/csv")
+        }
+        started_at = time.monotonic()
+        try:
+            r = self._client.post("/codebooks/parse-csv", files=multipart)
+            r.raise_for_status()
+            return self._unwrap(r)
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, "/codebooks/parse-csv", "POST", started_at)
+        except (json.JSONDecodeError, KeyError) as exc:
+            self._handle_exc(exc, "/codebooks/parse-csv", "POST", started_at)
+
+    def create_codebook(self, corpus_id: str, name: str, themes: list[dict]) -> dict:
+        """Persist a new codebook and its themes in the backend database."""
+        return self._post(
+            "/codebooks/",
+            json={"corpus_id": corpus_id, "name": name, "nodes": themes},
+        )
+
+    def get_codebook(self, codebook_id: str) -> dict:
+        """Fetch details of a codebook by its unique UUID."""
+        return self._get(f"/codebooks/{codebook_id}")
+
+    def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
+        """Return all persisted codebooks for a given corpus, ordered by descending version."""
+        params = {"corpus_id": corpus_id} if corpus_id else None
+        result = self._get("/codebooks/", params=params)
+        # The envelope `data` field is a list directly for this endpoint
+        if isinstance(result, list):
+            return result
+        return result.get("items", result) if isinstance(result, dict) else []
+
     # ---- Helpers ------------------------------------------------------------
 
     def _unwrap(self, response: httpx.Response, *, sub_key: str | None = None):
@@ -286,6 +322,8 @@ class BackendClient:
                     source_exc=exc, status_code=status_code, path=path
                 )
             elif status_code == 422:
+                if has_app_context():
+                    current_app.logger.error("422 Validation Error Payload: %s", exc.response.text)
                 error = BackendValidationError(
                     user_message=_parse_validation_detail(exc.response),
                     source_exc=exc,
@@ -326,9 +364,23 @@ def _parse_validation_detail(response: httpx.Response) -> str | None:
         body = response.json()
     except (json.JSONDecodeError, ValueError):
         return None
-    detail = body.get("detail") if isinstance(body, dict) else None
-    if not isinstance(detail, list):
+    if not isinstance(body, dict):
         return None
+
+    detail = body.get("detail")
+    if isinstance(detail, str) and detail.strip():
+        return detail
+
+    if not isinstance(detail, list):
+        # Our backend envelope for handled 422s is:
+        # {"success": false, "error": "...", "meta": {"detail": "..."}}
+        meta = body.get("meta")
+        if isinstance(meta, dict):
+            meta_detail = meta.get("detail")
+            if isinstance(meta_detail, str) and meta_detail.strip():
+                return meta_detail
+        return None
+
     messages: list[str] = []
     for item in detail:
         if not isinstance(item, dict):

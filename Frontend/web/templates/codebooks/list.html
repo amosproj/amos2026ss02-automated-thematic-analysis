@@ -1,7 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Codebooks{% endblock %}
 {% block content %}
-  <h1 class="h3 mb-4">Codebooks</h1>
+  {% if corpus_id and corpus_options %}
+    {% set active_corpus_id = corpus_id %}
+    {% set switch_template_url = url_for('codebooks.list_codebooks_for_corpus', corpus_id='__CORPUS_ID__') %}
+    {% set helper_text = 'Showing codebooks for this corpus.' %}
+    {% set show_create_form = False %}
+    {% include "_corpus_select.html" %}
+  {% endif %}
+
+  <div class="d-flex justify-content-between align-items-baseline mb-4">
+    <h1 class="h3 mb-0">Codebooks</h1>
+    <a href="{{ url_for('codebooks.upload_form', corpus_id=corpus_id) }}" class="btn btn-primary" id="new-codebook-btn">New Codebook</a>
+  </div>
 
   {% if error %}
     <p class="text-secondary">Couldn't load codebooks right now.</p>
@@ -25,8 +36,12 @@
                 <td class="text-secondary">{{ cb.created_by }}</td>
                 <td>
                   <a class="btn btn-sm btn-outline-primary"
-                     href="{{ url_for('codebooks.codebook_themes', codebook_id=cb.id, name=cb.name, version=cb.version) }}">
+                     href="{{ url_for('codebooks.codebook_themes_for_corpus', corpus_id=corpus_id, codebook_id=cb.id, name=cb.name, version=cb.version) }}">
                     View themes
+                  </a>
+                  <a class="btn btn-sm btn-outline-secondary ms-1"
+                     href="{{ url_for('codebooks.export_codebook', corpus_id=corpus_id, codebook_id=cb.id) }}">
+                    Export
                   </a>
                 </td>
               </tr>
@@ -38,4 +53,7 @@
   {% else %}
     <p class="text-secondary">No codebooks found.</p>
   {% endif %}
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
 {% endblock %}
