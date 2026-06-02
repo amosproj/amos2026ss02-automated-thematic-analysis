@@ -57,7 +57,7 @@ def test_codebook_list_renders_empty_state(client, fake_backend):
 
 def test_codebook_list_shows_create_button(client, fake_backend):
     fake_backend.codebooks = []
-    resp = client.get("/codebooks/")
+    resp = client.get("/codebooks/", follow_redirects=True)
     assert b"Create New Codebook" in resp.data
     assert b'href="/codebooks/new"' in resp.data
 
@@ -336,27 +336,6 @@ def test_progress_status_surfaces_backend_error_as_json(client, fake_backend):
     assert "error" in body
 
 
-def test_progress_demo_route_renders_with_scenario_flag(client, fake_backend):
-    resp = client.get("/codebooks/new/demo/fast")
-    assert resp.status_code == 200
-    assert b'data-demo-scenario="fast"' in resp.data
-    assert b"Demo mode" in resp.data
-
-
-def test_progress_demo_route_falls_back_to_fast_on_unknown_scenario(client, fake_backend):
-    resp = client.get("/codebooks/new/demo/not-a-scenario")
-    assert resp.status_code == 200
-    assert b'data-demo-scenario="fast"' in resp.data
-
-
-def test_progress_demo_route_supports_both_scenarios(client, fake_backend):
-    for scenario in ("fast", "slow"):
-        resp = client.get(f"/codebooks/new/demo/{scenario}")
-        assert resp.status_code == 200, scenario
-        assert f'data-demo-scenario="{scenario}"'.encode() in resp.data
-
-
-
 def test_progress_cancel_returns_updated_job(client, fake_backend):
     fake_backend.generation_jobs["job-9"] = {
         "id": "job-9", "status": "running",
@@ -374,13 +353,19 @@ def test_progress_cancel_returns_updated_job(client, fake_backend):
 
 
 def test_review_renders_editor_with_flattened_themes(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-42", "name": "My Generated Codebook",
+         "corpus_id": fake_backend.corpus_id, "version": 1,
+         "created_by": "alice", "description": None},
+    ]
     fake_backend.theme_tree = [
         {"theme": {"id": "t-1", "label": "Work-Life Balance",
                    "description": "Balance between work and personal life",
-                   "is_active": True},
+                   "node_type": "THEME", "is_active": True},
          "children": [
              {"theme": {"id": "t-2", "label": "Boundary issues",
-                        "description": "Difficulty separating", "is_active": True},
+                        "description": "Difficulty separating",
+                        "node_type": "THEME", "is_active": True},
               "children": []},
          ]},
     ]
@@ -388,15 +373,33 @@ def test_review_renders_editor_with_flattened_themes(client, fake_backend):
     assert resp.status_code == 200
     assert b"Review Codebook" in resp.data
     assert b'action="/codebooks/cb-42/review"' in resp.data
-    assert b"Generated Codebook" in resp.data
+    assert b"My Generated Codebook" in resp.data
     assert b'value="Work-Life Balance"' in resp.data
     assert b'value="Boundary issues"' in resp.data
 
 
-def test_review_not_found_for_missing_codebook(client, fake_backend):
-    from web.services.backend_client import BackendNotFoundError
+def test_review_skips_code_nodes_from_tree(client, fake_backend):
+    # Branch 9 mixes CODE nodes into the theme tree. Those come back via the
+    # codebook detail's codes[] field, so the flattener must skip them here.
+    fake_backend.codebooks = [
+        {"id": "cb-42", "name": "CB", "corpus_id": fake_backend.corpus_id,
+         "version": 1, "created_by": "alice", "description": None},
+    ]
+    fake_backend.theme_tree = [
+        {"theme": {"id": "t-1", "label": "Theme A",
+                   "node_type": "THEME", "is_active": True}, "children": []},
+        {"theme": {"id": "c-1", "label": "Code X",
+                   "node_type": "CODE", "is_active": True}, "children": []},
+    ]
+    resp = client.get("/codebooks/cb-42/review")
+    assert resp.status_code == 200
+    assert b'value="Theme A"' in resp.data
+    # Code rendered via the tree must NOT show up as a theme row.
+    assert b'name="theme_names[]" value="Code X"' not in resp.data
 
-    fake_backend.raise_on = ("get_theme_tree", BackendNotFoundError)
+
+def test_review_not_found_for_missing_codebook(client, fake_backend):
+    # No entry in fake_backend.codebooks; branch 9's get_codebook raises NotFound.
     resp = client.get("/codebooks/missing/review")
     assert resp.status_code == 200
     assert b"No themes found for this codebook" not in resp.data

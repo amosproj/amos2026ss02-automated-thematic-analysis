@@ -127,14 +127,6 @@ class FakeBackend:
         }
         return {"id": "cb-new", "name": name, "corpus_id": corpus_id, "themes": themes}
 
-    def get_codebook(self, codebook_id: str) -> dict:
-        self._maybe_raise("get_codebook")
-        match = next((cb for cb in self.codebooks if str(cb.get("id")) == str(codebook_id)), None)
-        return match or {
-            "id": codebook_id, "name": "Generated Codebook",
-            "corpus_id": self.corpus_id, "themes": [], "codes": [],
-        }
-
     # ---- Demographic --------------------------------------------------------
 
     def upload_demographic(self, corpus_id, file, name=None) -> dict:

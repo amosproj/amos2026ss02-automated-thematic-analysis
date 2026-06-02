@@ -536,11 +536,17 @@ def new_codebook_job_cancel(job_id: str):
 
 
 def _flatten_theme_tree(tree: list[dict]) -> list[dict]:
-    """Flatten get_theme_tree into editor rows: name, description, parent_name."""
+    """Flatten get_theme_tree into editor rows: name, description, parent_name.
+
+    Branch 9's theme tree includes CODE nodes alongside THEMEs. The review
+    editor surfaces codes separately via the codebook detail's `codes[]`
+    field, so we skip CODE-typed nodes here to avoid duplicating them."""
     rows: list[dict] = []
 
     def walk(node: dict, parent_label: str | None) -> None:
         theme = node.get("theme") or {}
+        if theme.get("node_type") == "CODE":
+            return
         label = theme.get("label", "")
         rows.append({
             "name": label,
