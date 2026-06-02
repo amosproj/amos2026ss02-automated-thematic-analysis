@@ -3,7 +3,7 @@
 // Tracked jobs live in localStorage so polling survives navigation. On every
 // page load this module reads the active set, polls each one's JSON status
 // endpoint, updates any progress bars on the page, and renders a toast in
-// the bottom-right corner when a job reaches a terminal state. Clicking a
+// the top-right corner when a job reaches a terminal state. Clicking a
 // success toast navigates to the right destination based on mode.
 //
 // Auto mode → `/codebooks/<id>/themes` (read-only browser)
@@ -75,6 +75,8 @@
     host.innerHTML = "";
     if (!jobs.length) return;
     jobs.forEach((job) => {
+      // Skip jobs already shown by the server-rendered row.
+      if (document.querySelector(`[data-job-row="${job.id}"]`)) return;
       const row = document.createElement("div");
       row.className = "alert alert-info d-flex align-items-center gap-3 mb-2 py-2";
       row.setAttribute("data-job-row", job.id);
@@ -147,6 +149,25 @@
     }
   }
 
+  // Poll server-rendered rows not in localStorage (started in another session).
+  // Reloads the list on terminal so finished rows drop off.
+  async function tickServerRows(trackedIds) {
+    const onList = /^\/codebooks\/[^/]+\/?$/.test(window.location.pathname);
+    if (!onList) return;
+    let anyTerminal = false;
+    for (const row of document.querySelectorAll("[data-job-row]")) {
+      const id = row.getAttribute("data-job-row");
+      if (trackedIds.has(id)) continue; // already handled above
+      const status = await fetchStatus(id);
+      if (!status || status.error) continue;
+      paintProgress(id, status);
+      if (["succeeded", "failed", "cancelled"].includes(status.status)) {
+        anyTerminal = true;
+      }
+    }
+    if (anyTerminal) setTimeout(() => window.location.reload(), 1200);
+  }
+
   // ---- Poll loop ----------------------------------------------------
   async function tick() {
     const jobs = loadJobs();
@@ -158,6 +179,7 @@
         onTerminal(job, status);
       }
     }
+    await tickServerRows(new Set(jobs.map((j) => j.id)));
   }
 
   // ---- Pick up new-job query params from redirect -------------------

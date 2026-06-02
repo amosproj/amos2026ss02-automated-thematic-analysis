@@ -155,6 +155,34 @@ async def create_generate_codebook_job(
 
 
 @router.get(
+    "/generate-jobs",
+    response_model=ResponseEnvelope[list[CodebookGenerationJobSchema]],
+    summary="List codebook generation jobs",
+    description=(
+        "Return generation jobs for a corpus, newest first. Pass a "
+        "comma-separated `status` filter (e.g. `queued,running`) to restrict "
+        "the result; omit it to return every job for the corpus."
+    ),
+)
+async def list_generate_codebook_jobs(
+    corpus_id: UUID,
+    session: DbSession,
+    status: str | None = None,
+) -> JSONResponse:
+    stmt = select(CodebookGenerationJob).where(
+        CodebookGenerationJob.corpus_id == corpus_id
+    )
+    if status:
+        statuses = [s.strip() for s in status.split(",") if s.strip()]
+        if statuses:
+            stmt = stmt.where(CodebookGenerationJob.status.in_(statuses))
+    stmt = stmt.order_by(desc(CodebookGenerationJob.created_at))
+    jobs = list((await session.scalars(stmt)).all())
+    payload = [_to_job_schema(job) for job in jobs]
+    return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))
+
+
+@router.get(
     "/generate-jobs/{job_id}",
     response_model=ResponseEnvelope[CodebookGenerationJobSchema],
     summary="Get codebook generation job",

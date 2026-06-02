@@ -42,6 +42,12 @@ class FakeCodebookBackend:
         self._maybe_raise("list_codebooks")
         return self.list_codebooks_result
 
+    def list_generation_jobs(
+        self, corpus_id: str, statuses: list[str] | None = None
+    ) -> list[dict]:
+        self._maybe_raise("list_generation_jobs")
+        return []
+
     def list_corpora(self, corpus_id: str | None = None) -> list[dict]:
         self._maybe_raise("list_corpora")
         return [{"id": "test-corpus-id", "name": "Default Corpus"}]

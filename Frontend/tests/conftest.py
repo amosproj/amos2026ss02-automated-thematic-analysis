@@ -182,6 +182,20 @@ class FakeBackend:
         self.generation_jobs[job_id] = job
         return job
 
+    def list_generation_jobs(
+        self, corpus_id: str, statuses: list[str] | None = None
+    ) -> list[dict]:
+        self._maybe_raise("list_generation_jobs")
+        result = []
+        for job in self.generation_jobs.values():
+            job_corpus = job.get("corpus_id")
+            if job_corpus is not None and job_corpus != corpus_id:
+                continue
+            if statuses and job.get("status") not in statuses:
+                continue
+            result.append(job)
+        return result
+
     def get_generation_job(self, job_id: str) -> dict:
         self._maybe_raise("get_generation_job")
         return self.generation_jobs[job_id]

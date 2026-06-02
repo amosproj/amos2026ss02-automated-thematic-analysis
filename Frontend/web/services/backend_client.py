@@ -162,17 +162,6 @@ class BackendClient:
     def get_theme_tree(self, codebook_id: str) -> list[dict]:
         return self._get(f"/codebooks/{codebook_id}/themes/tree")
 
-    def create_codebook(self, *, project_id: str, name: str, themes: list[dict]) -> dict:
-        """Persist a new codebook with its themes via POST /codebooks/.
-
-        `themes` is a flat list of `{name, description, parent_name|None}`
-        dicts. Hierarchy is encoded by `parent_name` referencing another
-        theme's `name` within the same payload."""
-        return self._post(
-            "/codebooks/",
-            json={"project_id": project_id, "name": name, "themes": themes},
-        )
-
     # ---- Demographic --------------------------------------------------------
 
     def upload_demographic(
@@ -286,6 +275,25 @@ class BackendClient:
         if transcript_document_ids:
             payload["transcript_document_ids"] = transcript_document_ids
         return self._post("/codebooks/generate-jobs", json=payload)
+
+    def list_generation_jobs(
+        self,
+        corpus_id: str,
+        statuses: list[str] | None = None,
+    ) -> list[dict]:
+        """Return generation jobs for a corpus, optionally filtered by status.
+
+        Used to render in-progress runs in the codebook list as a server-side
+        source of truth (visible in any browser/session), independent of the
+        client-side localStorage tracker.
+        """
+        params: dict = {"corpus_id": corpus_id}
+        if statuses:
+            params["status"] = ",".join(statuses)
+        result = self._get("/codebooks/generate-jobs", params=params)
+        if isinstance(result, list):
+            return result
+        return result.get("items", result) if isinstance(result, dict) else []
 
     def get_generation_job(self, job_id: str) -> dict:
         return self._get(f"/codebooks/generate-jobs/{job_id}")

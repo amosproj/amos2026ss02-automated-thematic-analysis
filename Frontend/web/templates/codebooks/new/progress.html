@@ -15,6 +15,7 @@
   <div class="bg-white border rounded-2 p-4" style="max-width: 640px;"
        data-job-id="{{ job_id }}"
        data-mode="{{ mode }}"
+       data-name="{{ codebook_name }}"
        data-status-url="{{ url_for('codebooks.new_codebook_job_status', job_id=job_id) }}"
        data-list-url="{{ url_for('codebooks.list_codebooks') }}"
        data-review-base="/codebooks/"
@@ -42,6 +43,7 @@
       const app = document.getElementById("progress-app");
       const jobId = app.dataset.jobId;
       const mode = app.dataset.mode;
+      const name = app.dataset.name || "Codebook";
       const statusUrl = app.dataset.statusUrl;
       const listUrl = app.dataset.listUrl;
       const reviewBase = app.dataset.reviewBase;
@@ -176,6 +178,14 @@
         } catch (e) {
           // Fall through — the next poll will reflect the state.
         }
+      });
+
+      // If the user leaves before the job finishes, hand it to job_tracker.js
+      // so background polling and the completion toast still fire.
+      // `stopped` guards the terminal case so a finished job isn't re-tracked.
+      window.addEventListener("pagehide", () => {
+        if (stopped) return;
+        window.ATAJobTracker?.track({ id: jobId, name, mode });
       });
 
       tick();

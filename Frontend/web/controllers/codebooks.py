@@ -6,7 +6,6 @@ from urllib.parse import quote_plus
 from flask import (
     Blueprint,
     Response,
-    current_app,
     flash,
     jsonify,
     redirect,
@@ -16,7 +15,6 @@ from flask import (
 )
 
 from web.services.backend_client import (
-    BackendClient,
     BackendError,
     BackendNotFoundError,
     get_backend_client as _backend,
@@ -89,14 +87,27 @@ def list_codebooks_for_corpus(corpus_id: str) -> str:
             corpus_id=corpus_id,
             corpus_options=corpus_options,
             active_corpus_name=corpus_name,
+            running_jobs=[],
             error=True,
         )
+
+    # Fetch in-progress runs so they show in any session, not just the one
+    # that started them. Failures are non-fatal; the client-side tracker covers.
+    running_jobs: list[dict] = []
+    try:
+        running_jobs = client.list_generation_jobs(
+            corpus_id=active_corpus_id, statuses=["queued", "running"]
+        )
+    except BackendError:
+        running_jobs = []
+
     return render_template(
         "codebooks/list.html",
         codebooks=codebooks,
         corpus_id=active_corpus_id,
         corpus_options=corpus_options,
         active_corpus_name=corpus_name,
+        running_jobs=running_jobs,
     )
 
 
@@ -503,23 +514,35 @@ def new_codebook_auto_submit(corpus_id: str):
             codebook_name=name,
         )
 
-    # Hand off to the codebook list with new-job query params; job_tracker.js
-    # picks them up, persists the job in localStorage, and starts polling in
-    # the background so the user can navigate freely until generation finishes.
+    encoded_job = quote_plus(str(job["id"]))
+    encoded_name = quote_plus(name)
+
+    if mode == "semi":
+        # Go straight to the progress page; it opens the review editor on
+        # success. Name (not new_job) is passed so the pagehide handler can
+        # register a background-tracker fallback if the user navigates away.
+        return redirect(
+            url_for("codebooks.new_codebook_job_progress", job_id=job["id"])
+            + f"?mode=semi&name={encoded_name}"
+        )
+
+    # auto: hand off to the codebook list; job_tracker.js picks up new_job
+    # and polls in the background while the user navigates freely.
     return redirect(
         url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id)
-        + f"?new_job={quote_plus(str(job['id']))}"
-        + f"&mode={mode}&name={quote_plus(name)}"
+        + f"?new_job={encoded_job}&mode={mode}&name={encoded_name}"
     )
 
 
 @bp.get("/new/jobs/<job_id>")
 def new_codebook_job_progress(job_id: str) -> str:
     mode = _resolve_mode(request.args.get("mode", ""))
+    name = request.args.get("name", "")
     return render_template(
         "codebooks/new/progress.html",
         job_id=job_id,
         mode=mode,
+        codebook_name=name,
     )
 
 

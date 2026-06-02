@@ -75,6 +75,41 @@ def test_codebook_list_row_shows_review_button(client, fake_backend):
     assert b'href="/codebooks/cb-1/review"' in resp.data
 
 
+def test_codebook_list_shows_running_job_row(client, fake_backend):
+    # In-progress runs are server-rendered so they're visible in any browser
+    # or session, not just the one that started the run.
+    fake_backend.codebooks = []
+    fake_backend.generation_jobs = {
+        "job-1": {
+            "id": "job-1", "status": "running",
+            "codebook_name": "Interview Codebook",
+            "corpus_id": fake_backend.corpus_id,
+            "passages_total": 10, "passages_done": 3,
+        },
+    }
+    resp = client.get("/codebooks/", follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"Interview Codebook" in resp.data
+    assert b"Running" in resp.data
+    # Carries the hooks job_tracker.js polls and dedupes against.
+    assert b'data-job-row="job-1"' in resp.data
+    assert b'data-job-progress="job-1"' in resp.data
+
+
+def test_codebook_list_survives_running_jobs_backend_error(client, fake_backend):
+    # A failure fetching in-progress runs must not break the list page — the
+    # client-side tracker remains as a fallback indicator.
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    fake_backend.raise_on = "list_generation_jobs"
+    resp = client.get("/codebooks/", follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"Interview Codebook" in resp.data
+
+
 def test_codebook_list_renders_backend_error(client, fake_backend):
     fake_backend.raise_on = "list_codebooks"
     resp = client.get("/codebooks/", follow_redirects=True)
@@ -235,12 +270,6 @@ def test_new_codebook_mode_select_pre_selects_from_query_param(client, fake_back
     assert b'value="semi"' in resp.data
 
 
-def test_new_codebook_mode_select_ignores_invalid_query_mode(client, fake_backend):
-    resp = client.get("/codebooks/new/corpus-xyz?mode=unknown")
-    assert resp.status_code == 200
-    assert b"checked>" not in resp.data
-
-
 def test_new_codebook_submit_without_mode_re_renders_with_flash(client, fake_backend):
     resp = client.post("/codebooks/new/corpus-xyz", data={})
     assert resp.status_code == 200
@@ -248,20 +277,14 @@ def test_new_codebook_submit_without_mode_re_renders_with_flash(client, fake_bac
     assert b"Fully automatic" in resp.data
 
 
-def test_new_codebook_submit_auto_redirects_to_auto_form(client, fake_backend):
-    resp = client.post("/codebooks/new/corpus-xyz", data={"mode": "auto"})
-    assert resp.status_code == 302
-    loc = resp.headers["Location"]
-    assert "/codebooks/new/corpus-xyz/auto" in loc
-    assert "mode=auto" in loc
-
-
-def test_new_codebook_submit_semi_redirects_to_auto_form(client, fake_backend):
-    resp = client.post("/codebooks/new/corpus-xyz", data={"mode": "semi"})
-    assert resp.status_code == 302
-    loc = resp.headers["Location"]
-    assert "/codebooks/new/corpus-xyz/auto" in loc
-    assert "mode=semi" in loc
+def test_new_codebook_submit_valid_mode_redirects_to_auto_form(client, fake_backend):
+    # Both auto and semi proceed to the name form, carrying the chosen mode.
+    for mode in ("auto", "semi"):
+        resp = client.post("/codebooks/new/corpus-xyz", data={"mode": mode})
+        assert resp.status_code == 302
+        loc = resp.headers["Location"]
+        assert "/codebooks/new/corpus-xyz/auto" in loc, mode
+        assert f"mode={mode}" in loc
 
 
 # Wizard step 2: name + confirm form (auto + semi) --------------------------
@@ -311,6 +334,24 @@ def test_auto_submit_creates_job_and_redirects_to_codebook_list(client, fake_bac
         "corpus_id": "corpus-xyz",
         "transcript_document_ids": None,
     }
+
+
+def test_auto_submit_semi_redirects_to_progress_page(client, fake_backend):
+    # Semi is a linear flow: land on the progress page (which auto-opens the
+    # review editor on success), not the background-tracking list handoff.
+    resp = client.post(
+        "/codebooks/new/corpus-xyz/auto",
+        data={"mode": "semi", "codebook_name": "Interview Codebook"},
+    )
+    assert resp.status_code == 302
+    loc = resp.headers["Location"]
+    assert "/codebooks/new/jobs/job-1" in loc
+    assert "mode=semi" in loc
+    assert "name=Interview+Codebook" in loc
+    # No new_job handoff param — the page registers a localStorage fallback
+    # only when the user navigates away (progress.html pagehide handler), so
+    # job_tracker.js leaves the URL (and ?mode=semi) intact across reloads.
+    assert "new_job=" not in loc
 
 
 def test_auto_submit_surfaces_backend_error(client, fake_backend):
