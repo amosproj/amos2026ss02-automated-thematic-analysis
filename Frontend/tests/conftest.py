@@ -120,12 +120,20 @@ class FakeBackend:
         self._maybe_raise("get_theme_tree")
         return self.theme_tree
 
-    def create_codebook(self, *, project_id: str, name: str, themes: list[dict]) -> dict:
+    def create_codebook(self, *, corpus_id: str, name: str, themes: list[dict]) -> dict:
         self._maybe_raise("create_codebook")
         self.last_create_codebook_request = {
-            "project_id": project_id, "name": name, "themes": themes,
+            "corpus_id": corpus_id, "name": name, "themes": themes,
         }
-        return {"id": "cb-new", "name": name, "project_id": project_id, "themes": themes}
+        return {"id": "cb-new", "name": name, "corpus_id": corpus_id, "themes": themes}
+
+    def get_codebook(self, codebook_id: str) -> dict:
+        self._maybe_raise("get_codebook")
+        match = next((cb for cb in self.codebooks if str(cb.get("id")) == str(codebook_id)), None)
+        return match or {
+            "id": codebook_id, "name": "Generated Codebook",
+            "corpus_id": self.corpus_id, "themes": [], "codes": [],
+        }
 
     # ---- Demographic --------------------------------------------------------
 

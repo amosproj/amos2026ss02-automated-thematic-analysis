@@ -555,34 +555,46 @@ def _flatten_theme_tree(tree: list[dict]) -> list[dict]:
     return rows
 
 
-def _render_review(codebook_id: str, codebook_name: str,
+def _render_review(codebook_id: str, codebook_name: str, corpus_id: str,
                    themes: list[dict], error: str | None = None) -> str:
     return render_template(
         "codebooks/new/review.html",
         codebook_id=codebook_id,
         codebook_name=codebook_name,
+        corpus_id=corpus_id,
         themes=themes,
         error=error,
     )
 
 
+# Branch 9's NodeInput requires description min_length=1; the LLM occasionally
+# produces themes with null description and the editor allows blank rows. Fill
+# with a placeholder rather than reject so the save succeeds end-to-end.
+_DESCRIPTION_PLACEHOLDER = "(no description)"
+
+
 @bp.get("/<codebook_id>/review")
 def codebook_review(codebook_id: str) -> str:
     try:
-        tree = _backend().get_theme_tree(codebook_id)
+        client = _backend()
+        tree = client.get_theme_tree(codebook_id)
+        codebook = client.get_codebook(codebook_id)
     except BackendNotFoundError:
         flash("That codebook couldn't be found. It may have been deleted.", "danger")
-        return _render_review(codebook_id, "", [], error="Codebook not found.")
+        return _render_review(codebook_id, "", "", [], error="Codebook not found.")
     except BackendError as exc:
         flash(exc.user_message, "danger")
-        return _render_review(codebook_id, "", [], error=exc.user_message)
+        return _render_review(codebook_id, "", "", [], error=exc.user_message)
 
-    return _render_review(codebook_id, "Generated Codebook", _flatten_theme_tree(tree))
+    corpus_id = str(codebook.get("corpus_id", ""))
+    name = codebook.get("name") or "Generated Codebook"
+    return _render_review(codebook_id, name, corpus_id, _flatten_theme_tree(tree))
 
 
 @bp.post("/<codebook_id>/review")
 def codebook_review_submit(codebook_id: str):
     codebook_name = (request.form.get("codebook_name") or "").strip()
+    corpus_id = (request.form.get("corpus_id") or "").strip()
     names = request.form.getlist("theme_names[]")
     descriptions = request.form.getlist("theme_descriptions[]")
     parents = request.form.getlist("parent_names[]")
@@ -594,7 +606,7 @@ def codebook_review_submit(codebook_id: str):
             continue
         themes.append({
             "name": cleaned_name,
-            "description": desc.strip(),
+            "description": desc.strip() or _DESCRIPTION_PLACEHOLDER,
             "parent_name": parent.strip() or None,
         })
 
@@ -602,6 +614,8 @@ def codebook_review_submit(codebook_id: str):
     error: str | None = None
     if not codebook_name:
         error = "Codebook name must not be blank."
+    elif not corpus_id:
+        error = "Missing corpus context — refresh the page and try again."
     elif not themes:
         error = "A codebook must contain at least one theme."
     else:
@@ -611,17 +625,16 @@ def codebook_review_submit(codebook_id: str):
                 break
 
     if error:
-        return _render_review(codebook_id, codebook_name, themes, error=error)
+        return _render_review(codebook_id, codebook_name, corpus_id, themes, error=error)
 
     try:
-        client = _backend()
-        client.create_codebook(
-            project_id=current_app.config["DEFAULT_PROJECT_ID"],
+        _backend().create_codebook(
+            corpus_id=corpus_id,
             name=codebook_name,
             themes=themes,
         )
     except BackendError as exc:
-        return _render_review(codebook_id, codebook_name, themes, error=exc.user_message)
+        return _render_review(codebook_id, codebook_name, corpus_id, themes, error=exc.user_message)
 
     flash(f"Saved '{codebook_name}' as a new codebook version.", "success")
     return redirect(url_for("codebooks.list_codebooks"))

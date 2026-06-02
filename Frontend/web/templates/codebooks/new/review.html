@@ -16,6 +16,7 @@
   <form method="post"
         action="{{ url_for('codebooks.codebook_review_submit', codebook_id=codebook_id) }}"
         id="review-form">
+    <input type="hidden" name="corpus_id" value="{{ corpus_id }}">
     <div class="bg-white border rounded-2 p-4 mb-3" style="max-width: 900px;">
       <div class="mb-3">
         <label for="codebook_name" class="form-label fw-semibold">Codebook name</label>

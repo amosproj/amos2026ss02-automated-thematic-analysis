@@ -409,6 +409,7 @@ def test_review_not_found_for_missing_codebook(client, fake_backend):
 def test_review_submit_persists_edited_codebook_and_redirects(client, fake_backend):
     resp = client.post("/codebooks/cb-42/review", data={
         "codebook_name": "Edited Codebook",
+        "corpus_id": fake_backend.corpus_id,
         "theme_names[]": ["Root Theme", "Child"],
         "theme_descriptions[]": ["root desc", "child desc"],
         "parent_names[]": ["", "Root Theme"],
@@ -418,6 +419,7 @@ def test_review_submit_persists_edited_codebook_and_redirects(client, fake_backe
     sent = fake_backend.last_create_codebook_request
     assert sent is not None
     assert sent["name"] == "Edited Codebook"
+    assert sent["corpus_id"] == fake_backend.corpus_id
     assert sent["themes"][1]["parent_name"] == "Root Theme"
     # Root theme's empty parent_name normalises to None for the backend payload.
     assert sent["themes"][0]["parent_name"] is None
@@ -426,6 +428,7 @@ def test_review_submit_persists_edited_codebook_and_redirects(client, fake_backe
 def test_review_submit_skips_blank_rows(client, fake_backend):
     resp = client.post("/codebooks/cb-42/review", data={
         "codebook_name": "X",
+        "corpus_id": fake_backend.corpus_id,
         "theme_names[]": ["A", "  "],
         "theme_descriptions[]": ["d1", "d2"],
         "parent_names[]": ["", ""],
@@ -438,6 +441,7 @@ def test_review_submit_skips_blank_rows(client, fake_backend):
 def test_review_submit_rejects_blank_codebook_name(client, fake_backend):
     resp = client.post("/codebooks/cb-42/review", data={
         "codebook_name": "  ",
+        "corpus_id": fake_backend.corpus_id,
         "theme_names[]": ["A"],
         "theme_descriptions[]": ["d"],
         "parent_names[]": [""],
@@ -449,6 +453,7 @@ def test_review_submit_rejects_blank_codebook_name(client, fake_backend):
 def test_review_submit_rejects_dangling_parent_reference(client, fake_backend):
     resp = client.post("/codebooks/cb-42/review", data={
         "codebook_name": "X",
+        "corpus_id": fake_backend.corpus_id,
         "theme_names[]": ["Child"],
         "theme_descriptions[]": ["d"],
         "parent_names[]": ["Nonexistent"],
@@ -461,6 +466,7 @@ def test_review_submit_surfaces_backend_error(client, fake_backend):
     fake_backend.raise_on = "create_codebook"
     resp = client.post("/codebooks/cb-42/review", data={
         "codebook_name": "X",
+        "corpus_id": fake_backend.corpus_id,
         "theme_names[]": ["A"],
         "theme_descriptions[]": ["d"],
         "parent_names[]": [""],
