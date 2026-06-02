@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.exceptions import NotFoundError, UnprocessableError
 from app.models.code import Code, CodebookCodeRelationship, ThemeCodeRelationship
 from app.models.codebook import Codebook
+from app.models.ingestion import Corpus
 from app.models.themes import CodebookThemeRelationship, Theme, ThemeHierarchyRelationship
 from app.schemas.codebook import (
     MAX_THEMES,
@@ -54,6 +55,13 @@ class CodebookService:
             )
 
         try:
+            # Verify corpus exists
+            corpus_exists = await self._session.execute(
+                select(Corpus.id).where(Corpus.id == payload.corpus_id)
+            )
+            if not corpus_exists.scalar_one_or_none():
+                raise UnprocessableError(f"Corpus '{payload.corpus_id}' not found.")
+
             # Auto-versioning: find the current max version for this project.
             version_q = select(func.max(Codebook.version)).where(
                 Codebook.corpus_id == payload.corpus_id
@@ -81,8 +89,12 @@ class CodebookService:
             edges: list[ThemeHierarchyRelationship] = []
             tc_edges: list[ThemeCodeRelationship] = []
             theme_by_name: dict[str, Theme] = {}
+            seen_names: set[str] = set()
 
             for node_input in payload.nodes:
+                if node_input.name in seen_names:
+                    raise UnprocessableError(f"Duplicate node name found: '{node_input.name}'")
+                seen_names.add(node_input.name)
                 if node_input.node_type == NodeType.CODE:
                     code = Code(
                         codebook_id=codebook.id,

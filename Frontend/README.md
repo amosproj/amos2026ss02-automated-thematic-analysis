@@ -131,7 +131,7 @@ All config is read from environment variables (or a `.env` file). Key settings:
 | `APP_ENV` | `development` | Set to `production` to enable production mode |
 | `LOG_LEVEL` | `INFO` | Logger level for both Flask and `backend_client` (`DEBUG`/`INFO`/`WARNING`/`ERROR`) |
 | `MAX_UPLOAD_SIZE_MB` | `10` | Per-file upload size cap |
-| `DEFAULT_PROJECT_ID` | `00000000-0000-0000-0000-000000000001` | Single-workspace MVP project ID |
+| `DEFAULT_CORPUS_ID` | `00000000-0000-0000-0000-000000000001` | Single-workspace MVP corpus ID |
 
 `MAX_CONTENT_LENGTH` (the raw-request-body cap that triggers a 413) is derived as `MAX_UPLOAD_SIZE_MB × 10 × 1024 × 1024` — about 100 MB by default — so Werkzeug rejects oversized payloads before fully buffering them.
 

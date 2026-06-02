@@ -9,6 +9,8 @@ import uuid
 import pytest
 
 from app.exceptions import NotFoundError
+from app.models.ingestion import Corpus
+from sqlalchemy import select
 from app.schemas.codebook import CodebookCreateRequest, NodeInput
 from app.services.codebook import CodebookService
 
@@ -18,6 +20,13 @@ CORPUS_ID = "00000000-0000-0000-0000-000000000001"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+async def _ensure_corpus(session, corpus_id: str = CORPUS_ID):
+    uid = uuid.UUID(corpus_id)
+    if not (await session.execute(select(Corpus.id).where(Corpus.id == uid))).scalar_one_or_none():
+        session.add(Corpus(id=uid, project_id=uuid.uuid4(), name="Test Corpus"))
+        await session.commit()
 
 
 def _theme(n: int) -> NodeInput:
@@ -38,6 +47,7 @@ def _payload(n_themes: int = 3, corpus_id: str = CORPUS_ID) -> CodebookCreateReq
 
 
 async def test_create_codebook_with_one_theme(db_session):
+    await _ensure_corpus(db_session)
     svc = CodebookService(db_session)
     codebook, themes, edges, _, _ = await svc.create_codebook(_payload(1))
 
@@ -51,12 +61,14 @@ async def test_create_codebook_with_one_theme(db_session):
 
 
 async def test_create_codebook_with_fifty_themes(db_session):
+    await _ensure_corpus(db_session)
     svc = CodebookService(db_session)
     codebook, themes, edges, _, _ = await svc.create_codebook(_payload(50))
     assert len(themes) == 50
 
 
 async def test_create_codebook_auto_increments_version(db_session):
+    await _ensure_corpus(db_session)
     svc = CodebookService(db_session)
 
     cb1, _, _, _, _ = await svc.create_codebook(_payload())
@@ -67,10 +79,12 @@ async def test_create_codebook_auto_increments_version(db_session):
 
 
 async def test_create_codebook_versions_are_scoped_per_corpus(db_session):
+    await _ensure_corpus(db_session, "00000000-0000-0000-0000-000000000002")
+    await _ensure_corpus(db_session, "00000000-0000-0000-0000-000000000003")
     svc = CodebookService(db_session)
 
-    cb_p1, _, _, _, _ = await svc.create_codebook(_payload(corpus_id=uuid.UUID("00000000-0000-0000-0000-000000000002")))
-    cb_p2, _, _, _, _ = await svc.create_codebook(_payload(corpus_id=uuid.UUID("00000000-0000-0000-0000-000000000003")))
+    cb_p1, _, _, _, _ = await svc.create_codebook(_payload(corpus_id="00000000-0000-0000-0000-000000000002"))
+    cb_p2, _, _, _, _ = await svc.create_codebook(_payload(corpus_id="00000000-0000-0000-0000-000000000003"))
 
     # Both are first codebooks for their respective projects → both version 1.
     assert cb_p1.version == 1
@@ -78,6 +92,7 @@ async def test_create_codebook_versions_are_scoped_per_corpus(db_session):
 
 
 async def test_create_codebook_persists_all_themes(db_session):
+    await _ensure_corpus(db_session)
     svc = CodebookService(db_session)
     _, themes, _, _, _ = await svc.create_codebook(_payload(5))
 
@@ -91,6 +106,7 @@ async def test_create_codebook_persists_all_themes(db_session):
 
 
 async def test_get_codebook_detail_returns_correct_themes(db_session):
+    await _ensure_corpus(db_session)
     svc = CodebookService(db_session)
     created_cb, created_themes, _, _, _ = await svc.create_codebook(_payload(3))
 
@@ -115,6 +131,7 @@ async def test_get_codebook_detail_not_found_raises(db_session):
 
 
 async def test_build_detail_schema_shapes_output(db_session):
+    await _ensure_corpus(db_session)
     svc = CodebookService(db_session)
     codebook, themes, edges, _, _ = await svc.create_codebook(_payload(2))
     schema = CodebookService.build_detail_schema(codebook, themes, edges)
