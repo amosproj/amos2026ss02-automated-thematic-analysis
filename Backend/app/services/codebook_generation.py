@@ -219,6 +219,8 @@ class CodebookGenerationService:
         if not chunk_rows:
             return []
 
+        # Preserve the caller's document order while sorting chunks inside each
+        # transcript by their original chunk index.
         chunks_by_document: dict[UUID, list[tuple[int, str]]] = {document_id: [] for document_id in transcript_document_ids}
         for document_id, text, chunk_index in chunk_rows:
             chunks_by_document[document_id].append((chunk_index, text))
@@ -249,6 +251,7 @@ class CodebookGenerationService:
                 if should_cancel is not None and await should_cancel():
                     raise CodebookGenerationCancelledError("Codebook generation was cancelled")
                 try:
+                    # LLM calls are synchronous, so run them off the event loop.
                     generation = await asyncio.to_thread(generate_codebook_for_passage, passage)
                     results.append(generation)
                     parse_error = None
@@ -267,6 +270,8 @@ class CodebookGenerationService:
                     raise UnprocessableError(f"Codebook generation failed: {exc}") from exc
 
             if parse_error is not None:
+                # Keep processing other passages; the response records partial
+                # failures so the caller can inspect skipped input.
                 failures.append(
                     GeneratedCodebookResponse.PassageFailure(
                         passage_index=index,
@@ -319,6 +324,8 @@ class CodebookGenerationService:
             for code in codes
             if code.parent_theme_key is not None
         }
+        # Consolidation can rename or merge codes; this keeps merged codes
+        # attached to a reasonable theme even when the LLM omits the path.
         fallback_parent_theme_key = next(
             (code.parent_theme_key for code in codes if code.parent_theme_key is not None),
             None,
@@ -351,6 +358,8 @@ class CodebookGenerationService:
             seen_labels.add(code_key)
             description = code.description.strip() if code.description else None
             returned_theme_key = self._theme_key_from_path(code.theme_path)
+            # Prefer the LLM-returned path, then the original code's path, then
+            # any known path so consolidated codes stay reachable.
             consolidated_codes.append(
                 _CodeDraft(
                     label=normalized_label,
@@ -430,8 +439,9 @@ class CodebookGenerationService:
         for code in codes:
             parent_key = code.parent_theme_key
             if parent_key in theme_nodes:
-                resolved_key = parent_key
+                resolved_key: tuple[str, ...] | None = parent_key
             elif parent_key and parent_key[-1] in leaf_key_by_label:
+                # Theme consolidation may move a leaf under a different parent.
                 resolved_key = leaf_key_by_label[parent_key[-1]]
                 logger.warning(
                     "Remapped generated code to final theme by leaf label: code_label={code_label!r}, "
@@ -441,6 +451,8 @@ class CodebookGenerationService:
                     resolved_parent_key=resolved_key,
                 )
             else:
+                # Last resort: use token overlap between the code and final
+                # theme labels to avoid dropping useful code-theme links.
                 resolved_key = cls._best_matching_theme_key(
                     code=code,
                     theme_nodes=theme_nodes,
@@ -512,6 +524,7 @@ class CodebookGenerationService:
         parent_keys = {key[:-1] for key in theme_nodes if len(key) > 1}
         leaf_keys = [key for key in theme_nodes if key not in parent_keys]
         root_keys = [key for key in theme_nodes if len(key) == 1]
+        # Prefer leaves because codes usually point to the most specific theme.
         return sorted(
             [*leaf_keys, *[key for key in root_keys if key not in leaf_keys]],
             key=lambda key: (len(key), key),
@@ -557,6 +570,8 @@ class CodebookGenerationService:
         if len(theme_paths) <= 1:
             return theme_nodes, hierarchy_edges
 
+        # Compress noisy passage-level themes while keeping enough structure for
+        # a useful codebook.
         target_total_themes = min(40, max(20, int(round(len(theme_nodes) * 0.35))))
         first_pass_constraints = self._build_theme_consolidation_constraints(
             max_root_themes=10,
@@ -700,6 +715,7 @@ class CodebookGenerationService:
             next_stack = [*stack, current]
             children = children_by_parent.get(current, [])
             if not children:
+                # The consolidation prompt expects full root-to-leaf paths.
                 paths.append(
                     GeneratedThemePath(
                         path=[
@@ -749,6 +765,8 @@ class CodebookGenerationService:
                 if index > 1:
                     raw_edges.append((tuple(part.lower() for part in normalized_labels[: index - 1]), key))
 
+        # Merge identical labels across different paths; the resulting graph
+        # must have one canonical node per label to avoid duplicate themes.
         canonical_key_by_label: dict[str, tuple[str, ...]] = {}
         for key in sorted(theme_nodes_by_key.keys(), key=lambda item: (len(item), item)):
             label_key = theme_nodes_by_key[key].label.lower()
@@ -781,6 +799,7 @@ class CodebookGenerationService:
                 continue
             existing_parent = child_parent.get(canonical_child)
             if existing_parent is not None and existing_parent != canonical_parent:
+                # Keep a tree shape after label merging by allowing one parent.
                 continue
             edge = (canonical_parent, canonical_child)
             if edge in seen_edges:
@@ -835,6 +854,8 @@ class CodebookGenerationService:
                 for index, label in enumerate(normalized_theme_path, start=1):
                     theme_key = tuple(part.lower() for part in normalized_theme_path[:index])
                     if theme_key not in theme_nodes_by_key:
+                        # Codes can reference a theme path that was missing from
+                        # the theme list; create that path so the link survives.
                         theme_nodes_by_key[theme_key] = _ThemeNodeDraft(
                             key=theme_key,
                             label=label,
@@ -858,6 +879,8 @@ class CodebookGenerationService:
             codes_by_key.values(),
             key=lambda code: code.label.lower(),
         )
+        # Canonicalize duplicate theme labels before persistence so hierarchy
+        # edges and code links point to stable theme keys.
         canonical_key_by_label: dict[str, tuple[str, ...]] = {}
         for key in sorted(theme_nodes_by_key.keys(), key=lambda item: (len(item), item)):
             label_key = theme_nodes_by_key[key].label.lower()
@@ -890,6 +913,8 @@ class CodebookGenerationService:
                 continue
             existing_parent = child_parent.get(canonical_child)
             if existing_parent is not None and existing_parent != canonical_parent:
+                # Keep the earliest deterministic parent when merged labels
+                # create competing parent candidates.
                 continue
             edge = (canonical_parent, canonical_child)
             if edge in seen_edges:
@@ -929,6 +954,8 @@ class CodebookGenerationService:
                 label_key = node.label.lower()
                 existing_theme_id = theme_id_by_label.get(label_key)
                 if existing_theme_id is not None:
+                    # Multiple canonical keys can still share a label after LLM
+                    # consolidation; persist only one Theme row per label.
                     theme_id_by_key[node.key] = existing_theme_id
                     continue
 
@@ -1013,6 +1040,8 @@ class CodebookGenerationService:
                         )
                 codes_created += 1
 
+            # Validate before commit so an invalid generated hierarchy rolls
+            # back atomically with its codebook, themes, and codes.
             validation = await ThemeGraphService(self._session).validate_theme_dag(codebook_id=codebook.id)
             if not validation.is_valid:
                 violations = "; ".join(validation.violations)
