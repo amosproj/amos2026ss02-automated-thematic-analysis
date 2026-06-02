@@ -5,6 +5,7 @@ from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 
 from app.llm.client import build_chat_model
 from app.llm.prompts import (
+    _build_research_query_block,
     build_code_consolidation_prompt,
     build_codebook_application_prompt,
     build_codebook_generation_prompt,
@@ -60,6 +61,7 @@ def apply_codebook_to_interview(
 def generate_codebook_for_passage(
     passage: str,
     *,
+    research_query: str | None = None,
     model: BaseChatModel | None = None,
 ) -> PassageCodebookGeneration:
     if not passage.strip():
@@ -68,7 +70,10 @@ def generate_codebook_for_passage(
     chat_model = model or build_chat_model()
     parser = JsonOutputParser(pydantic_object=PassageCodebookGeneration)
     chain = build_codebook_generation_prompt() | chat_model | parser
-    raw_result = chain.invoke({"passage": passage})
+    raw_result = chain.invoke({
+        "passage": passage,
+        "research_query_block": _build_research_query_block(research_query or ""),
+    })
     return PassageCodebookGeneration(**raw_result)
 
 

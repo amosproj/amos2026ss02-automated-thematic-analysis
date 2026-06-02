@@ -6,6 +6,10 @@ from uuid import UUID
 from pydantic import Field, ValidationInfo, field_validator
 
 from app.schemas.common import BaseSchema
+from app.utils.sanitize import sanitize_research_query
+
+_QUERY_MIN = 10
+_QUERY_MAX = 500
 
 
 class NodeType(enum.StrEnum):
@@ -91,12 +95,18 @@ class CodebookSchema(BaseSchema):
     description: str | None = None
     version: int
     created_by: str
+    research_query: str | None = None
 
 
 class CodebookGenerateRequest(BaseSchema):
     codebook_name: str = Field(min_length=1, max_length=255)
     corpus_id: UUID
     transcript_document_ids: list[UUID] | None = None
+    research_query: str = Field(
+        min_length=_QUERY_MIN,
+        max_length=_QUERY_MAX,
+        description="Free-text research question guiding thematic analysis (10–500 characters).",
+    )
 
     @field_validator("codebook_name")
     @classmethod
@@ -114,6 +124,21 @@ class CodebookGenerateRequest(BaseSchema):
         if not values:
             return None
         return values
+
+    @field_validator("research_query")
+    @classmethod
+    def sanitize_and_validate_query(cls, value: str) -> str:
+        cleaned = sanitize_research_query(value)
+        if len(cleaned) < _QUERY_MIN:
+            raise ValueError(
+                f"research_query must be at least {_QUERY_MIN} characters after sanitisation "
+                f"(got {len(cleaned)})."
+            )
+        if len(cleaned) > _QUERY_MAX:
+            raise ValueError(
+                f"research_query must be at most {_QUERY_MAX} characters (got {len(cleaned)})."
+            )
+        return cleaned
 
 
 class GeneratedCodebookResponse(BaseSchema):
@@ -146,6 +171,7 @@ class CodebookGenerationJobSchema(BaseSchema):
     corpus_id: UUID
     transcript_document_ids: list[UUID]
     cancel_requested: bool
+    research_query: str | None = None
 
     codebook_id: UUID | None = None
     passages_total: int

@@ -274,6 +274,7 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
                         codebook_name="Generated Codebook",
                         corpus_id=uuid4(),
                         transcript_document_ids=[uuid4()],
+                        research_query="How do participants describe barriers to technology adoption at work?",
                     ),
                     session=session,
                 )

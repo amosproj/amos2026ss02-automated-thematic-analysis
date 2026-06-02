@@ -43,6 +43,15 @@
     </div>
   </div>
 
+  {% if research_query %}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+      <p class="text-secondary small text-uppercase fw-semibold mb-1" style="letter-spacing:.07em">Research Question</p>
+      <blockquote class="mb-0 fst-italic">{{ research_query }}</blockquote>
+    </div>
+  </div>
+  {% endif %}
+
   {% if error %}
     <p class="text-secondary">Couldn't load themes for this codebook right now.</p>
   {% elif frequencies or tree or codes %}

@@ -17,6 +17,7 @@ from flask import (
 from web.services.backend_client import (
     BackendError,
     BackendNotFoundError,
+    BackendValidationError,
     get_backend_client as _backend,
 )
 from web.services.corpus_context import resolve_active_corpus, set_active_corpus_id
@@ -24,6 +25,9 @@ from web.services.corpus_context import resolve_active_corpus, set_active_corpus
 bp = Blueprint("codebooks", __name__)
 
 CODING_MODES = ("auto", "semi", "manual")
+
+_QUERY_MIN = 10
+_QUERY_MAX = 500
 
 
 @bp.get("/")
@@ -63,6 +67,41 @@ def codebooks_upload_landing() -> str:
         return redirect(url_for("codebooks.list_codebooks"))
 
     return redirect(url_for("codebooks.upload_form", corpus_id=active_corpus_id))
+
+
+@bp.post("/<corpus_id>/generate")
+def start_codebook_generation(corpus_id: str):
+    codebook_name = request.form.get("codebook_name", "").strip()
+    research_query = request.form.get("research_query", "").strip()
+
+    if not codebook_name:
+        flash("Codebook name is required.", "danger")
+        return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
+
+    if len(research_query) < _QUERY_MIN:
+        flash(f"Research query must be at least {_QUERY_MIN} characters.", "danger")
+        return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
+
+    if len(research_query) > _QUERY_MAX:
+        flash(f"Research query must be at most {_QUERY_MAX} characters.", "danger")
+        return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
+
+    try:
+        _backend().create_codebook_generation_job(
+            codebook_name=codebook_name,
+            corpus_id=corpus_id,
+            research_query=research_query,
+        )
+        flash(
+            "Codebook generation started. Refresh the page in a moment to see the new codebook.",
+            "success",
+        )
+    except BackendValidationError as exc:
+        flash(exc.user_message, "danger")
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+
+    return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
 
 
 @bp.get("/<corpus_id>/")
@@ -178,6 +217,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             name = active_codebook.get("name", "")
         if not version and active_codebook.get("version") is not None:
             version = str(active_codebook["version"])
+        research_query = active_codebook.get("research_query") or ""
 
         frequencies = client.get_theme_frequencies(active_codebook_id)
         tree = client.get_theme_tree(active_codebook_id)
@@ -196,6 +236,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             frequencies=[],
             tree=[],
             codes=[],
+            research_query="",
             error=True,
         )
     except BackendError as exc:
@@ -211,6 +252,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             frequencies=[],
             tree=[],
             codes=[],
+            research_query="",
             error=True,
         )
     return render_template(
@@ -224,6 +266,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         frequencies=frequencies,
         tree=tree,
         codes=codes,
+        research_query=research_query,
     )
 
 @bp.get("/<corpus_id>/<codebook_id>/export")
