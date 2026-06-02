@@ -6,7 +6,6 @@ from app.models.codebook_generation_job import CodebookGenerationJob
 from app.models.demographic import DemographicFiles, DemographicRow
 from app.models.ingestion import (
     Corpus,
-    CorpusChunk,
     CorpusDocument,
 )
 from app.models.themes import (
@@ -27,7 +26,6 @@ __all__ = [
     "Theme",
     "ThemeHierarchyRelationship",
     "Corpus",
-    "CorpusChunk",
     "CorpusDocument",
     "DocumentAnalysis",
     "ThemeOccurrence",
