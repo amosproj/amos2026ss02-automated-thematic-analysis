@@ -24,8 +24,6 @@ class Settings(BaseSettings):
     CORS_ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"] # Default allowed origin for development
     API_V1_PREFIX: str = "/api/v1"  # Default API prefix
 
-    INGESTION_CHUNK_SIZE_WORDS: int = 2048
-    INGESTION_CHUNK_OVERLAP_WORDS: int = 200
     MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024 # 10 MB limit for uploaded interview files
     UPLOADS_DIR: str = "uploads"
     DEMOGRAPHIC_UPLOAD_TTL_SECONDS: int = 60 * 60
