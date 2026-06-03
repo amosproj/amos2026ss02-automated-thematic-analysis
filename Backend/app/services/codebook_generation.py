@@ -216,7 +216,7 @@ class CodebookGenerationService:
             return []
 
         docs_by_id = {doc.id: doc for doc in docs}
-        
+
         passages: list[str] = []
         for document_id in transcript_document_ids:
             doc = docs_by_id.get(document_id)

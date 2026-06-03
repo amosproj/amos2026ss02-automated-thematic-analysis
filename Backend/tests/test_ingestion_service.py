@@ -31,7 +31,7 @@ async def test_get_corpus_not_found_raises(db_session):
 
 async def test_list_corpora_empty(db_session):
     svc = IngestionService(db_session)
-    corpora, total = await svc.list_corpora(project_id=P1)
+    corpora, total = await svc.list_corpora(corpus_id=P1)
     assert corpora == []
     assert total == 0
 
@@ -90,12 +90,6 @@ async def test_ingest_title_falls_back_to_filename(db_session):
     )
 
     assert result.documents[0].title == "interview.txt"
-
-
-# ---------------------------------------------------------------------------
-# list_documents / get_document
-# ---------------------------------------------------------------------------
-
 
 async def test_list_documents_paginated(db_session):
     svc = IngestionService(db_session)
