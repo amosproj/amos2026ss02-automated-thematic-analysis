@@ -186,7 +186,7 @@ async def test_get_document_content(client):
 
 
 async def test_get_document_content_not_found(client):
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     resp = await client.get(f"{API}/corpora/{corpus_id}/documents/{MISSING_STR}")

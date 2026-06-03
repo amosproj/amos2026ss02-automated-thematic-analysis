@@ -49,7 +49,7 @@ class DemographicService:
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
         self._session = session
         self._settings = settings
-        self._ingestion_service = IngestionService(session, settings)
+        self._ingestion_service = IngestionService(session)
 
     @staticmethod
     def _coerce_uuid(value: uuid.UUID, field_name: str) -> uuid.UUID:
