@@ -19,6 +19,7 @@ from app.services.codebook_generation import (
 
 
 def _utc_now_naive() -> datetime:
+    # Models store naive UTC timestamps, matching the existing DB schema.
     return datetime.now(UTC).replace(tzinfo=None)
 
 
@@ -71,6 +72,8 @@ class CodebookGenerationJobRunner:
 
     async def stop(self) -> None:
         tasks = list(self._tasks.values())
+        # Shutdown cancels in-flight background work instead of leaving orphaned
+        # tasks attached to the application event loop.
         for task in tasks:
             task.cancel()
         for task in tasks:
@@ -91,6 +94,7 @@ class CodebookGenerationJobRunner:
         if job_id in self._tasks and not self._tasks[job_id].done():
             return
         selected_factory = session_factory or get_session_factory()
+        # The API returns immediately; generation continues in this tracked task.
         task = asyncio.create_task(
             self._run_one(job_id, selected_factory),
             name=f"codebook-generation-job-{job_id}",
@@ -123,6 +127,7 @@ class CodebookGenerationJobRunner:
             if job.status != "queued":
                 return
             if job.cancel_requested:
+                # A queued job can be cancelled before the worker starts it.
                 job.status = "cancelled"
                 self.set_phase(job_id, "cancelled")
                 job.finished_at = _utc_now_naive()
@@ -154,6 +159,8 @@ class CodebookGenerationJobRunner:
                 )
                 if not should_write:
                     return
+                # Use a short-lived session so progress writes are visible even
+                # while the generation session is busy with LLM work.
                 async with session_factory() as progress_session:
                     progress_job = await progress_session.get(CodebookGenerationJob, job_id)
                     if progress_job is None:
@@ -165,6 +172,7 @@ class CodebookGenerationJobRunner:
                     last_progress_write_at = now
 
             async def _should_cancel() -> bool:
+                # Poll cancellation from a fresh session to avoid stale ORM state.
                 async with session_factory() as cancel_session:
                     cancel_job = await cancel_session.get(CodebookGenerationJob, job_id)
                     return bool(cancel_job and cancel_job.cancel_requested)
@@ -192,6 +200,8 @@ class CodebookGenerationJobRunner:
                 job.passages_done = generated.passages_processed
                 job.passages_total = max(job.passages_total, generated.passages_processed)
                 if generated.failed_passages:
+                    # Successful jobs can still report passages skipped after
+                    # repeated parser or validation failures.
                     job.error_message = json.dumps(
                         {
                             "type": "passage_generation_partial_failures",

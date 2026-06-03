@@ -4,13 +4,22 @@
 {% block content %}
 <div id="theme-app"
      data-frequencies='{{ frequencies | tojson }}'
-     data-tree='{{ tree | tojson }}'>
+     data-tree='{{ tree | tojson }}'
+     data-codes='{{ codes | tojson }}'>
+
+  {% if corpus_id and corpus_options %}
+    {% set active_corpus_id = corpus_id %}
+    {% set switch_template_url = url_for('codebooks.list_codebooks_for_corpus', corpus_id='__CORPUS_ID__') %}
+    {% set helper_text = 'Showing themes for this corpus.' %}
+    {% set show_create_form = False %}
+    {% include "_corpus_select.html" %}
+  {% endif %}
 
   {# Breadcrumb #}
   <nav aria-label="breadcrumb" class="mb-3">
     <ol class="breadcrumb mb-0">
       <li class="breadcrumb-item">
-        <a href="{{ url_for('codebooks.list_codebooks') }}">Codebooks</a>
+        <a href="{{ url_for('codebooks.list_codebooks_for_corpus', corpus_id=corpus_id) }}">Codebooks</a>
       </li>
       <li class="breadcrumb-item active">{{ name or 'Theme Browser' }}</li>
     </ol>
@@ -23,34 +32,45 @@
         <p class="text-white-50 small mb-1 text-uppercase fw-semibold" style="letter-spacing:.07em">Theme Browser</p>
         <h1 class="h3 text-white mb-0">{{ name or 'Codebook Themes' }}</h1>
       </div>
-      {% if version %}
-        <span class="theme-version-badge align-self-start">v{{ version }}</span>
-      {% endif %}
+      <div class="d-flex align-items-center gap-2">
+        {% if version %}
+          <span class="theme-version-badge">v{{ version }}</span>
+        {% endif %}
+        <a href="{{ url_for('codebooks.export_codebook', corpus_id=corpus_id, codebook_id=codebook_id) }}" class="btn btn-sm btn-outline-light ms-2">
+          Export CSV
+        </a>
+      </div>
     </div>
   </div>
 
   {% if error %}
     <p class="text-secondary">Couldn't load themes for this codebook right now.</p>
-  {% elif frequencies or tree %}
+  {% elif frequencies or tree or codes %}
 
     {# Metric cards #}
     <div class="row g-3 mb-4">
-      <div class="col-12 col-md-4">
+      <div class="col-12 col-md-3">
         <div class="metric-card metric-card--indigo h-100">
           <p class="metric-label">Total Themes</p>
           <p id="total-themes-value" class="metric-value">—</p>
         </div>
       </div>
-      <div class="col-12 col-md-4">
+      <div class="col-12 col-md-3">
         <div class="metric-card metric-card--cyan h-100">
           <p class="metric-label">Root Themes</p>
           <p id="root-themes-value" class="metric-value">—</p>
         </div>
       </div>
-      <div class="col-12 col-md-4">
+      <div class="col-12 col-md-3">
         <div class="metric-card metric-card--teal h-100">
           <p class="metric-label">Sub-themes</p>
           <p id="sub-themes-value" class="metric-value">—</p>
+        </div>
+      </div>
+      <div class="col-12 col-md-3">
+        <div class="metric-card metric-card--purple h-100" style="border-left-color: var(--bs-purple); background: linear-gradient(145deg, rgba(111,66,193,0.03) 0%, rgba(111,66,193,0) 100%);">
+          <p class="metric-label" style="color: var(--bs-purple);">Codes</p>
+          <p id="codes-value" class="metric-value" style="color: var(--bs-purple);">—</p>
         </div>
       </div>
     </div>
@@ -123,5 +143,6 @@
 {% endblock %}
 
 {% block scripts %}
+
 <script src="{{ url_for('static', filename='js/codebook_themes.js') }}"></script>
 {% endblock %}

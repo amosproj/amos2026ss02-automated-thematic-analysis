@@ -1,6 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Transcripts{% endblock %}
 {% block content %}
+  {% if corpus_id and corpus_options %}
+    {% set active_corpus_id = corpus_id %}
+    {% set switch_template_url = url_for('ingestion.list_transcripts', corpus_id='__CORPUS_ID__') %}
+    {% set helper_text = 'Showing transcripts for this corpus.' %}
+    {% set show_create_form = False %}
+    {% include "_corpus_select.html" %}
+  {% endif %}
+
   <h1 class="h3 mb-4">Uploaded Transcripts</h1>
 
   {% if error %}
@@ -36,4 +44,7 @@
   {% else %}
     <p class="text-secondary">No transcripts to show.</p>
   {% endif %}
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
 {% endblock %}

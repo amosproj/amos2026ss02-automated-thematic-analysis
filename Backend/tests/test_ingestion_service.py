@@ -17,9 +17,9 @@ P2 = uuid.UUID("00000000-0000-0000-0000-000000000002")
 
 async def test_create_corpus(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="Test Corpus"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="Test Corpus"))
     assert corpus.id
-    assert corpus.project_id == P1
+    assert corpus.id == P1
     assert corpus.name == "Test Corpus"
 
 
@@ -29,21 +29,15 @@ async def test_get_corpus_not_found_raises(db_session, test_settings):
         await svc.get_corpus(uuid.uuid4())
 
 
-async def test_list_corpora_empty(db_session, test_settings):
+async def test_list_corpora(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpora, total = await svc.list_corpora(project_id=P1)
-    assert corpora == []
-    assert total == 0
+    await svc.create_corpus(CorpusCreate(corpus_id=P1, name="A"))
+    await svc.create_corpus(CorpusCreate(corpus_id=P2, name="B"))
+
+    result, total = await svc.list_corpora()
+    assert total >= 2
 
 
-async def test_list_corpora_filters_by_project(db_session, test_settings):
-    svc = IngestionService(db_session, test_settings)
-    await svc.create_corpus(CorpusCreate(project_id=P1, name="A"))
-    await svc.create_corpus(CorpusCreate(project_id=P2, name="B"))
-
-    result, total = await svc.list_corpora(project_id=P1)
-    assert total == 1
-    assert result[0].project_id == P1
 
 
 # ---------------------------------------------------------------------------
@@ -53,7 +47,7 @@ async def test_list_corpora_filters_by_project(db_session, test_settings):
 
 async def test_ingest_one_valid_document(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     result = await svc.ingest_documents(
         corpus_id=corpus.id,
@@ -68,7 +62,7 @@ async def test_ingest_one_valid_document(db_session, test_settings):
 async def test_ingest_creates_chunks(db_session, test_settings):
     # test_settings: chunk_size=10, overlap=2 → stride=8
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     # 18 words → chunk 0: [0..10), chunk 1: [8..18)
     text = " ".join(str(i) for i in range(18))
@@ -82,7 +76,7 @@ async def test_ingest_creates_chunks(db_session, test_settings):
 
 async def test_chunk_order_correct(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     text = " ".join(str(i) for i in range(15))
     await svc.ingest_documents(
@@ -97,7 +91,7 @@ async def test_chunk_order_correct(db_session, test_settings):
 
 async def test_ingest_skips_empty_documents(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     result = await svc.ingest_documents(
         corpus_id=corpus.id,
@@ -110,7 +104,7 @@ async def test_ingest_skips_empty_documents(db_session, test_settings):
 
 async def test_ingest_title_falls_back_to_filename(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     result = await svc.ingest_documents(
         corpus_id=corpus.id,
@@ -128,7 +122,7 @@ async def test_ingest_title_falls_back_to_filename(db_session, test_settings):
 
 async def test_list_documents_paginated(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     docs = [DocumentInput(title=f"Doc {i}", text=f"Document number {i}") for i in range(5)]
     await svc.ingest_documents(corpus_id=corpus.id, documents=docs)
@@ -143,7 +137,7 @@ async def test_list_documents_paginated(db_session, test_settings):
 
 async def test_list_chunks_for_corpus(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     text = " ".join(str(i) for i in range(20))
     result = await svc.ingest_documents(
@@ -157,7 +151,7 @@ async def test_list_chunks_for_corpus(db_session, test_settings):
 
 async def test_list_chunks_filter_by_document(db_session, test_settings):
     svc = IngestionService(db_session, test_settings)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     text = " ".join(str(i) for i in range(20))
     result = await svc.ingest_documents(

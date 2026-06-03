@@ -14,6 +14,7 @@ from app.models import (
     CodebookCodeRelationship,
     CodebookThemeRelationship,
     Theme,
+    ThemeCodeRelationship,
     ThemeHierarchyRelationship,
 )
 from app.schemas.llm import (
@@ -24,10 +25,10 @@ from app.schemas.llm import (
     PassageCodebookGeneration,
     ThemeConsolidationResult,
 )
+from app.services.codebook_generation import CodebookGenerationService, _CodeDraft, _ThemeNodeDraft
 
 API_INGESTION = "/api/v1/ingestion"
 API_CODEBOOKS = "/api/v1/codebooks"
-PROJECT_ID = "00000000-0000-0000-0000-000000000111"
 
 
 @pytest.fixture(autouse=True)
@@ -48,10 +49,63 @@ def _stub_consolidation_calls(monkeypatch):
     )
 
 
+def test_remap_code_parent_keys_uses_best_matching_final_theme() -> None:
+    theme_nodes = {
+        ("work, employment & economic wellbeing",): _ThemeNodeDraft(
+            key=("work, employment & economic wellbeing",),
+            label="Work, Employment & Economic Wellbeing",
+        ),
+        ("work, employment & economic wellbeing", "employment outlook & job security"): _ThemeNodeDraft(
+            key=("work, employment & economic wellbeing", "employment outlook & job security"),
+            label="Employment Outlook & Job Security",
+        ),
+        ("ai governance, regulation & policy",): _ThemeNodeDraft(
+            key=("ai governance, regulation & policy",),
+            label="AI Governance, Regulation & Policy",
+        ),
+        ("ai governance, regulation & policy", "ai safety & ethics"): _ThemeNodeDraft(
+            key=("ai governance, regulation & policy", "ai safety & ethics"),
+            label="AI Safety & Ethics",
+        ),
+    }
+    codes = [
+        _CodeDraft(
+            label="Concerns about AI-driven job displacement and security",
+            description=None,
+            parent_theme_key=("labor market impacts", "job security"),
+        )
+    ]
+
+    remapped = CodebookGenerationService._remap_code_parent_keys(codes, theme_nodes=theme_nodes)
+
+    assert remapped[0].parent_theme_key == (
+        "work, employment & economic wellbeing",
+        "employment outlook & job security",
+    )
+
+
+def test_remap_code_parent_keys_does_not_force_unmatched_codes_to_first_theme() -> None:
+    theme_nodes = {
+        ("alpha",): _ThemeNodeDraft(key=("alpha",), label="Alpha"),
+        ("beta",): _ThemeNodeDraft(key=("beta",), label="Beta"),
+    }
+    codes = [
+        _CodeDraft(
+            label="Completely unrelated concept",
+            description=None,
+            parent_theme_key=("missing",),
+        )
+    ]
+
+    remapped = CodebookGenerationService._remap_code_parent_keys(codes, theme_nodes=theme_nodes)
+
+    assert remapped[0].parent_theme_key is None
+
+
 async def _create_corpus_and_docs(client) -> tuple[str, list[str]]:
     corpus_response = await client.post(
         f"{API_INGESTION}/corpora",
-        json={"project_id": PROJECT_ID, "name": "Generation Corpus"},
+        json={"corpus_id": str(uuid4()), "name": "Generation Corpus"},
     )
     assert corpus_response.status_code == 201
     corpus_id = corpus_response.json()["data"]["id"]
@@ -86,6 +140,10 @@ def _patch_batched_generation(monkeypatch, single_passage_fn) -> None:
     monkeypatch.setattr(
         "app.services.codebook_generation.generate_codebook_for_passages",
         _fake_generate_codebook_for_passages,
+    )
+    monkeypatch.setattr(
+        "app.services.codebook_generation.build_codebook_generation_chain",
+        lambda *_, **__: object(),
     )
 
 
@@ -229,6 +287,21 @@ async def test_generate_codebook_creates_deduplicated_themes_and_codes(
             "Onboarding Unclear",
         ]
 
+        theme_code_rows = list(
+            (
+                await session.scalars(
+                    select(ThemeCodeRelationship).where(
+                        ThemeCodeRelationship.codebook_id == codebook.id
+                    )
+                )
+            ).all()
+        )
+        assert len(theme_code_rows) == 2
+        code_ids = {code.id for code in code_rows}
+        theme_ids = {theme.id for theme in theme_rows}
+        assert {row.code_id for row in theme_code_rows} == code_ids
+        assert {row.theme_id for row in theme_code_rows}.issubset(theme_ids)
+
 
 async def test_generate_codebook_post_processes_codes_with_llm_consolidation(
     client,
@@ -306,6 +379,18 @@ async def test_generate_codebook_post_processes_codes_with_llm_consolidation(
             ).all()
         )
         assert [code.label for code in code_rows] == ["Manual Bottleneck"]
+
+        theme_code_rows = list(
+            (
+                await session.scalars(
+                    select(ThemeCodeRelationship).where(
+                        ThemeCodeRelationship.codebook_id == codebook_id
+                    )
+                )
+            ).all()
+        )
+        assert len(theme_code_rows) == 1
+        assert theme_code_rows[0].code_id == code_rows[0].id
 
 
 async def test_generate_codebook_post_processes_themes_with_llm_consolidation(
@@ -405,6 +490,29 @@ async def test_generate_codebook_post_processes_themes_with_llm_consolidation(
             ).all()
         )
         assert len(hierarchy_rows) == 1
+
+        code_row = (
+            await session.scalars(
+                select(Code)
+                .join(
+                    CodebookCodeRelationship,
+                    and_(
+                        CodebookCodeRelationship.code_id == Code.id,
+                        CodebookCodeRelationship.codebook_id == codebook_id,
+                    ),
+                )
+            )
+        ).one()
+        theme_by_id = {theme.id: theme for theme in theme_rows}
+        theme_code_row = (
+            await session.scalars(
+                select(ThemeCodeRelationship).where(
+                    ThemeCodeRelationship.codebook_id == codebook_id
+                )
+            )
+        ).one()
+        assert theme_code_row.code_id == code_row.id
+        assert theme_by_id[theme_code_row.theme_id].label == "Manual Work"
 
 
 async def test_generate_codebook_rejects_documents_outside_selected_corpus(
