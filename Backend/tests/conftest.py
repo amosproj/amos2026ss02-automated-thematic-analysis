@@ -1,4 +1,5 @@
 import os
+import uuid as _uuid
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, patch
 
@@ -18,7 +19,20 @@ TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
 @pytest_asyncio.fixture
 async def db_engine():
-    engine = create_async_engine(TEST_DB_URL, echo=False)
+    # Use a named in-memory database with shared cache so that multiple
+    # concurrent connections (e.g. main session + background job runner
+    # + progress/cancel callbacks) all see the *same* database while each
+    # owning an independent transaction.  A plain :memory: URL with
+    # StaticPool forces every session onto a single shared connection,
+    # causing transaction conflicts when the async job runner opens its
+    # own sessions.
+    db_name = f"test_{_uuid.uuid4().hex[:8]}"
+    url = f"sqlite+aiosqlite:///file:{db_name}?mode=memory&cache=shared&uri=true"
+    engine = create_async_engine(
+        url,
+        echo=False,
+        connect_args={"check_same_thread": False, "timeout": 10},
+    )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine

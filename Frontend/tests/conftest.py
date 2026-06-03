@@ -53,26 +53,31 @@ class FakeBackend:
         }
         self.demographic_upload_response: dict | None = None
         self.demographic_confirm_response: dict | None = None
+        # Codebook generation jobs
+        self.generation_jobs: dict[str, dict] = {}
+        self.last_generation_job_request: dict | None = None
+        self.last_create_codebook_request: dict | None = None
         # Either a method-name string (generic BackendError) or a
         # (method-name, ExceptionClass) tuple (specific typed subclass).
         self.raise_on: str | tuple[str, type] | None = None
 
     # ---- Corpora / documents ------------------------------------------------
 
-    def ensure_corpus(self, project_id: str, name: str) -> str:
+    def ensure_corpus(self, corpus_id: str, name: str) -> str:
         self._maybe_raise("ensure_corpus")
-        if not any(c.get("id") == self.corpus_id for c in self.corpora):
-            self.corpora.append({"id": self.corpus_id, "name": name})
-        return self.corpus_id
+        if not any(c.get("id") == corpus_id for c in self.corpora):
+            self.corpora.append({"id": corpus_id, "name": name})
+        return corpus_id
 
-    def list_corpora(self, project_id: str) -> list[dict]:
+    def list_corpora(self, corpus_id: str | None = None) -> list[dict]:
         self._maybe_raise("list_corpora")
+        if corpus_id:
+            return [c for c in self.corpora if c.get("id") == corpus_id]
         return self.corpora
 
-    def create_corpus(self, project_id: str, name: str) -> dict:
+    def create_corpus(self, corpus_id: str, name: str) -> dict:
         self._maybe_raise("create_corpus")
-        new_id = f"new-corpus-{len(self.corpora) + 1}"
-        created = {"id": new_id, "name": name}
+        created = {"id": corpus_id, "name": name}
         self.corpora.append(created)
         self.last_created_corpus = created
         return created
@@ -99,6 +104,14 @@ class FakeBackend:
                 scoped.append(cb)
         return scoped
 
+    def get_codebook(self, codebook_id: str) -> dict:
+        self._maybe_raise("get_codebook")
+        for cb in self.codebooks:
+            if cb.get("id") == codebook_id:
+                return cb
+        from web.services.backend_client import BackendNotFoundError
+        raise BackendNotFoundError(user_message="Codebook not found.")
+
     def get_theme_frequencies(self, codebook_id: str) -> list[dict]:
         self._maybe_raise("get_theme_frequencies")
         return self.theme_frequencies
@@ -106,6 +119,13 @@ class FakeBackend:
     def get_theme_tree(self, codebook_id: str) -> list[dict]:
         self._maybe_raise("get_theme_tree")
         return self.theme_tree
+
+    def create_codebook(self, *, corpus_id: str, name: str, themes: list[dict]) -> dict:
+        self._maybe_raise("create_codebook")
+        self.last_create_codebook_request = {
+            "corpus_id": corpus_id, "name": name, "themes": themes,
+        }
+        return {"id": "cb-new", "name": name, "corpus_id": corpus_id, "themes": themes}
 
     # ---- Demographic --------------------------------------------------------
 
@@ -132,6 +152,60 @@ class FakeBackend:
     def get_demographic_link_summary(self, corpus_id) -> dict:
         self._maybe_raise("get_demographic_link_summary")
         return self.demographic_link_summary
+
+    # ---- Codebook generation jobs -------------------------------------------
+
+    def create_generation_job(
+        self,
+        codebook_name: str,
+        corpus_id: str,
+        transcript_document_ids: list[str] | None = None,
+    ) -> dict:
+        self._maybe_raise("create_generation_job")
+        self.last_generation_job_request = {
+            "codebook_name": codebook_name,
+            "corpus_id": corpus_id,
+            "transcript_document_ids": transcript_document_ids,
+        }
+        job_id = f"job-{len(self.generation_jobs) + 1}"
+        job = {
+            "id": job_id,
+            "status": "queued",
+            "codebook_name": codebook_name,
+            "corpus_id": corpus_id,
+            "transcript_document_ids": transcript_document_ids or [],
+            "cancel_requested": False,
+            "codebook_id": None,
+            "passages_total": 0,
+            "passages_done": 0,
+        }
+        self.generation_jobs[job_id] = job
+        return job
+
+    def list_generation_jobs(
+        self, corpus_id: str, statuses: list[str] | None = None
+    ) -> list[dict]:
+        self._maybe_raise("list_generation_jobs")
+        result = []
+        for job in self.generation_jobs.values():
+            job_corpus = job.get("corpus_id")
+            if job_corpus is not None and job_corpus != corpus_id:
+                continue
+            if statuses and job.get("status") not in statuses:
+                continue
+            result.append(job)
+        return result
+
+    def get_generation_job(self, job_id: str) -> dict:
+        self._maybe_raise("get_generation_job")
+        return self.generation_jobs[job_id]
+
+    def cancel_generation_job(self, job_id: str) -> dict:
+        self._maybe_raise("cancel_generation_job")
+        job = self.generation_jobs[job_id]
+        job["cancel_requested"] = True
+        job["status"] = "cancelled"
+        return job
 
     # ---- Internal -----------------------------------------------------------
 

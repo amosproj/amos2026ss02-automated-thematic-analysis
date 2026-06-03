@@ -13,6 +13,7 @@ class ThemeNodeView(BaseSchema):
     id: UUID
     label: str
     is_active: bool
+    node_type: str = "THEME"
 
 
 class ThemeEdgeView(BaseSchema):

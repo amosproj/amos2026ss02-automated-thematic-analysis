@@ -61,12 +61,12 @@ async def create_corpus(
 async def list_corpora(
     session: DbSession,
     settings: AppSettings,
-    project_id: uuid.UUID | None = None,  # TODO: Only placeholder for now. add Project Data Structure and wire correctly into Corpus. optional filter
+    corpus_id: uuid.UUID | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> ResponseEnvelope[Page[CorpusSchema]]:
     service = IngestionService(session)
-    corpora, total = await service.list_corpora(project_id=project_id, page=page, page_size=page_size)
+    corpora, total = await service.list_corpora(corpus_id=corpus_id, page=page, page_size=page_size)
     return ResponseEnvelope.ok(
         Page(
             items=[CorpusSchema.model_validate(c) for c in corpora],

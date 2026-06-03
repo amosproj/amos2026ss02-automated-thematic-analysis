@@ -9,7 +9,7 @@ P1 = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 async def test_load_returns_one_document_per_ingested_doc(db_session):
     svc = IngestionService(db_session)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     await svc.ingest_documents(
         corpus_id=corpus.id,
@@ -25,7 +25,7 @@ async def test_load_returns_one_document_per_ingested_doc(db_session):
 
 async def test_load_document_metadata_keys(db_session):
     svc = IngestionService(db_session)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     await svc.ingest_documents(
         corpus_id=corpus.id,
@@ -39,7 +39,7 @@ async def test_load_document_metadata_keys(db_session):
 
 async def test_load_metadata_corpus_id_correct(db_session):
     svc = IngestionService(db_session)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     await svc.ingest_documents(
         corpus_id=corpus.id,
@@ -53,7 +53,7 @@ async def test_load_metadata_corpus_id_correct(db_session):
 
 async def test_load_page_content_is_text(db_session):
     svc = IngestionService(db_session)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     await svc.ingest_documents(
         corpus_id=corpus.id,
@@ -68,7 +68,7 @@ async def test_load_page_content_is_text(db_session):
 
 async def test_load_empty_corpus_returns_empty_list(db_session):
     svc = IngestionService(db_session)
-    corpus = await svc.create_corpus(CorpusCreate(project_id=P1, name="C"))
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
 
     docs = await load_corpus_documents_as_langchain_documents(db_session, corpus.id)
     assert docs == []

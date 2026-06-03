@@ -158,3 +158,94 @@ def build_codebook_generation_prompt() -> ChatPromptTemplate:
         ]
     )
 
+
+CODE_CONSOLIDATION_SYSTEM_PROMPT = """You are an experienced qualitative researcher refining a draft codebook.
+You receive a list of generated codes for one codebook and must reduce overlap.
+
+Rules:
+- Merge highly similar codes into one canonical code.
+- Merge subordinate/specific variants into a broader parent code when appropriate.
+- Merge reverse/opposite polarity labels that describe the same underlying dimension.
+- Keep only orthogonal (non-overlapping) codes.
+- Keep labels concise and specific.
+- Every returned code must include exactly one theme_path from the input code list.
+- If you merge codes from different theme_paths, choose the path that best describes the consolidated code.
+- Preserve grounded meaning from the input; do not invent unrelated concepts.
+- Return valid JSON only (no markdown, no comments).
+
+Return JSON with this exact shape:
+{{
+  "codes": [
+    {{
+      "label": "Code label",
+      "description": "Optional short description",
+      "theme_path": ["Theme label", "Subtheme label"]
+    }}
+  ]
+}}"""
+
+CODE_CONSOLIDATION_USER_INSTRUCTION = """Consolidate this code list into a minimal orthogonal set.
+
+--- CODES START ---
+{codes}
+--- CODES END ---"""
+
+
+def build_code_consolidation_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", CODE_CONSOLIDATION_SYSTEM_PROMPT),
+            ("user", CODE_CONSOLIDATION_USER_INSTRUCTION),
+        ]
+    )
+
+
+THEME_CONSOLIDATION_SYSTEM_PROMPT = """You are an experienced qualitative researcher refining a draft theme tree.
+You receive theme paths (root theme -> subtheme -> subsubtheme, etc.) for one codebook.
+
+Rules:
+- Merge highly similar theme labels into a single canonical label.
+- Merge subordinate/specific variants into an appropriate parent level when warranted.
+- Merge reverse/opposite polarity labels that represent the same conceptual dimension.
+- Keep themes distinct and non-overlapping where possible.
+- Keep the hierarchy coherent and readable.
+- Keep path order meaningful from broader to more specific.
+- Enforce level semantics:
+  - Level 1: domain-level theme (broad, cross-cutting area).
+  - Level 2: analytical theme (recurring pattern within the domain).
+  - Level 3+: granular subthemes only when they represent recurring mechanisms/dimensions.
+- Do not keep anecdotal examples, one-off cases, or concrete incidents as high-level themes.
+- For every child-parent relation, the child must be a type, cause, consequence, example, or dimension of the parent.
+- Preserve grounded meaning; do not invent unrelated concepts.
+- Return valid JSON only (no markdown, no comments).
+
+Return JSON with this exact shape:
+{{
+  "themes": [
+    {{
+      "path": [
+        {{"label": "Theme label", "description": "Optional short description"}},
+        {{"label": "Subtheme label", "description": "Optional short description"}}
+      ]
+    }}
+  ]
+}}"""
+
+THEME_CONSOLIDATION_USER_INSTRUCTION = """Consolidate this theme path list into a minimal coherent hierarchy.
+
+Apply these target constraints:
+{constraints}
+
+--- THEMES START ---
+{themes}
+--- THEMES END ---"""
+
+
+def build_theme_consolidation_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", THEME_CONSOLIDATION_SYSTEM_PROMPT),
+            ("user", THEME_CONSOLIDATION_USER_INSTRUCTION),
+        ]
+    )
+

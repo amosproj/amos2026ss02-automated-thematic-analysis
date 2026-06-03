@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy import Uuid as PG_UUID
 
 from app.models.code import Code
 from app.models.codebook import Codebook
@@ -82,7 +82,7 @@ def test_schema_fields_match_sqlalchemy_models() -> None:
 def test_pydantic_models_validate_from_sqlalchemy_objects() -> None:
     codebook = Codebook(
         id=uuid.uuid4(),
-        project_id="project-a",
+        corpus_id=uuid.UUID("3d756af1-9eb4-96de-570c-ebd361d87202"),
         name="Codebook A",
         description="placeholder",
         version=1,
@@ -90,7 +90,7 @@ def test_pydantic_models_validate_from_sqlalchemy_objects() -> None:
     )
     codebook_schema = CodebookSchema.model_validate(codebook)
     assert codebook_schema.id == codebook.id
-    assert codebook_schema.project_id == codebook.project_id
+    assert codebook_schema.corpus_id == codebook.corpus_id
     assert codebook_schema.name == codebook.name
 
     theme = Theme(

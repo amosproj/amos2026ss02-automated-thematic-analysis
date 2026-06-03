@@ -1,13 +1,24 @@
+import json
+
 from langchain_core.language_models import BaseChatModel
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 
 from app.llm.client import build_chat_model
 from app.llm.prompts import (
+    build_code_consolidation_prompt,
     build_codebook_application_prompt,
     build_codebook_generation_prompt,
     build_thematic_analysis_prompt,
+    build_theme_consolidation_prompt,
 )
-from app.schemas.llm import InterviewAnalysisResult, PassageCodebookGeneration
+from app.schemas.llm import (
+    CodeConsolidationItem,
+    CodeConsolidationResult,
+    GeneratedThemePath,
+    InterviewAnalysisResult,
+    PassageCodebookGeneration,
+    ThemeConsolidationResult,
+)
 
 
 # Run a single-shot thematic analysis over a transcript.
@@ -59,4 +70,55 @@ def generate_codebook_for_passage(
     chain = build_codebook_generation_prompt() | chat_model | parser
     raw_result = chain.invoke({"passage": passage})
     return PassageCodebookGeneration(**raw_result)
+
+
+def consolidate_generated_codes(
+    codes: list[CodeConsolidationItem],
+    *,
+    model: BaseChatModel | None = None,
+) -> CodeConsolidationResult:
+    """Merge overlapping generated codes into a smaller orthogonal set."""
+    if not codes:
+        return CodeConsolidationResult(codes=[])
+
+    chat_model = model or build_chat_model()
+    parser = JsonOutputParser(pydantic_object=CodeConsolidationResult)
+    # Serialize as formatted JSON so the model receives a stable, explicit list.
+    serialized_codes = json.dumps(
+        [code.model_dump(mode="json") for code in codes],
+        ensure_ascii=True,
+        indent=2,
+    )
+    chain = build_code_consolidation_prompt() | chat_model | parser
+    raw_result = chain.invoke({"codes": serialized_codes})
+    return CodeConsolidationResult(**raw_result)
+
+
+def consolidate_generated_themes(
+    themes: list[GeneratedThemePath],
+    *,
+    constraints: str | None = None,
+    model: BaseChatModel | None = None,
+) -> ThemeConsolidationResult:
+    """Merge overlapping generated theme paths into a smaller coherent hierarchy."""
+    if not themes:
+        return ThemeConsolidationResult(themes=[])
+
+    chat_model = model or build_chat_model()
+    parser = JsonOutputParser(pydantic_object=ThemeConsolidationResult)
+    # Serialize as formatted JSON so the model receives a stable, explicit list.
+    serialized_themes = json.dumps(
+        [theme.model_dump(mode="json") for theme in themes],
+        ensure_ascii=True,
+        indent=2,
+    )
+    chain = build_theme_consolidation_prompt() | chat_model | parser
+    raw_result = chain.invoke(
+        {
+            "themes": serialized_themes,
+            "constraints": constraints
+            or "- Use domain-level roots only.\n- Target 6-10 root themes.\n- Keep total themes compact and non-overlapping.",
+        }
+    )
+    return ThemeConsolidationResult(**raw_result)
 

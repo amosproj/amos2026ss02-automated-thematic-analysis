@@ -5,10 +5,45 @@
     // Data is embedded server-side as JSON — no extra HTTP requests needed.
     const frequencies = JSON.parse(appRoot.dataset.frequencies || "[]");
     const tree        = JSON.parse(appRoot.dataset.tree        || "[]");
+    const codes       = JSON.parse(appRoot.dataset.codes       || "[]");
+
+    function _flattenTree(nodes, out) {
+        for (const node of nodes) {
+            out.push(node);
+            _flattenTree(node.children ?? [], out);
+        }
+    }
+
+    const flatTree = [];
+    _flattenTree(tree, flatTree);
+    const existingNodeIds = new Set(flatTree.map(n => n.theme.id));
+
+    // Integrate flat Codes as top-level Tree Nodes
+    for (const c of codes) {
+        if (!existingNodeIds.has(c.id)) {
+            tree.push({
+                theme: {
+                    id: c.id,
+                    label: `[CODE] ${c.name}`,
+                    description: c.description,
+                    type: "CODE"
+                },
+                children: []
+            });
+        } else {
+            // It is nested in the tree. We modify the label to include [CODE]
+            const node = flatTree.find(n => n.theme.id === c.id);
+            if (node) {
+                node.theme.label = `[CODE] ${c.name}`;
+                node.theme.type = "CODE";
+            }
+        }
+    }
 
     const totalThemesValue  = document.getElementById("total-themes-value");
     const rootThemesValue   = document.getElementById("root-themes-value");
     const subThemesValue    = document.getElementById("sub-themes-value");
+    const codesValue        = document.getElementById("codes-value");
     const themesTableBody   = document.getElementById("themes-table-body");
     const themeDetailsEmpty   = document.getElementById("theme-details-empty");
     const themeDetailsContent = document.getElementById("theme-details-content");
@@ -47,10 +82,7 @@
     }
 
     function flattenTreeNodes(nodes, out) {
-        for (const node of nodes) {
-            out.push(node);
-            flattenTreeNodes(node.children ?? [], out);
-        }
+        _flattenTree(nodes, out);
     }
 
     // Merge frequency list + tree into one lookup map keyed by theme id.
@@ -79,13 +111,29 @@
     // ------------------------------------------------------------------
 
     function updateMetricCards() {
-        const total     = Object.keys(currentThemeInfoById).length;
-        const rootCount = tree.length;
-        const subCount  = total - rootCount;
+        const flat = [];
+        flattenTreeNodes(tree, flat);
+        
+        let total = 0;
+        flat.forEach(n => {
+            if (n.theme.type !== 'CODE' && n.theme.node_type !== 'CODE') {
+                total++;
+            }
+        });
+        
+        let rootCount = 0;
+        tree.forEach(n => {
+            if (n.theme.type !== 'CODE' && n.theme.node_type !== 'CODE') {
+                rootCount++;
+            }
+        });
+
+        const subCount = total - rootCount;
 
         if (totalThemesValue) totalThemesValue.textContent = String(total);
         if (rootThemesValue)  rootThemesValue.textContent  = String(rootCount);
         if (subThemesValue)   subThemesValue.textContent   = String(subCount < 0 ? 0 : subCount);
+        if (codesValue)       codesValue.textContent       = String(codes.length);
     }
 
     // ------------------------------------------------------------------

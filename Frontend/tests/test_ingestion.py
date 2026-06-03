@@ -159,7 +159,7 @@ def test_upload_form_shows_corpus_selector_for_both_upload_forms(client, fake_ba
     resp = client.get(f"/transcripts/{CORPUS}/upload")
 
     assert resp.status_code == 200
-    assert b'id="corpus_selector"' in resp.data
+    assert b'id="global-corpus-select"' in resp.data
     assert b"Main Corpus" in resp.data
     assert b"Pilot Corpus" in resp.data
     assert b"data-switch-template" in resp.data

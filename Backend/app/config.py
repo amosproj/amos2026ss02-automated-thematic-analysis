@@ -55,7 +55,6 @@ class Settings(BaseSettings):
 
     # Select which provider is active: "FAU" | "ACADEMIC"
     SELECTED_API: str = "FAU"
-
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

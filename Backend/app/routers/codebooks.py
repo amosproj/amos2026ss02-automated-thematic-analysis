@@ -4,24 +4,29 @@ import json
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter
+from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import JSONResponse
-from sqlalchemy import desc, exists, select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.dependencies import DbSession
 from app.exceptions import NotFoundError, UnprocessableError
-from app.models import Codebook, CodebookGenerationJob, Corpus
+from app.models import Codebook, CodebookGenerationJob
 from app.schemas.codebook import (
+    CodebookCreateRequest,
+    CodebookDetailSchema,
     CodebookGenerateRequest,
     CodebookGenerationJobCreateRequest,
     CodebookGenerationJobSchema,
     CodebookSchema,
     GeneratedCodebookResponse,
+    NodeInput,
 )
 from app.schemas.common import ResponseEnvelope
+from app.services.codebook import CodebookService
 from app.services.codebook_generation import CodebookGenerationService
 from app.services.codebook_generation_jobs import codebook_generation_job_runner
+from app.services.codebook_parser import parse_codebook_csv
 
 router = APIRouter(prefix="/codebooks", tags=["codebooks"])
 
@@ -64,39 +69,13 @@ def _to_job_schema(job: CodebookGenerationJob) -> CodebookGenerationJobSchema:
     "/",
     response_model=ResponseEnvelope[list[CodebookSchema]],
     summary="List codebooks",
-    description="Return all codebooks ordered by project id and descending version.",
+    description="Return all codebooks for a given corpus ordered by descending version.",
 )
 async def get_codebooks(
+    corpus_id: UUID,
     session: DbSession,
-    corpus_id: UUID | None = None,
 ) -> JSONResponse:
-    # TODO: Completely refactor / replace this endpoint. This is just a quick implementation to get some working data
-    #  for the frontend.
-    # The user needs to be able to select a project_id in the frontend in order to load a themes tree
-    if corpus_id is None:
-        stmt = select(Codebook).order_by(Codebook.project_id.asc(), desc(Codebook.version))
-    else:
-        corpus_exists = (
-            await session.execute(
-                select(exists().where(Corpus.id == corpus_id))
-            )
-        ).scalar_one()
-        if not corpus_exists:
-            return JSONResponse(content=ResponseEnvelope.ok([]).model_dump(mode="json"))
-
-        generated_for_selected_corpus = exists(
-            select(CodebookGenerationJob.id).where(
-                CodebookGenerationJob.codebook_id == Codebook.id,
-                CodebookGenerationJob.corpus_id == corpus_id,
-                CodebookGenerationJob.codebook_id.is_not(None),
-                CodebookGenerationJob.status == "succeeded",
-            )
-        )
-        stmt = (
-            select(Codebook)
-            .where(generated_for_selected_corpus)
-            .order_by(Codebook.project_id.asc(), desc(Codebook.version))
-        )
+    stmt = select(Codebook).where(Codebook.corpus_id == corpus_id).order_by(desc(Codebook.version))
     codebooks = list((await session.scalars(stmt)).all())
     payload = [CodebookSchema.model_validate(codebook) for codebook in codebooks]
     return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))
@@ -176,6 +155,34 @@ async def create_generate_codebook_job(
 
 
 @router.get(
+    "/generate-jobs",
+    response_model=ResponseEnvelope[list[CodebookGenerationJobSchema]],
+    summary="List codebook generation jobs",
+    description=(
+        "Return generation jobs for a corpus, newest first. Pass a "
+        "comma-separated `status` filter (e.g. `queued,running`) to restrict "
+        "the result; omit it to return every job for the corpus."
+    ),
+)
+async def list_generate_codebook_jobs(
+    corpus_id: UUID,
+    session: DbSession,
+    status: str | None = None,
+) -> JSONResponse:
+    stmt = select(CodebookGenerationJob).where(
+        CodebookGenerationJob.corpus_id == corpus_id
+    )
+    if status:
+        statuses = [s.strip() for s in status.split(",") if s.strip()]
+        if statuses:
+            stmt = stmt.where(CodebookGenerationJob.status.in_(statuses))
+    stmt = stmt.order_by(desc(CodebookGenerationJob.created_at))
+    jobs = list((await session.scalars(stmt)).all())
+    payload = [_to_job_schema(job) for job in jobs]
+    return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))
+
+
+@router.get(
     "/generate-jobs/{job_id}",
     response_model=ResponseEnvelope[CodebookGenerationJobSchema],
     summary="Get codebook generation job",
@@ -223,3 +230,52 @@ async def cancel_generate_codebook_job(
         status_code=202,
         content=ResponseEnvelope.ok(_to_job_schema(job)).model_dump(mode="json"),
     )
+
+
+@router.post("/parse-csv", response_model=ResponseEnvelope[list[NodeInput]])
+async def parse_csv(
+    file: UploadFile = File(...),
+) -> JSONResponse:
+    """Parse and validate a researcher-uploaded codebook CSV without saving it.
+
+    Returns the parsed list of ThemeInput preview items, or a 422 error.
+    """
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise UnprocessableError("Only CSV files are supported for codebook upload.")
+
+    try:
+        content = await file.read()
+        themes = parse_codebook_csv(content)
+        payload = [t.model_dump() for t in themes]
+        return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))
+    except UnprocessableError as exc:
+        raise exc
+    except Exception as exc:
+        raise UnprocessableError(f"Failed to parse CSV file: {exc}") from exc
+
+
+@router.post("/", response_model=ResponseEnvelope[CodebookDetailSchema], status_code=201)
+async def create_codebook(
+    payload: CodebookCreateRequest,
+    session: DbSession,
+) -> JSONResponse:
+    """Create a new codebook and persist its themes atomically in the database."""
+    service = CodebookService(session)
+    codebook, themes, edges, codes, tc_edges = await service.create_codebook(payload)
+    detail = CodebookService.build_detail_schema(codebook, themes, edges, codes, tc_edges)
+    return JSONResponse(
+        status_code=201,
+        content=ResponseEnvelope.ok(detail).model_dump(mode="json"),
+    )
+
+
+@router.get("/{codebook_id}", response_model=ResponseEnvelope[CodebookDetailSchema])
+async def get_codebook_detail(
+    codebook_id: UUID,
+    session: DbSession,
+) -> JSONResponse:
+    """Fetch details of a specific codebook, including all associated themes."""
+    service = CodebookService(session)
+    codebook, themes, edges, codes, theme_code_edges = await service.get_codebook_detail(codebook_id)
+    detail = CodebookService.build_detail_schema(codebook, themes, edges, codes, theme_code_edges)
+    return JSONResponse(content=ResponseEnvelope.ok(detail).model_dump(mode="json"))

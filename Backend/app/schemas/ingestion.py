@@ -7,7 +7,7 @@ from app.schemas.common import BaseSchema
 class CorpusCreate(BaseSchema):
     """Request body for creating a new corpus."""
 
-    project_id: uuid.UUID
+    corpus_id: uuid.UUID
     name: str
 
 

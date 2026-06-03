@@ -50,8 +50,12 @@
                href="{{ url_for('demographic.demographic_landing') }}">Demographic Data</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint and request.endpoint.startswith('codebooks.') %}active{% endif %}"
+            <a class="nav-link {% if request.endpoint in ('codebooks.list_codebooks', 'codebooks.list_codebooks_for_corpus', 'codebooks.codebook_themes', 'codebooks.codebook_themes_for_corpus', 'codebooks.export_codebook', 'codebooks.success') %}active{% endif %}"
                href="{{ url_for('codebooks.list_codebooks') }}">Codebooks</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint in ('codebooks.upload_form', 'codebooks.upload_submit', 'codebooks.manual_form', 'codebooks.confirm_submit', 'codebooks.codebooks_upload_landing') %}active{% endif %}"
+               href="{{ url_for('codebooks.codebooks_upload_landing') }}">Upload Codebook</a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint == 'analysis.index' %}active{% endif %}"
@@ -104,6 +108,9 @@
     </div>
   </footer>
 
+  <!-- Background-job toast container; populated by job_tracker.js -->
+  <div id="ata-toasts" aria-live="polite" aria-atomic="true"></div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
           integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
           crossorigin="anonymous"></script>
@@ -117,6 +124,7 @@
       }
     });
   </script>
+  <script src="{{ url_for('static', filename='js/job_tracker.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

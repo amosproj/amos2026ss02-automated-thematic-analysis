@@ -49,13 +49,13 @@ class _AssertionLog:
 async def test_create_corpus_returns_201(client):
     resp = await client.post(
         f"{API}/corpora",
-        json={"project_id": P1_STR, "name": "My Corpus"},
+        json={"corpus_id": P1_STR, "name": "My Corpus"},
     )
     assert resp.status_code == 201
     body = resp.json()
     assert body["success"] is True
     assert body["data"]["name"] == "My Corpus"
-    assert body["data"]["project_id"] == P1_STR
+    assert body["data"]["id"] == P1_STR
     assert "id" in body["data"]
 
 
@@ -65,7 +65,7 @@ async def test_create_corpus_returns_201(client):
 
 
 async def test_list_corpora_empty(client):
-    resp = await client.get(f"{API}/corpora", params={"project_id": MISSING_STR})
+    resp = await client.get(f"{API}/corpora", params={"corpus_id": MISSING_STR})
     assert resp.status_code == 200
     body = resp.json()
     assert body["data"]["items"] == []
@@ -73,15 +73,20 @@ async def test_list_corpora_empty(client):
 
 
 async def test_list_corpora_returns_created(client):
-    await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C1"})
-    await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C2"})
-    await client.post(f"{API}/corpora", json={"project_id": P2_STR, "name": "C3"})
+    import uuid
+    id1 = str(uuid.uuid4())
+    id2 = str(uuid.uuid4())
+    await client.post(f"{API}/corpora", json={"corpus_id": id1, "name": "C1"})
+    await client.post(f"{API}/corpora", json={"corpus_id": id2, "name": "C2"})
 
-    resp = await client.get(f"{API}/corpora", params={"project_id": P1_STR})
+    resp = await client.get(f"{API}/corpora")
     assert resp.status_code == 200
     data = resp.json()["data"]
-    assert data["meta"]["total"] == 2
-    assert len(data["items"]) == 2
+
+    assert len(data["items"]) >= 2
+    names = {c["name"] for c in data["items"]}
+    assert "C1" in names
+    assert "C2" in names
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +95,7 @@ async def test_list_corpora_returns_created(client):
 
 
 async def test_get_corpus_by_id(client):
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "X"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "X"})
     corpus_id = create.json()["data"]["id"]
 
     resp = await client.get(f"{API}/corpora/{corpus_id}")
@@ -109,7 +114,7 @@ async def test_get_corpus_not_found(client):
 
 
 async def test_bulk_ingest_documents(client):
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     payload = {
@@ -126,7 +131,7 @@ async def test_bulk_ingest_documents(client):
 
 
 async def test_bulk_ingest_skips_empty_documents(client):
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     payload = {"documents": [{"title": "E", "text": ""}, {"title": "V", "text": "valid text here"}]}
@@ -141,7 +146,7 @@ async def test_bulk_ingest_skips_empty_documents(client):
 
 
 async def test_get_documents_paginated(client):
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     docs = [{"title": f"Doc {i}", "text": f"Document number {i} with enough words"} for i in range(5)]
@@ -160,7 +165,7 @@ async def test_get_documents_paginated(client):
 
 
 async def test_get_document_content(client):
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     ingest = await client.post(
@@ -195,7 +200,7 @@ async def test_get_document_content_not_found(client):
 
 async def test_upload_txt_real_fixture(client):
     log = _AssertionLog()
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     content = _TXT_FIXTURE.read_bytes()
@@ -212,7 +217,7 @@ async def test_upload_txt_real_fixture(client):
 
 async def test_upload_docx_real_fixture(client):
     log = _AssertionLog()
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     content = _DOCX_FIXTURE.read_bytes()
@@ -233,7 +238,7 @@ async def test_upload_docx_real_fixture(client):
 async def test_upload_pdf_real_fixture(client):
     """Also verifies the full upload pipeline preserves text content."""
     log = _AssertionLog()
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     content = _PDF_FIXTURE.read_bytes()
@@ -259,7 +264,7 @@ async def test_upload_pdf_real_fixture(client):
 
 async def test_upload_jsonl_real_fixture(client):
     log = _AssertionLog()
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     content = _JSONL_FIXTURE.read_bytes()
@@ -279,7 +284,7 @@ async def test_upload_jsonl_real_fixture(client):
 
 async def test_upload_multiple_files(client):
     log = _AssertionLog()
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     resp = await client.post(
@@ -298,7 +303,7 @@ async def test_upload_multiple_files(client):
 
 async def test_upload_partial_failure_returns_per_file_results(client):
     log = _AssertionLog()
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     resp = await client.post(
@@ -318,7 +323,7 @@ async def test_upload_partial_failure_returns_per_file_results(client):
 
 async def test_upload_unsupported_extension(client):
     log = _AssertionLog()
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     resp = await client.post(
@@ -335,7 +340,7 @@ async def test_upload_unsupported_extension(client):
 async def test_upload_oversize_file_rejected(client):
     """Upload exactly 1 byte over the 10 MB cap and verify per-file rejection."""
     log = _AssertionLog()
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     oversize = b"x" * (10 * 1024 * 1024 + 1)
@@ -355,7 +360,7 @@ async def test_upload_oversize_file_rejected(client):
 
 async def test_upload_empty_file_rejected(client):
     log = _AssertionLog()
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     resp = await client.post(
@@ -372,7 +377,7 @@ async def test_upload_empty_file_rejected(client):
 async def test_upload_normalizes_filename_to_lowercase(client):
     """Stored filenames are lowercased on input so mixed-case duplicates can't slip past dedup."""
     log = _AssertionLog()
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     resp = await client.post(
@@ -391,7 +396,7 @@ async def test_upload_normalizes_filename_to_lowercase(client):
 async def test_upload_duplicate_filename_case_insensitive_is_renamed(client):
     """Same filename in different casing → second upload renamed; both stored lowercase."""
     log = _AssertionLog()
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     await client.post(
@@ -422,8 +427,8 @@ async def test_upload_duplicate_filename_case_insensitive_is_renamed(client):
 async def test_same_filename_allowed_across_different_corpora(client):
     """Uniqueness is scoped to the corpus, not global."""
     log = _AssertionLog()
-    create_a = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "A"})
-    create_b = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "B"})
+    create_a = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "A"})
+    create_b = await client.post(f"{API}/corpora", json={"corpus_id": P2_STR, "name": "B"})
     corpus_a = create_a.json()["data"]["id"]
     corpus_b = create_b.json()["data"]["id"]
 
@@ -444,7 +449,7 @@ async def test_same_filename_allowed_across_different_corpora(client):
 async def test_upload_duplicate_filename_is_renamed(client):
     """Same-case duplicate within one corpus is renamed with ' (n)' suffix."""
     log = _AssertionLog()
-    create = await client.post(f"{API}/corpora", json={"project_id": P1_STR, "name": "C"})
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
     for _ in range(2):

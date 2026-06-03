@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -12,7 +13,7 @@ async def _seed_codebook_with_themes(db_engine):
     async with session_factory() as session:
         codebook = Codebook(
             id=uuid4(),
-            project_id="project_frequency_api",
+            corpus_id=uuid.UUID("dad475c8-9dac-23e4-1876-d69b713c1cfe"),
             name="Theme Frequency API",
             description="Fixture",
             version=1,

@@ -20,6 +20,7 @@ from web.services.corpus_context import resolve_active_corpus, set_active_corpus
 bp = Blueprint("demographic", __name__)
 
 
+
 # ---- Landings ---------------------------------------------------------------
 
 

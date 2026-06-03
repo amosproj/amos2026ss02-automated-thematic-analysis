@@ -15,13 +15,13 @@ from app.schemas.llm import (
 
 API_INGESTION = "/api/v1/ingestion"
 API_CODEBOOKS = "/api/v1/codebooks"
-PROJECT_ID = "00000000-0000-0000-0000-000000000222"
+CORPUS_ID = "00000000-0000-0000-0000-000000000222"
 
 
 async def _create_corpus_with_docs(client, texts: list[str]) -> tuple[str, list[str]]:
     corpus_response = await client.post(
         f"{API_INGESTION}/corpora",
-        json={"project_id": PROJECT_ID, "name": "Generation Job Corpus"},
+        json={"corpus_id": CORPUS_ID, "name": "Generation Job Corpus"},
     )
     assert corpus_response.status_code == 201
     corpus_id = corpus_response.json()["data"]["id"]
@@ -53,7 +53,7 @@ async def _wait_for_terminal_job_status(client, job_id: str, timeout_seconds: fl
         last_payload = payload
         if payload["status"] in {"succeeded", "failed", "cancelled"}:
             return payload
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.25)
     raise AssertionError(f"Job {job_id} did not reach terminal status. Last payload: {last_payload}")
 
 
@@ -103,7 +103,7 @@ async def test_generate_codebook_job_completes_successfully(client, monkeypatch)
     assert created_job["status"] in {"queued", "running"}
 
     terminal_job = await _wait_for_terminal_job_status(client, created_job["id"])
-    assert terminal_job["status"] == "succeeded"
+    assert terminal_job["status"] == "succeeded", terminal_job.get("error_message")
     assert terminal_job["codebook_id"] is not None
     assert terminal_job["themes_created"] >= 1
     assert terminal_job["codes_created"] >= 1
@@ -264,3 +264,43 @@ async def test_generate_codebook_job_records_partial_parse_failures_and_succeeds
     assert warning["type"] == "passage_generation_partial_failures"
     assert warning["passages_failed"] == 1
     assert len(warning["failed_passages"]) == 1
+
+
+async def test_list_generation_jobs_filters_by_corpus_and_status(client, db_session) -> None:
+    # Insert jobs directly (no runner/LLM) and assert the list endpoint scopes
+    # by corpus and honours the comma-separated status filter. This backs the
+    # server-rendered "running" rows on the codebook list page.
+    from uuid import UUID
+
+    from app.models import CodebookGenerationJob
+
+    corpus = UUID(CORPUS_ID)
+    other_corpus = UUID("00000000-0000-0000-0000-0000000009ff")
+    db_session.add_all([
+        CodebookGenerationJob(status="running", codebook_name="Running One",
+                              corpus_id=corpus, transcript_document_ids_json="[]"),
+        CodebookGenerationJob(status="queued", codebook_name="Queued One",
+                              corpus_id=corpus, transcript_document_ids_json="[]"),
+        CodebookGenerationJob(status="succeeded", codebook_name="Done One",
+                              corpus_id=corpus, transcript_document_ids_json="[]"),
+        CodebookGenerationJob(status="running", codebook_name="Other Corpus",
+                              corpus_id=other_corpus, transcript_document_ids_json="[]"),
+    ])
+    await db_session.commit()
+
+    # No status filter → every job for the corpus, and only that corpus.
+    response = await client.get(
+        f"{API_CODEBOOKS}/generate-jobs", params={"corpus_id": CORPUS_ID}
+    )
+    assert response.status_code == 200
+    names = {job["codebook_name"] for job in response.json()["data"]}
+    assert names == {"Running One", "Queued One", "Done One"}
+
+    # Status filter → only the active jobs.
+    response = await client.get(
+        f"{API_CODEBOOKS}/generate-jobs",
+        params={"corpus_id": CORPUS_ID, "status": "queued,running"},
+    )
+    assert response.status_code == 200
+    active = {job["codebook_name"] for job in response.json()["data"]}
+    assert active == {"Running One", "Queued One"}
