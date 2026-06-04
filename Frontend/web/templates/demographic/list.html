@@ -50,6 +50,15 @@
                      href="{{ url_for('demographic.view_data', corpus_id=corpus_id, file_id=f.id) }}">
                     View Data
                   </a>
+                  <button type="button" class="btn btn-sm btn-outline-danger ms-2"
+                          id="delete-data-btn-{{ loop.index }}"
+                          data-bs-toggle="modal" 
+                          data-bs-target="#deleteDemographicModal-{{ loop.index }}">
+                    Delete
+                  </button>
+                  {% with modal_id='deleteDemographicModal-' ~ loop.index, form_action=url_for('demographic.delete_file', corpus_id=corpus_id, file_id=f.id), item_name=f.name %}
+                    {% include "_delete_modal.html" %}
+                  {% endwith %}
                 </td>
               </tr>
             {% endfor %}

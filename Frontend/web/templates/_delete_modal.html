@@ -1,0 +1,30 @@
+{# Reusable Delete Confirmation Modal #}
+{# 
+  Requires the following context variables when included:
+  - modal_id: Unique ID for the modal element
+  - form_action: The URL where the POST request should be sent
+  - item_name: The name of the item being deleted (for display)
+  - title: (Optional) Modal title, defaults to "Confirm Deletion"
+  - message: (Optional) Custom warning message
+#}
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" aria-labelledby="{{ modal_id }}Label" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="{{ modal_id }}Label">{{ title | default('Confirm Deletion') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>
+          {{ message | default('Are you sure you want to delete <strong>' ~ item_name ~ '</strong>? This action cannot be undone.') | safe }}
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <form action="{{ form_action }}" method="POST" class="d-inline">
+          <button type="submit" class="btn btn-danger">Delete</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

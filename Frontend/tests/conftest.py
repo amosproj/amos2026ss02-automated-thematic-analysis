@@ -153,6 +153,10 @@ class FakeBackend:
         self._maybe_raise("get_demographic_link_summary")
         return self.demographic_link_summary
 
+    def delete_demographic_file(self, corpus_id, file_id) -> None:
+        self._maybe_raise("delete_demographic_file")
+        pass
+
     # ---- Codebook generation jobs -------------------------------------------
 
     def create_generation_job(
