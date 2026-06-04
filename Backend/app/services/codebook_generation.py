@@ -15,7 +15,6 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
 from app.exceptions import NotFoundError, UnprocessableError
 from app.llm.pipelines import (
     build_codebook_generation_chain,
@@ -43,6 +42,13 @@ from app.schemas.llm import (
     PassageCodebookGeneration,
 )
 from app.services.theme_graph import ThemeGraphService
+
+
+_PASSAGE_GENERATION_MAX_CONCURRENCY = 8
+_PASSAGE_GENERATION_BATCH_SIZE = 16
+_PASSAGE_GENERATION_MAX_ATTEMPTS = 3
+_PASSAGE_GENERATION_RETRY_BASE_DELAY_S = 0.5
+_PASSAGE_GENERATION_RETRY_MAX_DELAY_S = 5.0
 
 
 @dataclass
@@ -249,12 +255,6 @@ class CodebookGenerationService:
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> tuple[list[PassageCodebookGeneration], list[GeneratedCodebookResponse.PassageFailure]]:
-        cfg = get_settings()
-        max_concurrency = max(1, int(cfg.CODEBOOK_GEN_MAX_CONCURRENCY))
-        batch_size = max(1, int(cfg.CODEBOOK_GEN_BATCH_SIZE))
-        attempts = max(1, int(cfg.CODEBOOK_GEN_MAX_RETRIES) + 1)
-        retry_base_delay_s = max(0.0, float(cfg.CODEBOOK_GEN_RETRY_BASE_DELAY_S))
-        retry_max_delay_s = max(0.0, float(cfg.CODEBOOK_GEN_RETRY_MAX_DELAY_S))
         started_at = time.monotonic()
 
         total = len(passages)
@@ -275,7 +275,7 @@ class CodebookGenerationService:
             retryable_failure_detected = False
             retry_indexes: list[int] = []
 
-            for chunk_indexes in self._chunked(pending_indexes, batch_size):
+            for chunk_indexes in self._chunked(pending_indexes, _PASSAGE_GENERATION_BATCH_SIZE):
                 if should_cancel is not None and await should_cancel():
                     raise CodebookGenerationCancelledError("Codebook generation was cancelled")
 
@@ -283,7 +283,7 @@ class CodebookGenerationService:
                 batch_results = await generate_codebook_for_passages(
                     [passages[index] for index in chunk_indexes],
                     chain=chain,
-                    max_concurrency=max_concurrency,
+                    max_concurrency=_PASSAGE_GENERATION_MAX_CONCURRENCY,
                 )
                 for local_index, result in enumerate(batch_results):
                     passage_index = chunk_indexes[local_index]
@@ -296,7 +296,7 @@ class CodebookGenerationService:
                         continue
 
                     if isinstance(result, (OutputParserException, ValidationError)):
-                        if attempt_count < attempts:
+                        if attempt_count < _PASSAGE_GENERATION_MAX_ATTEMPTS:
                             retry_indexes.append(passage_index)
                         else:
                             parse_failures_by_index[passage_index] = result
@@ -304,7 +304,7 @@ class CodebookGenerationService:
                         continue
 
                     # Retry transient provider/network failures, but fail fast on hard errors.
-                    if self._is_retryable_llm_exception(result) and attempt_count < attempts:
+                    if self._is_retryable_llm_exception(result) and attempt_count < _PASSAGE_GENERATION_MAX_ATTEMPTS:
                         retryable_failure_detected = True
                         retry_indexes.append(passage_index)
                         continue
@@ -321,8 +321,8 @@ class CodebookGenerationService:
                 retry_attempt = max(attempts_by_index[index] for index in retry_indexes)
                 retry_delay = self._compute_retry_delay(
                     attempt=retry_attempt,
-                    base_delay_s=retry_base_delay_s,
-                    max_delay_s=retry_max_delay_s,
+                    base_delay_s=_PASSAGE_GENERATION_RETRY_BASE_DELAY_S,
+                    max_delay_s=_PASSAGE_GENERATION_RETRY_MAX_DELAY_S,
                 )
                 if retry_delay > 0:
                     await asyncio.sleep(retry_delay)
@@ -344,8 +344,8 @@ class CodebookGenerationService:
             len(results),
             len(failures),
             sum(attempts_by_index.values()),
-            max_concurrency,
-            batch_size,
+            _PASSAGE_GENERATION_MAX_CONCURRENCY,
+            _PASSAGE_GENERATION_BATCH_SIZE,
             time.monotonic() - started_at,
         )
         return results, failures
