@@ -43,7 +43,6 @@ from app.schemas.llm import (
 )
 from app.services.theme_graph import ThemeGraphService
 
-
 _PASSAGE_GENERATION_MAX_CONCURRENCY = 8
 _PASSAGE_GENERATION_BATCH_SIZE = 16
 _PASSAGE_GENERATION_MAX_ATTEMPTS = 3
