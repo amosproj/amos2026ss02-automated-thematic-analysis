@@ -126,6 +126,28 @@ async def test_get_codebook_detail_not_found_raises(db_session):
 
 
 # ---------------------------------------------------------------------------
+# delete_codebook
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_codebook_cascades_and_succeeds(db_session):
+    await _ensure_corpus(db_session)
+    svc = CodebookService(db_session)
+    created_cb, _, _, _, _ = await svc.create_codebook(_payload(3))
+
+    await svc.delete_codebook(created_cb.id)
+
+    with pytest.raises(NotFoundError):
+        await svc.get_codebook_detail(created_cb.id)
+
+
+async def test_delete_codebook_not_found_raises(db_session):
+    svc = CodebookService(db_session)
+    with pytest.raises(NotFoundError):
+        await svc.delete_codebook(uuid.uuid4())
+
+
+# ---------------------------------------------------------------------------
 # build_detail_schema
 # ---------------------------------------------------------------------------
 
