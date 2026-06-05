@@ -93,6 +93,10 @@ class FakeBackend:
 
     # ---- Codebooks / themes -------------------------------------------------
 
+    def delete_codebook(self, codebook_id: str) -> None:
+        self._maybe_raise("delete_codebook")
+        self.codebooks = [cb for cb in self.codebooks if cb.get("id") != codebook_id]
+
     def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
         self._maybe_raise("list_codebooks")
         if not corpus_id:

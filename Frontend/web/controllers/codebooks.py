@@ -726,3 +726,14 @@ def codebook_review(codebook_id: str) -> str:
         themes=_flatten_codebook_for_preview(codebook),
         error=None,
     )
+
+
+@bp.post("/<corpus_id>/<codebook_id>/delete")
+def delete_codebook(corpus_id: str, codebook_id: str):
+    """Delete a codebook and its themes."""
+    try:
+        _backend().delete_codebook(codebook_id)
+        flash("Codebook successfully deleted.", "success")
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+    return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
