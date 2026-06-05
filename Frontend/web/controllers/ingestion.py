@@ -2,7 +2,6 @@ import uuid
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
 from web.services.backend_client import (
-    BackendClient,
     BackendError,
     BackendValidationError,
     get_backend_client as _backend,
@@ -94,7 +93,6 @@ def create_corpus_submit():
     On success, redirect to the upload page scoped to the new corpus so both
     transcript and demographic forms target it immediately.
     """
-    cfg = current_app.config
     name = (request.form.get("name") or "").strip()
     current_corpus_id = (request.form.get("current_corpus_id") or "").strip()
 
