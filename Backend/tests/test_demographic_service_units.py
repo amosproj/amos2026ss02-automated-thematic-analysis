@@ -85,7 +85,7 @@ async def test_delete_file_not_found(tmp_path):
     session.execute = AsyncMock(return_value=none_result)
     service = DemographicService(session=session, settings=_settings(tmp_path))
     service._validate_corpus = AsyncMock(return_value=None)
-    
+
     from app.exceptions import NotFoundError
     with pytest.raises(NotFoundError, match="not found in corpus"):
         await service.delete_file(uuid.uuid4(), uuid.uuid4())
@@ -99,7 +99,7 @@ async def test_delete_file_success(tmp_path):
     session.execute = AsyncMock(return_value=result)
     service = DemographicService(session=session, settings=_settings(tmp_path))
     service._validate_corpus = AsyncMock(return_value=None)
-    
+
     await service.delete_file(uuid.uuid4(), uuid.uuid4())
     session.delete.assert_called_once_with(file_obj)
     session.commit.assert_called_once()
