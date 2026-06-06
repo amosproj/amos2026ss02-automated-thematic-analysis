@@ -68,10 +68,11 @@ The recommended way to start the application is via Docker.
 | Start stack | `./setup.sh` | `.\setup.ps1` |
 | Start (foreground logs) | `./setup.sh -f` | `.\setup.ps1 -Foreground` |
 | Run tests | `./setup.sh --test` | `.\setup.ps1 -Test` |
-| Stop stack | `./setup.sh --down` | `.\setup.ps1 -Down` |
+| Stop stack | `./teardown.sh` (or `./setup.sh --down`) | `.\teardown.ps1` (or `.\setup.ps1 -Down`) |
 | Stop + delete data | `./setup.sh --down-volumes` | `.\setup.ps1 -DownVolumes` |
+| Fully clean restart (destroy data) | `./setup.sh --down-volumes -y && ./setup.sh` | `.\setup.ps1 -DownVolumes -Yes; .\setup.ps1` |
 
-Run `./setup.sh --help` or `Get-Help .\setup.ps1` for the full option reference.
+Run `./setup.sh --help` or `Get-Help .\setup.ps1` for the full option reference. Note that `./teardown.sh` is just a convenience wrapper for `./setup.sh --down`, so you do not need to run both.
 
 <details>
 <summary>Manual setup (fallback)</summary>
