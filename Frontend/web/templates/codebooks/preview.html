@@ -28,7 +28,9 @@
                value="{{ codebook_name or 'My Codebook' }}"
                class="form-control form-control-lg bg-light"
                placeholder="Enter a name for this codebook"
+               minlength="1"
                required>
+        <div class="invalid-feedback">Codebook name must not be blank.</div>
       </div>
     </div>
   </div>
@@ -201,6 +203,36 @@
     const row = button.closest('.theme-row');
     row.remove();
     updateThemeList();
+  }
+
+  // --- Trim-check on the codebook name before submit ---
+  const nameInput = document.getElementById("codebook_name");
+  const form = document.getElementById("codebook-form");
+  if (form && nameInput) {
+    form.addEventListener("submit", (e) => {
+      if (!nameInput.value.trim()) {
+        e.preventDefault();
+        nameInput.value = "";
+        nameInput.classList.add("is-invalid");
+        nameInput.focus();
+      }
+    });
+    nameInput.addEventListener("input", () => {
+      if (nameInput.value.trim()) nameInput.classList.remove("is-invalid");
+    });
+
+    // --- Warn before navigating away with unsaved edits ---
+    const serialize = (fd) => [...fd.entries()].map(([k, v]) => k + "=" + v).sort().join("&");
+    const originalData = serialize(new FormData(form));
+    let formSubmitting = false;
+    form.addEventListener("submit", () => { formSubmitting = true; });
+    window.addEventListener("beforeunload", (e) => {
+      if (formSubmitting) return;
+      if (serialize(new FormData(form)) !== originalData) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    });
   }
 </script>
 {% endblock %}

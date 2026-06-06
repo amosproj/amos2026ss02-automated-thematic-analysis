@@ -384,6 +384,7 @@ def confirm_submit(corpus_id: str) -> str:
                     for r in rows
                 ]
             if codebook_name == original_name and _normalise(themes) == _normalise(original_themes):
+                flash("No changes were made to the codebook.", "info")
                 return redirect(url_for(
                     "codebooks.success",
                     corpus_id=corpus_id,

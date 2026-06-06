@@ -12,9 +12,14 @@
   <h1 class="h3 mb-4">Upload Results</h1>
 
   {% if results %}
-    {% set succeeded = results | selectattr("success") | list | length %}
-    {% set failed = results | rejectattr("success") | list | length %}
-    <p class="mb-3">{{ succeeded }} succeeded, {{ failed }} failed.</p>
+    {% set succeeded = results | selectattr("success") | selectattr("documents_created") | list | length %}
+    {% set warned   = results | selectattr("success") | rejectattr("documents_created") | list | length %}
+    {% set failed   = results | rejectattr("success") | list | length %}
+    <p class="mb-3">
+      {{ succeeded }} uploaded
+      {%- if warned %}, {{ warned }} uploaded with warnings{% endif %}
+      {%- if failed %}, {{ failed }} failed{% endif %}.
+    </p>
 
     <div class="bg-white border rounded-2 mb-4">
       <div class="table-responsive">
@@ -28,17 +33,24 @@
           </thead>
           <tbody>
             {% for r in results %}
-              <tr class="{{ 'table-success' if r.success else 'table-danger' }}">
+              {% set no_content = r.success and r.documents_created == 0 %}
+              <tr class="{{ 'table-warning' if no_content else ('table-success' if r.success else 'table-danger') }}">
                 <td>{{ r.filename }}</td>
                 <td>
-                  {% if r.success %}
+                  {% if no_content %}
+                    <span class="badge text-bg-warning text-dark">No content</span>
+                  {% elif r.success %}
                     <span class="badge text-bg-success">Uploaded</span>
                   {% else %}
                     <span class="badge text-bg-danger">Failed</span>
                   {% endif %}
                 </td>
                 <td>
-                  {% if r.success %}
+                  {% if no_content %}
+                    The file was parsed successfully but contained no storable content
+                    (all text was blank or all entries were skipped).
+                    Nothing was added to the corpus.
+                  {% elif r.success %}
                     {% if r.stored_filename != r.filename %}
                       Renamed to <code>{{ r.stored_filename }}</code> (duplicate name).<br>
                     {% endif %}
