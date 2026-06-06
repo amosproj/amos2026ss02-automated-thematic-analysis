@@ -5,6 +5,9 @@
 {% block content %}
 <div class="container py-4" style="max-width: 900px;">
   <form id="codebook-form" method="post" action="{{ url_for('codebooks.confirm_submit', corpus_id=corpus_id) }}">
+  {% if source_codebook_id %}
+    <input type="hidden" name="source_codebook_id" value="{{ source_codebook_id }}">
+  {% endif %}
   
   <div class="card shadow-sm border-0 rounded-4 mb-4">
     <div class="card-body p-4">

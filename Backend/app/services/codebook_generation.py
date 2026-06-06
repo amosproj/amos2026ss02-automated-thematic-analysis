@@ -92,13 +92,19 @@ class CodebookGenerationService:
             transcript_document_ids=normalized_document_ids,
         )
         if not documents:
-            raise UnprocessableError("No documents found in the selected corpus")
+            raise UnprocessableError(
+                "No transcripts found in the selected corpus. "
+                "Please upload transcripts before generating a codebook."
+            )
         passages = await self._load_passages(
             corpus_id=corpus_id,
             transcript_document_ids=[document.id for document in documents],
         )
         if not passages:
-            raise UnprocessableError("No transcript passages found for selected transcript_document_ids")
+            raise UnprocessableError(
+                "The transcripts in the selected corpus contain no processable text. "
+                "Please check that your uploads completed successfully and contain text content."
+            )
 
         # End the read transaction before long-running LLM calls so the session
         # does not keep a checked-out DB connection during inference.
