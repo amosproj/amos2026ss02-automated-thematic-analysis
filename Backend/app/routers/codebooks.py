@@ -301,3 +301,14 @@ async def get_codebook_detail(
     codebook, themes, edges, codes, theme_code_edges = await service.get_codebook_detail(codebook_id)
     detail = CodebookService.build_detail_schema(codebook, themes, edges, codes, theme_code_edges)
     return JSONResponse(content=ResponseEnvelope.ok(detail).model_dump(mode="json"))
+
+
+@router.delete("/{codebook_id}", response_model=ResponseEnvelope[None])
+async def delete_codebook(
+    codebook_id: UUID,
+    session: DbSession,
+) -> JSONResponse:
+    """Delete a codebook and all its themes/codes."""
+    service = CodebookService(session)
+    await service.delete_codebook(codebook_id)
+    return JSONResponse(content=ResponseEnvelope.ok(None).model_dump(mode="json"))
