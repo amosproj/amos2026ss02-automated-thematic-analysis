@@ -226,6 +226,19 @@ class BackendClient:
         """Get transcript ↔ demographic linking status."""
         return self._get(f"/demographic/{corpus_id}/link-summary")
 
+    def delete_demographic_file(self, corpus_id: str, file_id: str) -> None:
+        """Delete a demographic file from the backend."""
+        path = f"/demographic/{corpus_id}/files/{file_id}"
+        started_at = time.monotonic()
+        try:
+            r = self._client.delete(path)
+            r.raise_for_status()
+            return self._unwrap(r)
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+        except (json.JSONDecodeError, KeyError) as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+
     # ---- Codebook Upload & Parsing ------------------------------------------
 
     def parse_csv_preview(self, file: FileStorage) -> list[dict]:
