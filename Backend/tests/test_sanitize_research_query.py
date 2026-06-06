@@ -20,6 +20,11 @@ class TestSanitizeResearchQuery:
         assert "alert" not in result
         assert "How are themes formed?" in result
 
+    def test_script_tag_with_space_before_closing_angle_is_removed(self) -> None:
+        result = sanitize_research_query('<script >alert("xss")</script >How are themes formed?')
+        assert "alert" not in result
+        assert "How are themes formed?" in result
+
     def test_sql_injection_like_string_is_preserved_literally(self) -> None:
         value = "What about users who say ' OR 1=1 -- in interviews?"
         result = sanitize_research_query(value)
