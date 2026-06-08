@@ -444,6 +444,11 @@
 }
 .upload-card--teal:hover { border-color: #14b8a6; }
 
+.upload-card--cyan .upload-card-header {
+    background: linear-gradient(135deg, #0e7490, #06b6d4);
+}
+.upload-card--cyan:hover { border-color: #06b6d4; }
+
 .upload-card-icon {
     width: 26px;
     height: 26px;
@@ -546,6 +551,35 @@
     opacity: 0.85;
     cursor: not-allowed;
     pointer-events: auto;     /* see .btn-indigo:disabled for rationale */
+    box-shadow: none;
+}
+
+/* Cyan variant: used for demographic upload card */
+.btn-cyan {
+    color: #fff;
+    border: 1px solid transparent;
+    font-weight: 500;
+    padding: 0.45rem 1.1rem;
+    transition: background 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+    background: #0e7490;
+}
+.btn-cyan:hover,
+.btn-cyan:focus {
+    background: #075985;
+    color: #fff;
+    box-shadow: 0 6px 14px -6px rgba(14, 116, 144, 0.45);
+}
+.btn-cyan:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+.btn-cyan:disabled,
+.btn-cyan.disabled {
+    background: #cffafe;
+    color: #ecfeff;
+    opacity: 0.85;
+    cursor: not-allowed;
+    pointer-events: auto;
     box-shadow: none;
 }
 
