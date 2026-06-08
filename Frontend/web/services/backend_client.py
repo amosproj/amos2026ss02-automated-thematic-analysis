@@ -156,23 +156,6 @@ class BackendClient:
     # ---- Codebooks ----------------------------------------------------------
 
 
-    def create_codebook_generation_job(
-        self,
-        *,
-        codebook_name: str,
-        corpus_id: str,
-        research_query: str,
-        transcript_document_ids: list[str] | None = None,
-    ) -> dict:
-        body: dict = {
-            "codebook_name": codebook_name,
-            "corpus_id": corpus_id,
-            "research_query": research_query,
-        }
-        if transcript_document_ids:
-            body["transcript_document_ids"] = transcript_document_ids
-        return self._post("/codebooks/generate-jobs", json=body)
-
     def get_theme_frequencies(self, codebook_id: str) -> list[dict]:
         return self._get(f"/codebooks/{codebook_id}/themes")
 
@@ -286,9 +269,15 @@ class BackendClient:
         self,
         codebook_name: str,
         corpus_id: str,
+        research_query: str | None = None,
+        researcher_topics: str | None = None,
         transcript_document_ids: list[str] | None = None,
     ) -> dict:
         payload: dict = {"codebook_name": codebook_name, "corpus_id": corpus_id}
+        if research_query:
+            payload["research_query"] = research_query
+        if researcher_topics:
+            payload["researcher_topics"] = researcher_topics
         if transcript_document_ids:
             payload["transcript_document_ids"] = transcript_document_ids
         return self._post("/codebooks/generate-jobs", json=payload)

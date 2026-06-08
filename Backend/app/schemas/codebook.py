@@ -8,7 +8,6 @@ from pydantic import Field, ValidationInfo, field_validator
 from app.schemas.common import BaseSchema
 from app.utils.sanitize import sanitize_research_query
 
-_QUERY_MIN = 10
 _QUERY_MAX = 500
 
 
@@ -96,16 +95,22 @@ class CodebookSchema(BaseSchema):
     version: int
     created_by: str
     research_query: str | None = None
+    researcher_topics: str | None = None
 
 
 class CodebookGenerateRequest(BaseSchema):
     codebook_name: str = Field(min_length=1, max_length=255)
     corpus_id: UUID
     transcript_document_ids: list[UUID] | None = None
-    research_query: str = Field(
-        min_length=_QUERY_MIN,
+    research_query: str | None = Field(
+        default=None,
         max_length=_QUERY_MAX,
-        description="Free-text research question guiding thematic analysis (10–500 characters).",
+        description="Optional free-text research question guiding thematic analysis (up to 500 characters).",
+    )
+    researcher_topics: str | None = Field(
+        default=None,
+        max_length=_QUERY_MAX,
+        description="Optional comma-separated topics the researcher wants the analysis to cover.",
     )
 
     @field_validator("codebook_name")
@@ -127,16 +132,29 @@ class CodebookGenerateRequest(BaseSchema):
 
     @field_validator("research_query")
     @classmethod
-    def sanitize_and_validate_query(cls, value: str) -> str:
+    def sanitize_and_validate_query(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         cleaned = sanitize_research_query(value)
-        if len(cleaned) < _QUERY_MIN:
-            raise ValueError(
-                f"research_query must be at least {_QUERY_MIN} characters after sanitisation "
-                f"(got {len(cleaned)})."
-            )
+        if not cleaned:
+            return None
         if len(cleaned) > _QUERY_MAX:
             raise ValueError(
                 f"research_query must be at most {_QUERY_MAX} characters (got {len(cleaned)})."
+            )
+        return cleaned
+
+    @field_validator("researcher_topics")
+    @classmethod
+    def sanitize_and_validate_topics(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = sanitize_research_query(value)
+        if not cleaned:
+            return None
+        if len(cleaned) > _QUERY_MAX:
+            raise ValueError(
+                f"researcher_topics must be at most {_QUERY_MAX} characters (got {len(cleaned)})."
             )
         return cleaned
 
@@ -172,6 +190,7 @@ class CodebookGenerationJobSchema(BaseSchema):
     transcript_document_ids: list[UUID]
     cancel_requested: bool
     research_query: str | None = None
+    researcher_topics: str | None = None
 
     codebook_id: UUID | None = None
     passages_total: int

@@ -15,9 +15,11 @@
           action="{{ url_for('codebooks.new_codebook_auto_submit', corpus_id=corpus_id) }}">
       <input type="hidden" name="mode" value="{{ mode }}">
 
-      <div class="mb-3">
-        <label for="codebook_name" class="form-label fw-semibold">Codebook name</label>
-        <input class="form-control"
+      <div class="mb-2">
+        <label for="codebook_name" class="form-label fw-bold fs-5 mb-1">
+          Codebook name <span class="text-danger">*</span>
+        </label>
+        <input class="form-control form-control-lg"
                type="text"
                id="codebook_name"
                name="codebook_name"
@@ -25,6 +27,56 @@
                maxlength="255"
                required
                autofocus>
+        <div class="form-text">Required.</div>
+      </div>
+
+      <hr class="my-4">
+
+      <p class="text-secondary small mb-3">
+        Optionally guide the AI below. Leave both blank to let it generate the codebook
+        fully automatically.
+      </p>
+
+      <div class="mb-3">
+        <label for="research_query" class="form-label fw-semibold">
+          Research question <span class="text-secondary fw-normal small">(optional)</span>
+        </label>
+        <textarea class="form-control{% if rq_error %} is-invalid{% endif %}"
+                  id="research_query"
+                  name="research_query"
+                  rows="3"
+                  maxlength="500"
+                  aria-describedby="rq-help rq-counter rq-error"
+                  placeholder="e.g. How do participants experience remote work? What challenges do they face?">{{ research_query or '' }}</textarea>
+        <div class="d-flex justify-content-between align-items-start mt-1">
+          <div id="rq-help" class="form-text">If provided, the AI focuses on themes relevant to this question.</div>
+          <div id="rq-counter" class="form-text text-end ms-2 text-secondary">0 / 500</div>
+        </div>
+        <div id="rq-error" class="invalid-feedback">
+          {{ rq_error or 'Research question must be at most 500 characters.' }}
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label for="researcher_topics" class="form-label fw-semibold">
+          Topics to focus on <span class="text-secondary fw-normal small">(optional)</span>
+        </label>
+        <textarea class="form-control{% if rt_error %} is-invalid{% endif %}"
+                  id="researcher_topics"
+                  name="researcher_topics"
+                  rows="2"
+                  maxlength="500"
+                  aria-describedby="rt-help rt-counter rt-error"
+                  placeholder="e.g. isolation, productivity, work-life balance">{{ researcher_topics or '' }}</textarea>
+        <div class="d-flex justify-content-between align-items-start mt-1">
+          <div id="rt-help" class="form-text">
+            Specific themes you want the AI to look for, even if subtle — comma-separated.
+          </div>
+          <div id="rt-counter" class="form-text text-end ms-2 text-secondary">0 / 500</div>
+        </div>
+        <div id="rt-error" class="invalid-feedback">
+          {{ rt_error or 'Topics must be at most 500 characters.' }}
+        </div>
       </div>
 
       <div class="d-flex gap-2">
@@ -40,16 +92,38 @@
   </div>
 
   <script>
-    // Encode the entered name in this page's URL before navigating away, so a
-    // later browser-back lands here with the field re-populated.
     (() => {
       const form = document.querySelector("form");
       const nameInput = document.getElementById("codebook_name");
+      const rqInput = document.getElementById("research_query");
+      const rtInput = document.getElementById("researcher_topics");
+      const MAX = 500;
+
+      function bindCounter(input, counterId) {
+        const counter = document.getElementById(counterId);
+        const update = () => {
+          const len = input.value.trim().length;
+          counter.textContent = len + " / " + MAX;
+          counter.classList.toggle("text-danger", len > MAX);
+          counter.classList.toggle("text-secondary", len <= MAX);
+        };
+        input.addEventListener("input", update);
+        update();
+      }
+      bindCounter(rqInput, "rq-counter");
+      bindCounter(rtInput, "rt-counter");
+
+      // Codebook name is the only required field (enforced by the browser via
+      // `required`). The two guidance fields are optional, so submit only needs
+      // to persist field values for browser-back repopulation.
       form.addEventListener("submit", () => {
         const url = new URL(window.location.href);
-        const value = nameInput.value.trim();
-        if (value) url.searchParams.set("name", value);
-        else url.searchParams.delete("name");
+        const name = nameInput.value.trim();
+        const q = rqInput.value.trim();
+        const t = rtInput.value.trim();
+        if (name) url.searchParams.set("name", name); else url.searchParams.delete("name");
+        if (q) url.searchParams.set("rq", q); else url.searchParams.delete("rq");
+        if (t) url.searchParams.set("rt", t); else url.searchParams.delete("rt");
         window.history.replaceState(null, "", url.toString());
       });
     })();

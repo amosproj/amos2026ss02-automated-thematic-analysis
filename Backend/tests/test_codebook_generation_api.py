@@ -755,8 +755,19 @@ async def test_generate_codebook_continues_when_one_passage_has_validation_error
     assert len(payload["failed_passages"]) == 1
 
 
-async def test_generate_codebook_rejects_missing_research_query(client) -> None:
+async def test_generate_codebook_allows_missing_research_query(client, monkeypatch) -> None:
+    # research_query is optional: omitting it generates a codebook with no
+    # research-focus steering rather than being rejected.
     corpus_id, document_ids = await _create_corpus_and_docs(client)
+
+    def _fake(passage: str, **_kwargs) -> PassageCodebookGeneration:
+        return PassageCodebookGeneration(
+            themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Workflow Friction")])],
+            codes=[GeneratedCodeSuggestion(label="Delay", description=None, theme_path=["Workflow Friction"])],
+        )
+
+    monkeypatch.setattr("app.services.codebook_generation.generate_codebook_for_passage", _fake)
+
     response = await client.post(
         f"{API_CODEBOOKS}/generate",
         json={
@@ -765,21 +776,7 @@ async def test_generate_codebook_rejects_missing_research_query(client) -> None:
             "transcript_document_ids": document_ids,
         },
     )
-    assert response.status_code == 422
-
-
-async def test_generate_codebook_rejects_too_short_research_query(client) -> None:
-    corpus_id, document_ids = await _create_corpus_and_docs(client)
-    response = await client.post(
-        f"{API_CODEBOOKS}/generate",
-        json={
-            "codebook_name": "Short Query",
-            "corpus_id": corpus_id,
-            "transcript_document_ids": document_ids,
-            "research_query": "Too short",
-        },
-    )
-    assert response.status_code == 422
+    assert response.status_code == 201
 
 
 async def test_generate_codebook_rejects_too_long_research_query(client) -> None:

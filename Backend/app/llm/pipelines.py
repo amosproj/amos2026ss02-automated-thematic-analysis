@@ -6,6 +6,7 @@ from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from app.llm.client import build_chat_model
 from app.llm.prompts import (
     _build_research_query_block,
+    _build_researcher_topics_block,
     build_code_consolidation_prompt,
     build_codebook_application_prompt,
     build_codebook_generation_prompt,
@@ -62,6 +63,7 @@ def generate_codebook_for_passage(
     passage: str,
     *,
     research_query: str | None = None,
+    researcher_topics: str | None = None,
     model: BaseChatModel | None = None,
 ) -> PassageCodebookGeneration:
     if not passage.strip():
@@ -73,6 +75,7 @@ def generate_codebook_for_passage(
     raw_result = chain.invoke({
         "passage": passage,
         "research_query_block": _build_research_query_block(research_query or ""),
+        "researcher_topics_block": _build_researcher_topics_block(researcher_topics or ""),
     })
     return PassageCodebookGeneration(**raw_result)
 

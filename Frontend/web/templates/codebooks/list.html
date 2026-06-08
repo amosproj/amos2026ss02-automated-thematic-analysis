@@ -50,37 +50,6 @@
      started in THIS browser, only when not already server-rendered above. #}
   <div id="ata-job-placeholders"></div>
 
-  {% if corpus_id %}
-  <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-white fw-semibold">Generate new codebook</div>
-    <div class="card-body">
-      <form method="post" action="{{ url_for('codebooks.start_codebook_generation', corpus_id=corpus_id) }}" novalidate id="generate-codebook-form">
-        <div class="mb-3">
-          <label for="codebook_name" class="form-label fw-semibold">Codebook name <span class="text-danger">*</span></label>
-          <input type="text" class="form-control" id="codebook_name" name="codebook_name" required maxlength="255"
-                 placeholder="e.g. Barriers to adoption — Round 1">
-        </div>
-        <div class="mb-3">
-          <label for="research_query" class="form-label fw-semibold">
-            Research question <span class="text-danger">*</span>
-          </label>
-          <textarea class="form-control" id="research_query" name="research_query"
-                    rows="3" minlength="10" maxlength="500" required
-                    placeholder="Describe your research interest. The AI will focus on themes relevant to this question."
-                    aria-describedby="rq-help rq-counter rq-error"></textarea>
-          <div class="d-flex justify-content-between align-items-start mt-1">
-            <div id="rq-help" class="form-text">Between 10 and 500 characters.</div>
-            <div id="rq-counter" class="form-text text-end ms-2 text-secondary">0 / 500</div>
-          </div>
-          <div id="rq-error" class="invalid-feedback">Please enter a research question (10–500 characters).</div>
-          <div aria-live="polite" id="rq-live" class="visually-hidden"></div>
-        </div>
-        <button type="submit" class="btn btn-primary">Start generation</button>
-      </form>
-    </div>
-  </div>
-  {% endif %}
-
   {% if error %}
     <p class="text-secondary">Couldn't load codebooks right now.</p>
   {% elif codebooks %}
@@ -124,8 +93,4 @@
   {% else %}
     <p class="text-secondary">No codebooks found.</p>
   {% endif %}
-{% endblock %}
-{% block scripts %}
-  {{ super() }}
-  <script src="{{ url_for('static', filename='js/codebook_generation.js') }}"></script>
 {% endblock %}

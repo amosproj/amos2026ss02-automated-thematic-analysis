@@ -17,7 +17,6 @@ from flask import (
 from web.services.backend_client import (
     BackendError,
     BackendNotFoundError,
-    BackendValidationError,
     get_backend_client as _backend,
 )
 from web.services.corpus_context import resolve_active_corpus, set_active_corpus_id
@@ -26,7 +25,6 @@ bp = Blueprint("codebooks", __name__)
 
 CODING_MODES = ("auto", "semi", "manual")
 
-_QUERY_MIN = 10
 _QUERY_MAX = 500
 
 
@@ -67,41 +65,6 @@ def codebooks_upload_landing() -> str:
         return redirect(url_for("codebooks.list_codebooks"))
 
     return redirect(url_for("codebooks.upload_form", corpus_id=active_corpus_id))
-
-
-@bp.post("/<corpus_id>/generate")
-def start_codebook_generation(corpus_id: str):
-    codebook_name = request.form.get("codebook_name", "").strip()
-    research_query = request.form.get("research_query", "").strip()
-
-    if not codebook_name:
-        flash("Codebook name is required.", "danger")
-        return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
-
-    if len(research_query) < _QUERY_MIN:
-        flash(f"Research query must be at least {_QUERY_MIN} characters.", "danger")
-        return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
-
-    if len(research_query) > _QUERY_MAX:
-        flash(f"Research query must be at most {_QUERY_MAX} characters.", "danger")
-        return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
-
-    try:
-        _backend().create_codebook_generation_job(
-            codebook_name=codebook_name,
-            corpus_id=corpus_id,
-            research_query=research_query,
-        )
-        flash(
-            "Codebook generation started. Refresh the page in a moment to see the new codebook.",
-            "success",
-        )
-    except BackendValidationError as exc:
-        flash(exc.user_message, "danger")
-    except BackendError as exc:
-        flash(exc.user_message, "danger")
-
-    return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
 
 
 @bp.get("/<corpus_id>/")
@@ -527,6 +490,8 @@ def new_codebook_auto_form(corpus_id: str) -> str:
         corpus_id=corpus_id,
         mode=mode,
         codebook_name=request.args.get("name", ""),
+        research_query=request.args.get("rq", ""),
+        researcher_topics=request.args.get("rt", ""),
     )
 
 
@@ -534,28 +499,41 @@ def new_codebook_auto_form(corpus_id: str) -> str:
 def new_codebook_auto_submit(corpus_id: str):
     mode = _resolve_mode(request.form.get("mode", ""))
     name = (request.form.get("codebook_name") or "").strip()
-    if not name:
-        flash("Please give your codebook a name.", "danger")
+    research_query = (request.form.get("research_query") or "").strip()
+    researcher_topics = (request.form.get("researcher_topics") or "").strip()
+
+    def _render_form(rq_error: str | None = None, rt_error: str | None = None):
         return render_template(
             "codebooks/new/auto_form.html",
             corpus_id=corpus_id,
             mode=mode,
-            codebook_name="",
+            codebook_name=name,
+            research_query=research_query,
+            researcher_topics=researcher_topics,
+            rq_error=rq_error,
+            rt_error=rt_error,
         )
+
+    if not name:
+        flash("Please give your codebook a name.", "danger")
+        return _render_form()
+
+    # research_query and researcher_topics are both optional; only cap length.
+    if len(research_query) > _QUERY_MAX:
+        return _render_form(rq_error=f"Research question must be at most {_QUERY_MAX} characters.")
+    if len(researcher_topics) > _QUERY_MAX:
+        return _render_form(rt_error=f"Topics must be at most {_QUERY_MAX} characters.")
 
     try:
         job = _backend().create_generation_job(
             codebook_name=name,
             corpus_id=corpus_id,
+            research_query=research_query or None,
+            researcher_topics=researcher_topics or None,
         )
     except BackendError as exc:
         flash(exc.user_message, "danger")
-        return render_template(
-            "codebooks/new/auto_form.html",
-            corpus_id=corpus_id,
-            mode=mode,
-            codebook_name=name,
-        )
+        return _render_form()
 
     encoded_job = quote_plus(str(job["id"]))
     encoded_name = quote_plus(name)

@@ -72,6 +72,7 @@ class CodebookGenerationService:
         corpus_id: UUID,
         transcript_document_ids: list[UUID] | None,
         research_query: str | None = None,
+        researcher_topics: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> GeneratedCodebookResponse:
@@ -98,6 +99,7 @@ class CodebookGenerationService:
         generation_results, failed_passages = await self._generate_per_passage(
             passages,
             research_query=research_query,
+            researcher_topics=researcher_topics,
             on_progress=on_progress,
             should_cancel=should_cancel,
         )
@@ -126,6 +128,7 @@ class CodebookGenerationService:
             codebook_name=codebook_name,
             corpus_id=corpus_id,
             research_query=research_query,
+            researcher_topics=researcher_topics,
             theme_nodes=theme_nodes,
             code_nodes=code_nodes,
             hierarchy_edges=hierarchy_edges,
@@ -239,6 +242,7 @@ class CodebookGenerationService:
         passages: list[str],
         *,
         research_query: str | None = None,
+        researcher_topics: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> tuple[list[PassageCodebookGeneration], list[GeneratedCodebookResponse.PassageFailure]]:
@@ -257,7 +261,10 @@ class CodebookGenerationService:
                 try:
                     # LLM calls are synchronous, so run them off the event loop.
                     generation = await asyncio.to_thread(
-                        generate_codebook_for_passage, passage, research_query=research_query
+                        generate_codebook_for_passage,
+                        passage,
+                        research_query=research_query,
+                        researcher_topics=researcher_topics,
                     )
                     results.append(generation)
                     parse_error = None
@@ -937,6 +944,7 @@ class CodebookGenerationService:
         codebook_name: str,
         corpus_id: UUID,
         research_query: str | None = None,
+        researcher_topics: str | None = None,
         theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
         code_nodes: list[_CodeDraft],
         hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
@@ -951,6 +959,7 @@ class CodebookGenerationService:
                 version=version,
                 created_by="system-llm",
                 research_query=research_query,
+                researcher_topics=researcher_topics,
             )
             self._session.add(codebook)
             await self._session.flush()

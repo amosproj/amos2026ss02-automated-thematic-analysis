@@ -37,6 +37,7 @@ class CodebookGenerationJob(Base, TimestampMixin):
     # structured JSON describing passages skipped after repeated parser errors.
     error_message: Mapped[str | None] = mapped_column(Text(), nullable=True)
     research_query: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    researcher_topics: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)

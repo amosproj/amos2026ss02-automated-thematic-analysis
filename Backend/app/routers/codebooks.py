@@ -51,6 +51,7 @@ def _to_job_schema(job: CodebookGenerationJob) -> CodebookGenerationJobSchema:
         transcript_document_ids=_deserialize_document_ids(job.transcript_document_ids_json),
         cancel_requested=job.cancel_requested,
         research_query=job.research_query,
+        researcher_topics=job.researcher_topics,
         codebook_id=job.codebook_id,
         passages_total=job.passages_total,
         passages_done=job.passages_done,
@@ -103,6 +104,7 @@ async def generate_codebook(
         corpus_id=payload.corpus_id,
         transcript_document_ids=payload.transcript_document_ids,
         research_query=payload.research_query,
+        researcher_topics=payload.researcher_topics,
     )
     return JSONResponse(
         status_code=201,
@@ -135,6 +137,7 @@ async def create_generate_codebook_job(
         passages_total=0,
         passages_done=0,
         research_query=payload.research_query,
+        researcher_topics=payload.researcher_topics,
     )
     session.add(job)
     await session.commit()
