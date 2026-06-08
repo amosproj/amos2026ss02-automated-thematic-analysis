@@ -224,3 +224,40 @@ async def test_list_codebooks_empty(client):
     body = resp.json()
     assert body["success"] is True
     assert isinstance(body["data"], list)
+
+
+# ---------------------------------------------------------------------------
+# DELETE /codebooks/{codebook_id}
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_codebook_success(client):
+    await _ensure_corpus(client)
+    payload = {
+        "name": "Delete Me Codebook",
+        "corpus_id": CORPUS_ID,
+        "nodes": [
+            {"name": "A", "description": "Desc A", "node_type": "THEME"},
+            {"name": "B", "description": "Desc B", "node_type": "THEME"},
+            {"name": "C", "description": "Desc C", "node_type": "THEME"},
+        ],
+    }
+    create_resp = await client.post(f"{API}/", json=payload)
+    cb_id = create_resp.json()["data"]["id"]
+
+    delete_resp = await client.delete(f"{API}/{cb_id}")
+    assert delete_resp.status_code == 200
+    assert delete_resp.json()["success"] is True
+
+    get_resp = await client.get(f"{API}/{cb_id}")
+    assert get_resp.status_code == 404
+
+
+async def test_delete_codebook_not_found(client):
+    unknown_id = str(uuid.uuid4())
+    resp = await client.delete(f"{API}/{unknown_id}")
+    assert resp.status_code == 404
+    body = resp.json()
+    assert body["success"] is False
+    assert "not found" in body["error"].lower()
+

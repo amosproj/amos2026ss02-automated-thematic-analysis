@@ -367,3 +367,26 @@ def test_view_renders_empty_when_no_rows(client, fake_backend):
     resp = client.get(f"/demographic/{CORPUS}/view/file-1")
     assert resp.status_code == 200
     assert b"No data rows" in resp.data
+
+
+# ---- Delete file ------------------------------------------------------------
+
+
+def test_delete_file_success(client, fake_backend):
+    resp = client.post(
+        f"/demographic/{CORPUS}/delete/file-1",
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"deleted successfully" in resp.data
+
+
+def test_delete_file_backend_error(client, fake_backend):
+    fake_backend.raise_on = "delete_demographic_file"
+    resp = client.post(
+        f"/demographic/{CORPUS}/delete/file-1",
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"simulated delete_demographic_file failure" in resp.data
+

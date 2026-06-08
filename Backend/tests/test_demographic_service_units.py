@@ -75,3 +75,32 @@ async def test_list_rows_rejects_file_not_in_corpus(tmp_path):
             page=1,
             page_size=10,
         )
+
+
+@pytest.mark.asyncio
+async def test_delete_file_not_found(tmp_path):
+    none_result = Mock()
+    none_result.scalar_one_or_none.return_value = None
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=none_result)
+    service = DemographicService(session=session, settings=_settings(tmp_path))
+    service._validate_corpus = AsyncMock(return_value=None)
+
+    from app.exceptions import NotFoundError
+    with pytest.raises(NotFoundError, match="not found in corpus"):
+        await service.delete_file(uuid.uuid4(), uuid.uuid4())
+
+@pytest.mark.asyncio
+async def test_delete_file_success(tmp_path):
+    file_obj = Mock()
+    result = Mock()
+    result.scalar_one_or_none.return_value = file_obj
+    session = AsyncMock()
+    session.execute = AsyncMock(return_value=result)
+    service = DemographicService(session=session, settings=_settings(tmp_path))
+    service._validate_corpus = AsyncMock(return_value=None)
+
+    await service.delete_file(uuid.uuid4(), uuid.uuid4())
+    session.delete.assert_called_once_with(file_obj)
+    session.commit.assert_called_once()
+

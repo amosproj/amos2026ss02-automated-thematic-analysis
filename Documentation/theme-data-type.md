@@ -117,3 +117,5 @@ The frontend calculates theme statistics (root themes, total themes, sub-themes)
 - `GET /codebooks/{codebook_id}/themes/tree`
   - Returns the recursive theme tree for the selected codebook (excludes `Code` nodes).
   - Optional query param: `root_theme_id` to return only one subtree.
+- `DELETE /codebooks/{codebook_id}`
+  - Deletes a codebook and cascades deletion to all associated themes, codes, and relationships. Returns `200 OK` on success, or `404 Not Found` if the codebook doesn't exist.

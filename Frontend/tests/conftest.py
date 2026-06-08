@@ -93,6 +93,10 @@ class FakeBackend:
 
     # ---- Codebooks / themes -------------------------------------------------
 
+    def delete_codebook(self, codebook_id: str) -> None:
+        self._maybe_raise("delete_codebook")
+        self.codebooks = [cb for cb in self.codebooks if cb.get("id") != codebook_id]
+
     def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
         self._maybe_raise("list_codebooks")
         if not corpus_id:
@@ -152,6 +156,10 @@ class FakeBackend:
     def get_demographic_link_summary(self, corpus_id) -> dict:
         self._maybe_raise("get_demographic_link_summary")
         return self.demographic_link_summary
+
+    def delete_demographic_file(self, corpus_id, file_id) -> None:
+        self._maybe_raise("delete_demographic_file")
+        pass
 
     # ---- Codebook generation jobs -------------------------------------------
 

@@ -477,3 +477,27 @@ async def test_list_demographic_rows_pagination_and_file_filter(client):
     assert wrong_filter.status_code == 422
     assert wrong_filter.json()["success"] is False
     assert "does not belong to corpus" in wrong_filter.json()["meta"]["detail"]
+
+
+async def test_delete_demographic_file_success(client, db_engine):
+    corpus_id = await _create_corpus(client, "Corpus Delete")
+    csv_content = "username;group\nuser_d;D\n"
+    import_id = await _upload_and_confirm_named_csv(client, corpus_id, "batch-delete", csv_content)
+
+    delete_resp = await client.delete(f"{DEMOGRAPHIC_API}/{corpus_id}/files/{import_id}")
+    assert delete_resp.status_code == 200
+    assert delete_resp.json()["success"] is True
+
+    files_resp = await client.get(f"{DEMOGRAPHIC_API}/{corpus_id}/files")
+    files = files_resp.json()["data"]["items"]
+    assert len(files) == 0
+
+
+async def test_delete_demographic_file_not_found(client):
+    corpus_id = await _create_corpus(client, "Corpus Delete Missing")
+    fake_id = str(uuid.uuid4())
+
+    delete_resp = await client.delete(f"{DEMOGRAPHIC_API}/{corpus_id}/files/{fake_id}")
+    assert delete_resp.status_code == 404
+    assert delete_resp.json()["success"] is False
+    assert "not found" in delete_resp.json()["meta"]["detail"]

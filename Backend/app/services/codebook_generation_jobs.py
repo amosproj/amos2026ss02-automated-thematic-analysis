@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -22,8 +23,48 @@ def _utc_now_naive() -> datetime:
 
 
 class CodebookGenerationJobRunner:
+    _TERMINAL_PHASES = frozenset({"succeeded", "failed", "cancelled"})
+    _TERMINAL_PHASE_TTL_S = 60.0 * 60.0
+    _MAX_PHASE_ENTRIES = 4096
+
     def __init__(self) -> None:
         self._tasks: dict[UUID, asyncio.Task[None]] = {}
+        self._phases: dict[UUID, str] = {}
+        self._phase_updated_at: dict[UUID, float] = {}
+
+    def get_phase(self, job_id: UUID, *, status: str) -> str:
+        self._prune_phases()
+        return self._phases.get(job_id, status)
+
+    def set_phase(self, job_id: UUID, phase: str) -> None:
+        self._prune_phases()
+        self._phases[job_id] = phase
+        self._phase_updated_at[job_id] = time.monotonic()
+        self._prune_phases()
+
+    def _prune_phases(self) -> None:
+        now = time.monotonic()
+        expired_job_ids = [
+            phase_job_id
+            for phase_job_id, phase in self._phases.items()
+            if phase in self._TERMINAL_PHASES
+            and (now - self._phase_updated_at.get(phase_job_id, now)) >= self._TERMINAL_PHASE_TTL_S
+        ]
+        for expired_job_id in expired_job_ids:
+            self._phases.pop(expired_job_id, None)
+            self._phase_updated_at.pop(expired_job_id, None)
+
+        if len(self._phases) <= self._MAX_PHASE_ENTRIES:
+            return
+
+        terminal_job_ids = [
+            phase_job_id for phase_job_id, phase in self._phases.items() if phase in self._TERMINAL_PHASES
+        ]
+        terminal_job_ids.sort(key=lambda phase_job_id: self._phase_updated_at.get(phase_job_id, 0.0))
+        overflow = len(self._phases) - self._MAX_PHASE_ENTRIES
+        for evict_job_id in terminal_job_ids[:overflow]:
+            self._phases.pop(evict_job_id, None)
+            self._phase_updated_at.pop(evict_job_id, None)
 
     async def start(self) -> None:
         return
@@ -40,6 +81,8 @@ class CodebookGenerationJobRunner:
             except asyncio.CancelledError:
                 pass
         self._tasks.clear()
+        self._phases.clear()
+        self._phase_updated_at.clear()
 
     async def enqueue(
         self,
@@ -68,6 +111,7 @@ class CodebookGenerationJobRunner:
             logger.exception("Unhandled error while processing codebook generation job {}", job_id)
         finally:
             self._tasks.pop(job_id, None)
+            # Keep terminal phase available for polling finished jobs.
 
     async def _process_one(
         self,
@@ -84,11 +128,13 @@ class CodebookGenerationJobRunner:
             if job.cancel_requested:
                 # A queued job can be cancelled before the worker starts it.
                 job.status = "cancelled"
+                self.set_phase(job_id, "cancelled")
                 job.finished_at = _utc_now_naive()
                 await session.commit()
                 return
 
             job.status = "running"
+            self.set_phase(job_id, "generating_passages")
             job.started_at = _utc_now_naive()
             await session.commit()
 
@@ -112,6 +158,9 @@ class CodebookGenerationJobRunner:
                     cancel_job = await cancel_session.get(CodebookGenerationJob, job_id)
                     return bool(cancel_job and cancel_job.cancel_requested)
 
+            async def _on_phase(phase: str) -> None:
+                self.set_phase(job_id, phase)
+
             try:
                 generated = await service.generate_codebook(
                     codebook_name=job.codebook_name,
@@ -120,10 +169,12 @@ class CodebookGenerationJobRunner:
                     research_query=job.research_query,
                     researcher_topics=job.researcher_topics,
                     on_progress=_on_progress,
+                    on_phase=_on_phase,
                     should_cancel=_should_cancel,
                 )
                 await session.refresh(job)
                 job.status = "succeeded"
+                self.set_phase(job_id, "succeeded")
                 job.codebook_id = generated.codebook.id
                 job.transcripts_processed = generated.transcripts_processed
                 job.passages_processed = generated.passages_processed
@@ -150,12 +201,14 @@ class CodebookGenerationJobRunner:
                 await session.rollback()
                 await session.refresh(job)
                 job.status = "cancelled"
+                self.set_phase(job_id, "cancelled")
                 job.finished_at = _utc_now_naive()
                 await session.commit()
             except Exception as exc:
                 await session.rollback()
                 await session.refresh(job)
                 job.status = "failed"
+                self.set_phase(job_id, "failed")
                 job.error_message = str(exc)
                 job.finished_at = _utc_now_naive()
                 await session.commit()

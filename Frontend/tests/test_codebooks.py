@@ -506,3 +506,29 @@ def test_auto_demo_link_present_on_mode_select(client, fake_backend):
     assert b"/auto-demo" in resp.data
 
 
+# POST /codebooks/<corpus_id>/<codebook_id>/delete
+
+
+def test_delete_codebook_success(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    resp = client.post(f"/codebooks/{fake_backend.corpus_id}/cb-1/delete", follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"successfully deleted" in resp.data
+    assert len(fake_backend.codebooks) == 0
+
+
+def test_delete_codebook_handles_backend_error(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    fake_backend.raise_on = "delete_codebook"
+    resp = client.post(f"/codebooks/{fake_backend.corpus_id}/cb-1/delete", follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"simulated delete_codebook failure" in resp.data
+    assert len(fake_backend.codebooks) == 1

@@ -62,5 +62,6 @@ All routes are under `/api/v1/demographic/{corpus_id}`.
 | `POST` | `/confirm?import_id=...&confirm=true|false` | Persist or cancel a pending upload |
 | `GET` | `/files` | List confirmed demographic imports (paginated) |
 | `GET` | `/rows` | List confirmed demographic rows (paginated, optional `demographic_file_id` filter) |
+| `DELETE` | `/files/{file_id}` | Delete a demographic file and all associated rows |
 
 All responses use the shared response envelope shape.

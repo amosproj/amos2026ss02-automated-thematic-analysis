@@ -5,7 +5,7 @@ from fastapi import APIRouter, File, Form, Query, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.dependencies import AppSettings, DbSession
-from app.exceptions import UnprocessableError
+from app.exceptions import NotFoundError, UnprocessableError
 from app.schemas import Page, PageMeta, ResponseEnvelope
 from app.schemas.demographic import (
     DemographicFileSummary,
@@ -186,6 +186,41 @@ async def list_demographic_rows(
             meta=PageMeta(total=total, page=page, page_size=page_size, pages=_pages(total, page_size)),
         )
     )
+
+
+@router.delete(
+    "/files/{file_id}",
+    response_model=ResponseEnvelope[None],
+    summary="Delete a demographic file",
+    description="Delete a demographic file and all of its rows.",
+)
+async def delete_demographic_file(
+    corpus_id: uuid.UUID,
+    file_id: uuid.UUID,
+    session: DbSession,
+    settings: AppSettings,
+) -> ResponseEnvelope[None] | JSONResponse:
+    """Delete a demographic file and all associated rows."""
+    service = DemographicService(session, settings)
+    try:
+        await service.delete_file(corpus_id=corpus_id, demographic_file_id=file_id)
+    except NotFoundError as exc:
+        return JSONResponse(
+            status_code=NotFoundError.status_code,
+            content=ResponseEnvelope[None].fail(
+                error="NotFoundError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
+        )
+    except UnprocessableError as exc:
+        return JSONResponse(
+            status_code=UnprocessableError.status_code,
+            content=ResponseEnvelope[None].fail(
+                error="UnprocessableError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
+        )
+    return ResponseEnvelope[None].ok(data=None)
 
 
 @router.get(

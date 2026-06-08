@@ -226,6 +226,19 @@ class BackendClient:
         """Get transcript ↔ demographic linking status."""
         return self._get(f"/demographic/{corpus_id}/link-summary")
 
+    def delete_demographic_file(self, corpus_id: str, file_id: str) -> None:
+        """Delete a demographic file from the backend."""
+        path = f"/demographic/{corpus_id}/files/{file_id}"
+        started_at = time.monotonic()
+        try:
+            r = self._client.delete(path)
+            r.raise_for_status()
+            return self._unwrap(r)
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+        except (json.JSONDecodeError, KeyError) as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+
     # ---- Codebook Upload & Parsing ------------------------------------------
 
     def parse_csv_preview(self, file: FileStorage) -> list[dict]:
@@ -262,6 +275,10 @@ class BackendClient:
         if isinstance(result, list):
             return result
         return result.get("items", result) if isinstance(result, dict) else []
+
+    def delete_codebook(self, codebook_id: str) -> None:
+        """Delete a codebook and all its associated themes/codes via cascade."""
+        self._delete(f"/codebooks/{codebook_id}")
 
     # ---- Codebook generation jobs -------------------------------------------
 
@@ -342,6 +359,17 @@ class BackendClient:
             self._handle_exc(exc, path, "POST", started_at)
         except (json.JSONDecodeError, KeyError) as exc:
             self._handle_exc(exc, path, "POST", started_at)
+
+    def _delete(self, path: str, *, sub_key: str | None = None, **kwargs):
+        started_at = time.monotonic()
+        try:
+            r = self._client.delete(path, **kwargs)
+            r.raise_for_status()
+            return self._unwrap(r, sub_key=sub_key)
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+        except (json.JSONDecodeError, KeyError) as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
 
     def _handle_exc(
         self,

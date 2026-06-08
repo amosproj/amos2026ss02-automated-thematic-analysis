@@ -127,6 +127,26 @@ async def _create_corpus_and_docs(client) -> tuple[str, list[str]]:
     return corpus_id, document_ids
 
 
+def _patch_batched_generation(monkeypatch, single_passage_fn) -> None:
+    async def _fake_generate_codebook_for_passages(passages, *_, **__):
+        results = []
+        for passage in passages:
+            try:
+                results.append(single_passage_fn(passage))
+            except Exception as exc:
+                results.append(exc)
+        return results
+
+    monkeypatch.setattr(
+        "app.services.codebook_generation.generate_codebook_for_passages",
+        _fake_generate_codebook_for_passages,
+    )
+    monkeypatch.setattr(
+        "app.services.codebook_generation.build_codebook_generation_chain",
+        lambda *_, **__: object(),
+    )
+
+
 async def test_generate_codebook_creates_deduplicated_themes_and_codes(
     client,
     db_engine,
@@ -189,10 +209,7 @@ async def test_generate_codebook_creates_deduplicated_themes_and_codes(
             ],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _fake_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _fake_generate_codebook_for_passage)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate",
@@ -327,10 +344,7 @@ async def test_generate_codebook_post_processes_codes_with_llm_consolidation(
             ]
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _fake_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _fake_generate_codebook_for_passage)
     monkeypatch.setattr(
         "app.services.codebook_generation.consolidate_generated_codes",
         _fake_consolidate_generated_codes,
@@ -431,10 +445,7 @@ async def test_generate_codebook_post_processes_themes_with_llm_consolidation(
             ]
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _fake_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _fake_generate_codebook_for_passage)
     monkeypatch.setattr(
         "app.services.codebook_generation.consolidate_generated_themes",
         _fake_consolidate_generated_themes,
@@ -517,10 +528,7 @@ async def test_generate_codebook_rejects_documents_outside_selected_corpus(
     def _never_called(_: str, **_kwargs) -> PassageCodebookGeneration:
         raise AssertionError("LLM generation should not be called for invalid transcript selection")
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _never_called,
-    )
+    _patch_batched_generation(monkeypatch, _never_called)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate",
@@ -578,10 +586,7 @@ async def test_generate_codebook_uses_all_corpus_documents_when_ids_omitted(
             ],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _fake_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _fake_generate_codebook_for_passage)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate",
@@ -628,10 +633,7 @@ async def test_generate_codebook_merges_duplicate_theme_labels_across_paths(
             codes=[],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _fake_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _fake_generate_codebook_for_passage)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate",
@@ -652,11 +654,11 @@ async def test_generate_codebook_continues_when_one_passage_has_output_parse_err
     monkeypatch,
 ) -> None:
     corpus_id, document_ids = await _create_corpus_and_docs(client)
-    calls = {"count": 0}
+    calls_by_passage: dict[str, int] = {}
 
-    def _sometimes_fails_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
-        calls["count"] += 1
-        if calls["count"] <= 3:
+    def _sometimes_fails_generate_codebook_for_passage(passage: str) -> PassageCodebookGeneration:
+        calls_by_passage[passage] = calls_by_passage.get(passage, 0) + 1
+        if "Alpha" in passage and calls_by_passage[passage] <= 3:
             raise OutputParserException("Invalid json output: malformed")
         return PassageCodebookGeneration(
             themes=[
@@ -675,10 +677,7 @@ async def test_generate_codebook_continues_when_one_passage_has_output_parse_err
             ],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _sometimes_fails_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _sometimes_fails_generate_codebook_for_passage)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate",
@@ -701,11 +700,11 @@ async def test_generate_codebook_continues_when_one_passage_has_validation_error
     monkeypatch,
 ) -> None:
     corpus_id, document_ids = await _create_corpus_and_docs(client)
-    calls = {"count": 0}
+    calls_by_passage: dict[str, int] = {}
 
-    def _sometimes_fails_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
-        calls["count"] += 1
-        if calls["count"] <= 3:
+    def _sometimes_fails_generate_codebook_for_passage(passage: str) -> PassageCodebookGeneration:
+        calls_by_passage[passage] = calls_by_passage.get(passage, 0) + 1
+        if "Alpha" in passage and calls_by_passage[passage] <= 3:
             # Simulate malformed LLM payload that fails pydantic schema validation.
             raise ValidationError.from_exception_data(
                 "PassageCodebookGeneration",
@@ -735,10 +734,7 @@ async def test_generate_codebook_continues_when_one_passage_has_validation_error
             ],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _sometimes_fails_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _sometimes_fails_generate_codebook_for_passage)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate",
@@ -766,7 +762,7 @@ async def test_generate_codebook_allows_missing_research_query(client, monkeypat
             codes=[GeneratedCodeSuggestion(label="Delay", description=None, theme_path=["Workflow Friction"])],
         )
 
-    monkeypatch.setattr("app.services.codebook_generation.generate_codebook_for_passage", _fake)
+    _patch_batched_generation(monkeypatch, _fake)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate",
@@ -807,7 +803,7 @@ async def test_generate_codebook_persists_research_query_on_codebook(
             codes=[GeneratedCodeSuggestion(label="Delay", description=None, theme_path=["Workflow Friction"])],
         )
 
-    monkeypatch.setattr("app.services.codebook_generation.generate_codebook_for_passage", _fake)
+    _patch_batched_generation(monkeypatch, _fake)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate",

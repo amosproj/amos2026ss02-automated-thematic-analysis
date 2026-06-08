@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import re
+import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -15,9 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import NotFoundError, UnprocessableError
 from app.llm.pipelines import (
+    build_codebook_generation_chain,
     consolidate_generated_codes,
     consolidate_generated_themes,
-    generate_codebook_for_passage,
+    generate_codebook_for_passages,
 )
 from app.models import (
     Code,
@@ -39,6 +42,12 @@ from app.schemas.llm import (
     PassageCodebookGeneration,
 )
 from app.services.theme_graph import ThemeGraphService
+
+_PASSAGE_GENERATION_MAX_CONCURRENCY = 8
+_PASSAGE_GENERATION_BATCH_SIZE = 16
+_PASSAGE_GENERATION_MAX_ATTEMPTS = 3
+_PASSAGE_GENERATION_RETRY_BASE_DELAY_S = 0.5
+_PASSAGE_GENERATION_RETRY_MAX_DELAY_S = 5.0
 
 
 @dataclass
@@ -74,6 +83,7 @@ class CodebookGenerationService:
         research_query: str | None = None,
         researcher_topics: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
+        on_phase: Callable[[str], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> GeneratedCodebookResponse:
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
@@ -96,6 +106,8 @@ class CodebookGenerationService:
         # does not keep a checked-out DB connection during inference.
         await self._session.rollback()
 
+        if on_phase is not None:
+            await on_phase("generating_passages")
         generation_results, failed_passages = await self._generate_per_passage(
             passages,
             research_query=research_query,
@@ -103,6 +115,8 @@ class CodebookGenerationService:
             on_progress=on_progress,
             should_cancel=should_cancel,
         )
+        if on_phase is not None:
+            await on_phase("consolidating")
         await self._raise_if_cancelled(should_cancel)
         theme_nodes, code_nodes, hierarchy_edges = self._deduplicate_generation(generation_results)
         code_nodes = await self._post_process_codes(
@@ -124,6 +138,8 @@ class CodebookGenerationService:
                 f"(failed passages: {len(failed_passages)})"
             )
 
+        if on_phase is not None:
+            await on_phase("persisting")
         created_codebook, themes_created, codes_created = await self._persist_generated_codebook(
             codebook_name=codebook_name,
             corpus_id=corpus_id,
@@ -237,8 +253,8 @@ class CodebookGenerationService:
             passages.extend(text.strip() for _, text in ordered_chunks if text and text.strip())
         return passages
 
-    @staticmethod
     async def _generate_per_passage(
+        self,
         passages: list[str],
         *,
         research_query: str | None = None,
@@ -246,56 +262,140 @@ class CodebookGenerationService:
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> tuple[list[PassageCodebookGeneration], list[GeneratedCodebookResponse.PassageFailure]]:
-        results: list[PassageCodebookGeneration] = []
-        failures: list[GeneratedCodebookResponse.PassageFailure] = []
+        started_at = time.monotonic()
+
         total = len(passages)
+        chain = build_codebook_generation_chain()
+        completed = 0
+        generation_by_index: dict[int, PassageCodebookGeneration] = {}
+        parse_failures_by_index: dict[int, Exception] = {}
+        attempts_by_index: dict[int, int] = {index: 0 for index in range(total)}
+        pending_indexes = list(range(total))
+
         if on_progress is not None:
             await on_progress(0, total)
 
-        for index, passage in enumerate(passages, start=1):
-            parse_error: OutputParserException | ValidationError | None = None
-            attempts = 3
-            for attempt in range(1, attempts + 1):
+        # Retry only the failed subset on each round to avoid reprocessing successful passages.
+        while pending_indexes:
+            if should_cancel is not None and await should_cancel():
+                raise CodebookGenerationCancelledError("Codebook generation was cancelled")
+            retryable_failure_detected = False
+            retry_indexes: list[int] = []
+
+            for chunk_indexes in self._chunked(pending_indexes, _PASSAGE_GENERATION_BATCH_SIZE):
                 if should_cancel is not None and await should_cancel():
                     raise CodebookGenerationCancelledError("Codebook generation was cancelled")
-                try:
-                    # LLM calls are synchronous, so run them off the event loop.
-                    generation = await asyncio.to_thread(
-                        generate_codebook_for_passage,
-                        passage,
-                        research_query=research_query,
-                        researcher_topics=researcher_topics,
-                    )
-                    results.append(generation)
-                    parse_error = None
-                    break
-                except OutputParserException as exc:
-                    parse_error = exc
-                    if attempt < attempts:
-                        continue
-                except ValidationError as exc:
-                    parse_error = exc
-                    if attempt < attempts:
-                        continue
-                except CodebookGenerationCancelledError:
-                    raise
-                except Exception as exc:
-                    raise UnprocessableError(f"Codebook generation failed: {exc}") from exc
-
-            if parse_error is not None:
-                # Keep processing other passages; the response records partial
-                # failures so the caller can inspect skipped input.
-                failures.append(
-                    GeneratedCodebookResponse.PassageFailure(
-                        passage_index=index,
-                        passage_excerpt=passage[:240],
-                        error=str(parse_error),
-                        attempts=attempts,
-                    )
+                # Use LangChain default async batching and keep strict index mapping.
+                batch_results = await generate_codebook_for_passages(
+                    [passages[index] for index in chunk_indexes],
+                    chain=chain,
+                    max_concurrency=_PASSAGE_GENERATION_MAX_CONCURRENCY,
+                    research_query=research_query,
+                    researcher_topics=researcher_topics,
                 )
-            if on_progress is not None:
-                await on_progress(index, total)
+                for local_index, result in enumerate(batch_results):
+                    passage_index = chunk_indexes[local_index]
+                    attempts_by_index[passage_index] += 1
+                    attempt_count = attempts_by_index[passage_index]
+
+                    if isinstance(result, PassageCodebookGeneration):
+                        generation_by_index[passage_index] = result
+                        completed += 1
+                        continue
+
+                    if isinstance(result, (OutputParserException, ValidationError)):
+                        if attempt_count < _PASSAGE_GENERATION_MAX_ATTEMPTS:
+                            retry_indexes.append(passage_index)
+                        else:
+                            parse_failures_by_index[passage_index] = result
+                            completed += 1
+                        continue
+
+                    # Retry transient provider/network failures, but fail fast on hard errors.
+                    if self._is_retryable_llm_exception(result) and attempt_count < _PASSAGE_GENERATION_MAX_ATTEMPTS:
+                        retryable_failure_detected = True
+                        retry_indexes.append(passage_index)
+                        continue
+
+                    raise UnprocessableError(f"Codebook generation failed: {result}") from result
+
+                if on_progress is not None:
+                    await on_progress(completed, total)
+
+            if not retry_indexes:
+                break
+            pending_indexes = retry_indexes
+            if retryable_failure_detected:
+                retry_attempt = max(attempts_by_index[index] for index in retry_indexes)
+                retry_delay = self._compute_retry_delay(
+                    attempt=retry_attempt,
+                    base_delay_s=_PASSAGE_GENERATION_RETRY_BASE_DELAY_S,
+                    max_delay_s=_PASSAGE_GENERATION_RETRY_MAX_DELAY_S,
+                )
+                if retry_delay > 0:
+                    await asyncio.sleep(retry_delay)
+
+        results = [generation_by_index[index] for index in sorted(generation_by_index)]
+        failures = [
+            GeneratedCodebookResponse.PassageFailure(
+                passage_index=index + 1,
+                passage_excerpt=passages[index][:240],
+                error=str(parse_failures_by_index[index]),
+                attempts=attempts_by_index[index],
+            )
+            for index in sorted(parse_failures_by_index)
+        ]
+        logger.info(
+            "Passage generation complete: passages={}, succeeded={}, failed={}, total_attempts={}, "
+            "max_concurrency={}, batch_size={}, elapsed_s={:.2f}",
+            total,
+            len(results),
+            len(failures),
+            sum(attempts_by_index.values()),
+            _PASSAGE_GENERATION_MAX_CONCURRENCY,
+            _PASSAGE_GENERATION_BATCH_SIZE,
+            time.monotonic() - started_at,
+        )
         return results, failures
+
+    @staticmethod
+    def _chunked(items: list[int], chunk_size: int) -> list[list[int]]:
+        return [items[index:index + chunk_size] for index in range(0, len(items), chunk_size)]
+
+    @staticmethod
+    def _is_retryable_llm_exception(exc: Exception) -> bool:
+        if isinstance(exc, (TimeoutError, asyncio.TimeoutError, ConnectionError, OSError)):
+            return True
+        message = str(exc).lower()
+        retryable_markers = (
+            "429",
+            "502",
+            "503",
+            "504",
+            "rate limit",
+            "too many requests",
+            "timeout",
+            "timed out",
+            "temporarily unavailable",
+            "connection reset",
+            "connection aborted",
+            "service unavailable",
+        )
+        return any(marker in message for marker in retryable_markers)
+
+    @staticmethod
+    def _compute_retry_delay(
+        *,
+        attempt: int,
+        base_delay_s: float,
+        max_delay_s: float,
+    ) -> float:
+        if base_delay_s <= 0:
+            return 0.0
+        capped_attempt = max(1, attempt)
+        backoff = base_delay_s * (2 ** (capped_attempt - 1))
+        jitter: float = random.uniform(0.8, 1.2)
+        return float(min(max_delay_s, backoff * jitter))
 
     @staticmethod
     def _normalize_label(value: str) -> str:

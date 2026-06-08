@@ -193,6 +193,19 @@ def preview_confirm(corpus_id: str, import_id: str):
     return redirect(url_for("demographic.list_files", corpus_id=corpus_id))
 
 
+@bp.post("/<corpus_id>/delete/<file_id>")
+def delete_file(corpus_id: str, file_id: str):
+    set_active_corpus_id(corpus_id)
+    try:
+        _backend().delete_demographic_file(corpus_id, file_id)
+        flash("Demographic data deleted successfully.", "success")
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+
+    return redirect(url_for("demographic.list_files", corpus_id=corpus_id))
+
+
+
 # ---- View (corpus-scoped) --------------------------------------------------
 
 
