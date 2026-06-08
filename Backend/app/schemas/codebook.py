@@ -131,18 +131,20 @@ class CodebookGenerateRequest(BaseSchema):
             return None
         return values
 
-    @field_validator("research_query")
+    @field_validator("research_query", mode="before")
     @classmethod
-    def sanitize_and_validate_query(cls, value: str | None) -> str | None:
-        # Optional field: an omitted (None) or empty value means "no research
-        # question" and is accepted. But once the researcher actually types
-        # something, it must be a meaningful query — not whitespace only and at
-        # least the minimum length.
+    def sanitize_and_validate_query(cls, value: object) -> str | None:
+        # Run before Pydantic's own str processing (including str_strip_whitespace)
+        # so we can distinguish "user typed only spaces" from "field was empty/omitted".
+        # Optional: None and "" are accepted as "no research question".
+        # But once the researcher types something it must be a real query.
         if value is None or value == "":
             return None
-        cleaned = sanitize_research_query(value)
-        if not cleaned:
+        if not isinstance(value, str):
+            return value  # type: ignore[return-value]  # let Pydantic raise a type error
+        if not value.strip():
             raise ValueError("research_query must not be empty or whitespace only.")
+        cleaned = sanitize_research_query(value)
         if len(cleaned) < _QUERY_MIN:
             raise ValueError(
                 f"research_query must be at least {_QUERY_MIN} characters (got {len(cleaned)})."
