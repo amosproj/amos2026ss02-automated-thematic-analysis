@@ -353,6 +353,7 @@ def manual_form(corpus_id: str) -> str:
 def confirm_submit(corpus_id: str) -> str:
     """Validate, customise, and confirm a codebook and its themes."""
     codebook_name = (request.form.get("codebook_name") or "").strip()
+    source_codebook_id = request.form.get("source_codebook_id", "").strip()
     node_types = request.form.getlist("node_types[]")
     theme_names = request.form.getlist("theme_names[]")
     theme_descriptions = request.form.getlist("theme_descriptions[]")
@@ -367,6 +368,30 @@ def confirm_submit(corpus_id: str) -> str:
             "description": desc.strip(),
             "parent_name": parent.strip() if parent.strip() else None
         })
+
+    # If this is an edit of an existing codebook, check whether anything actually
+    # changed. If not, skip the create and go straight to the success page.
+    if source_codebook_id:
+        try:
+            original = _backend().get_codebook(source_codebook_id)
+            original_name = (original.get("name") or "").strip()
+            original_themes = _flatten_codebook_for_preview(original)
+            # Normalise parent_name to "" on both sides before comparing —
+            # the form assembles None for empty parents, the flatten helper uses "".
+            def _normalise(rows: list[dict]) -> list[dict]:
+                return [
+                    {**r, "parent_name": r.get("parent_name") or ""}
+                    for r in rows
+                ]
+            if codebook_name == original_name and _normalise(themes) == _normalise(original_themes):
+                flash("No changes were made to the codebook.", "info")
+                return redirect(url_for(
+                    "codebooks.success",
+                    corpus_id=corpus_id,
+                    codebook_id=source_codebook_id,
+                ))
+        except BackendError:
+            pass  # original no longer accessible; fall through to create
 
     # Frontend validation
     error = None
@@ -724,6 +749,7 @@ def codebook_review(codebook_id: str) -> str:
         corpus_id=corpus_id,
         codebook_name=name,
         themes=_flatten_codebook_for_preview(codebook),
+        source_codebook_id=codebook_id,
         error=None,
     )
 

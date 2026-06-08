@@ -44,7 +44,8 @@ def test_upload_submit_renders_per_file_results(client, fake_backend):
     assert b"a.txt" in body
     assert b"b.pdf" in body
     assert b"Uploaded" in body
-    assert b"2 succeeded, 0 failed" in body
+    assert b"2 uploaded" in body
+    assert b"No content" not in body
     assert fake_backend.uploaded_files == ["a.txt", "b.pdf"]
 
 
@@ -71,7 +72,8 @@ def test_upload_submit_renders_per_file_errors(client, fake_backend):
     )
 
     assert resp.status_code == 200
-    assert b"1 succeeded, 1 failed" in resp.data
+    assert b"1 uploaded" in resp.data
+    assert b"1 failed" in resp.data
     assert b"Unsupported file extension" in resp.data
 
 

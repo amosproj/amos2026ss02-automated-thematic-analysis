@@ -100,7 +100,9 @@
           const pct = Math.min(99, Math.max(2, raw));
           setBar(pct);
           counts.textContent = done + " / " + total + " passages";
-          statusLine.textContent = "Generating themes and codes…";
+          statusLine.textContent = total > 0
+            ? "Generating themes and codes — " + done + " of " + total + " passages processed…"
+            : "Generating themes and codes…";
           return;
         }
 
