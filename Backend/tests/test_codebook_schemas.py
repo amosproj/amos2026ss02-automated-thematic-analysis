@@ -37,10 +37,10 @@ class TestResearchQueryValidation:
         req = CodebookGenerateRequest(**_make_request(research_query=""))
         assert req.research_query is None
 
-    def test_9_char_query_accepted(self) -> None:
-        # There is no minimum length; short queries are accepted as-is.
-        req = CodebookGenerateRequest(**_make_request(research_query="123456789"))
-        assert req.research_query == "123456789"
+    def test_9_char_query_raises(self) -> None:
+        # Optional, but once provided it must meet the 10-char minimum.
+        with pytest.raises(ValidationError):
+            CodebookGenerateRequest(**_make_request(research_query="123456789"))
 
     def test_10_char_query_accepted(self) -> None:
         req = CodebookGenerateRequest(**_make_request(research_query="1234567890"))
@@ -55,17 +55,16 @@ class TestResearchQueryValidation:
         with pytest.raises(ValidationError):
             CodebookGenerateRequest(**_make_request(research_query="a" * 501))
 
-    def test_whitespace_only_query_treated_as_none(self) -> None:
-        # Whitespace-only strings are sanitised to empty then coerced to None.
-        req = CodebookGenerateRequest(**_make_request(research_query="          "))
-        assert req.research_query is None
+    def test_whitespace_only_query_raises(self) -> None:
+        # A non-empty value that is only whitespace is rejected (not silently
+        # treated as "no query").
+        with pytest.raises(ValidationError):
+            CodebookGenerateRequest(**_make_request(research_query="          "))
 
-    def test_html_tags_stripped_short_content_accepted(self) -> None:
-        # After stripping HTML the remaining text is short but still accepted —
-        # there is no minimum length requirement.
-        req = CodebookGenerateRequest(**_make_request(research_query="<b>short</b>"))
-        assert req.research_query == "short"
-        assert "<b>" not in req.research_query
+    def test_html_tags_stripped_before_length_check(self) -> None:
+        # "<b>" is 3 chars of tag; remaining text is 5 chars → below min after strip.
+        with pytest.raises(ValidationError):
+            CodebookGenerateRequest(**_make_request(research_query="<b>short</b>"))
 
     def test_html_stripped_but_enough_content_accepted(self) -> None:
         query = "<b>" + "a" * 20 + "</b>"

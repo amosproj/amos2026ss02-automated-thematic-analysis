@@ -8,6 +8,7 @@ from pydantic import Field, ValidationInfo, field_validator
 from app.schemas.common import BaseSchema
 from app.utils.sanitize import sanitize_research_query
 
+_QUERY_MIN = 10
 _QUERY_MAX = 500
 
 
@@ -133,11 +134,19 @@ class CodebookGenerateRequest(BaseSchema):
     @field_validator("research_query")
     @classmethod
     def sanitize_and_validate_query(cls, value: str | None) -> str | None:
-        if value is None:
+        # Optional field: an omitted (None) or empty value means "no research
+        # question" and is accepted. But once the researcher actually types
+        # something, it must be a meaningful query — not whitespace only and at
+        # least the minimum length.
+        if value is None or value == "":
             return None
         cleaned = sanitize_research_query(value)
         if not cleaned:
-            return None
+            raise ValueError("research_query must not be empty or whitespace only.")
+        if len(cleaned) < _QUERY_MIN:
+            raise ValueError(
+                f"research_query must be at least {_QUERY_MIN} characters (got {len(cleaned)})."
+            )
         if len(cleaned) > _QUERY_MAX:
             raise ValueError(
                 f"research_query must be at most {_QUERY_MAX} characters (got {len(cleaned)})."

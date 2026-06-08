@@ -32,7 +32,7 @@ Request body:
 
 - `codebook_name` (`string`, required)
 - `corpus_id` (`uuid`, required)
-- `research_query` (`string`, optional, ≤500 chars) — the researcher's research question. When provided, steers the LLM toward themes relevant to this focus. Omit it to generate fully automatically.
+- `research_query` (`string`, optional, 10–500 chars) — the researcher's research question. Optional, but when provided it must be at least 10 characters and not whitespace only. When provided, steers the LLM toward themes relevant to this focus. Omit it to generate fully automatically.
 - `researcher_topics` (`string`, optional, ≤500 chars) — specific topics the researcher wants covered (e.g. comma-separated). Passed to the LLM as a distinct instruction block so these topics are actively surfaced when the passage supports them. Distinct from `research_query`; the two are never concatenated.
 - `transcript_document_ids` (`uuid[]`, optional)
 
@@ -61,7 +61,7 @@ Request body:
 
 - `codebook_name` (`string`, required)
 - `corpus_id` (`uuid`, required)
-- `research_query` (`string`, optional, ≤500 chars) — the researcher's research question. When provided, steers the LLM toward themes relevant to this focus. Omit it to generate fully automatically.
+- `research_query` (`string`, optional, 10–500 chars) — the researcher's research question. Optional, but when provided it must be at least 10 characters and not whitespace only. When provided, steers the LLM toward themes relevant to this focus. Omit it to generate fully automatically.
 - `researcher_topics` (`string`, optional, ≤500 chars) — specific topics the researcher wants covered (e.g. comma-separated). Passed to the LLM as a distinct instruction block so these topics are actively surfaced when the passage supports them. Distinct from `research_query`; the two are never concatenated.
 - `transcript_document_ids` (`uuid[]`, optional)
 

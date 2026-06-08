@@ -25,6 +25,7 @@ bp = Blueprint("codebooks", __name__)
 
 CODING_MODES = ("auto", "semi", "manual")
 
+_QUERY_MIN = 10
 _QUERY_MAX = 500
 
 
@@ -499,7 +500,8 @@ def new_codebook_auto_form(corpus_id: str) -> str:
 def new_codebook_auto_submit(corpus_id: str):
     mode = _resolve_mode(request.form.get("mode", ""))
     name = (request.form.get("codebook_name") or "").strip()
-    research_query = (request.form.get("research_query") or "").strip()
+    raw_research_query = request.form.get("research_query") or ""
+    research_query = raw_research_query.strip()
     researcher_topics = (request.form.get("researcher_topics") or "").strip()
 
     def _render_form(rq_error: str | None = None, rt_error: str | None = None):
@@ -518,9 +520,19 @@ def new_codebook_auto_submit(corpus_id: str):
         flash("Please give your codebook a name.", "danger")
         return _render_form()
 
-    # research_query and researcher_topics are both optional; only cap length.
+    # The research question is optional: leaving it blank is fine. But if the
+    # researcher actually types something it must be a real question — not just
+    # whitespace, and within the length bounds.
+    if raw_research_query and not research_query:
+        return _render_form(rq_error="Research question cannot be only whitespace.")
+    if research_query and len(research_query) < _QUERY_MIN:
+        return _render_form(
+            rq_error=f"Research question must be at least {_QUERY_MIN} characters."
+        )
     if len(research_query) > _QUERY_MAX:
         return _render_form(rq_error=f"Research question must be at most {_QUERY_MAX} characters.")
+
+    # Topics are optional, free-form keywords; only cap their length.
     if len(researcher_topics) > _QUERY_MAX:
         return _render_form(rt_error=f"Topics must be at most {_QUERY_MAX} characters.")
 

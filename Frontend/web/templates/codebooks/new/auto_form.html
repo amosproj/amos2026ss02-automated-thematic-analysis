@@ -45,15 +45,16 @@
                   id="research_query"
                   name="research_query"
                   rows="3"
+                  minlength="10"
                   maxlength="500"
                   aria-describedby="rq-help rq-counter rq-error"
                   placeholder="e.g. How do participants experience remote work? What challenges do they face?">{{ research_query or '' }}</textarea>
         <div class="d-flex justify-content-between align-items-start mt-1">
-          <div id="rq-help" class="form-text">If provided, the AI focuses on themes relevant to this question.</div>
+          <div id="rq-help" class="form-text">If provided, the AI focuses on themes relevant to this question. Use at least 10 characters.</div>
           <div id="rq-counter" class="form-text text-end ms-2 text-secondary">0 / 500</div>
         </div>
         <div id="rq-error" class="invalid-feedback">
-          {{ rq_error or 'Research question must be at most 500 characters.' }}
+          {{ rq_error or 'Research question must be between 10 and 500 characters.' }}
         </div>
       </div>
 
