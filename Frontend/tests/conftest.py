@@ -168,12 +168,16 @@ class FakeBackend:
         codebook_name: str,
         corpus_id: str,
         transcript_document_ids: list[str] | None = None,
+        research_query: str | None = None,
+        researcher_topics: str | None = None,
     ) -> dict:
         self._maybe_raise("create_generation_job")
         self.last_generation_job_request = {
             "codebook_name": codebook_name,
             "corpus_id": corpus_id,
             "transcript_document_ids": transcript_document_ids,
+            "research_query": research_query,
+            "researcher_topics": researcher_topics,
         }
         job_id = f"job-{len(self.generation_jobs) + 1}"
         job = {

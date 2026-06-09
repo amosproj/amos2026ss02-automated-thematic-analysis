@@ -79,6 +79,8 @@ class CodebookGenerationService:
         codebook_name: str,
         corpus_id: UUID,
         transcript_document_ids: list[UUID] | None,
+        research_query: str | None = None,
+        researcher_topics: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         on_phase: Callable[[str], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
@@ -113,6 +115,8 @@ class CodebookGenerationService:
             await on_phase("generating_passages")
         generation_results, failed_passages = await self._generate_per_passage(
             passages,
+            research_query=research_query,
+            researcher_topics=researcher_topics,
             on_progress=on_progress,
             should_cancel=should_cancel,
         )
@@ -144,6 +148,8 @@ class CodebookGenerationService:
         created_codebook, themes_created, codes_created = await self._persist_generated_codebook(
             codebook_name=codebook_name,
             corpus_id=corpus_id,
+            research_query=research_query,
+            researcher_topics=researcher_topics,
             theme_nodes=theme_nodes,
             code_nodes=code_nodes,
             hierarchy_edges=hierarchy_edges,
@@ -250,6 +256,8 @@ class CodebookGenerationService:
         self,
         passages: list[str],
         *,
+        research_query: str | None = None,
+        researcher_topics: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> tuple[list[PassageCodebookGeneration], list[GeneratedCodebookResponse.PassageFailure]]:
@@ -276,12 +284,13 @@ class CodebookGenerationService:
             for chunk_indexes in self._chunked(pending_indexes, _PASSAGE_GENERATION_BATCH_SIZE):
                 if should_cancel is not None and await should_cancel():
                     raise CodebookGenerationCancelledError("Codebook generation was cancelled")
-
                 # Use LangChain default async batching and keep strict index mapping.
                 batch_results = await generate_codebook_for_passages(
                     [passages[index] for index in chunk_indexes],
                     chain=chain,
                     max_concurrency=_PASSAGE_GENERATION_MAX_CONCURRENCY,
+                    research_query=research_query,
+                    researcher_topics=researcher_topics,
                 )
                 for local_index, result in enumerate(batch_results):
                     passage_index = chunk_indexes[local_index]
@@ -1033,6 +1042,8 @@ class CodebookGenerationService:
         *,
         codebook_name: str,
         corpus_id: UUID,
+        research_query: str | None = None,
+        researcher_topics: str | None = None,
         theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
         code_nodes: list[_CodeDraft],
         hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
@@ -1046,6 +1057,8 @@ class CodebookGenerationService:
                 description="LLM-generated codebook",
                 version=version,
                 created_by="system-llm",
+                research_query=research_query,
+                researcher_topics=researcher_topics,
             )
             self._session.add(codebook)
             await self._session.flush()
