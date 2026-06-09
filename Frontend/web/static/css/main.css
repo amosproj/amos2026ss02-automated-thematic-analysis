@@ -662,3 +662,18 @@
 }
 .ata-toast-title { font-weight: 600; margin-bottom: .2rem; }
 .ata-toast-body  { color: #495057; }
+
+/* ── Codebook "saved" confirmation ──────────────────────────────────────── */
+.success-check {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: #ecfdf5;
+    border: 2px solid #a7f3d0;
+    color: #10b981;
+    font-size: 2.25rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

@@ -2,217 +2,59 @@
 
 {% block title %}Codebook Saved Successfully{% endblock %}
 
-{% block head_extra %}
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --primary-color: #4f46e5;
-    --primary-hover: #4338ca;
-    --success-color: #10b981;
-    --border-radius: 12px;
-    --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-  }
-
-  .success-container {
-    font-family: 'Outfit', 'Inter', sans-serif;
-    max-width: 750px;
-    margin: 3rem auto;
-    padding: 0 1.5rem;
-  }
-
-  .success-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: var(--border-radius);
-    padding: 3rem 2rem;
-    box-shadow: var(--card-shadow);
-    text-align: center;
-  }
-
-  .checkmark-circle {
-    width: 80px;
-    height: 80px;
-    background: #ecfdf5;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 1.5rem auto;
-    border: 2px solid #a7f3d0;
-  }
-
-  .checkmark {
-    font-size: 2.5rem;
-    color: var(--success-color);
-    line-height: 1;
-  }
-
-  .success-title {
-    font-size: 2.2rem;
-    font-weight: 700;
-    color: #0f172a;
-    margin-bottom: 0.5rem;
-  }
-
-  .success-subtitle {
-    font-size: 1.1rem;
-    color: #64748b;
-    margin-bottom: 2.5rem;
-  }
-
-  .meta-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
-    text-align: left;
-  }
-
-  @media (max-width: 600px) {
-    .meta-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .meta-item {
-    font-size: 0.95rem;
-  }
-
-  .meta-label {
-    font-weight: 600;
-    color: #475569;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.25rem;
-  }
-
-  .meta-value {
-    color: #1e293b;
-    font-size: 1rem;
-  }
-
-  .themes-preview-section {
-    text-align: left;
-    margin-bottom: 2.5rem;
-  }
-
-  .themes-preview-title {
-    font-size: 1.2rem;
-    font-weight: 600;
-    color: #1e293b;
-    margin-bottom: 1rem;
-    border-bottom: 1px solid #e2e8f0;
-    padding-bottom: 0.5rem;
-  }
-
-  .theme-preview-item {
-    padding: 0.75rem 0;
-    border-bottom: 1px dashed #e2e8f0;
-  }
-
-  .theme-preview-item:last-child {
-    border-bottom: none;
-  }
-
-  .theme-preview-name {
-    font-weight: 600;
-    color: #4f46e5;
-  }
-
-  .theme-preview-desc {
-    color: #64748b;
-    font-size: 0.9rem;
-    margin-top: 0.25rem;
-  }
-
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.8rem 2rem;
-    background: var(--primary-color);
-    color: #ffffff;
-    font-weight: 600;
-    border-radius: 8px;
-    cursor: pointer;
-    border: none;
-    transition: background-color 0.2s ease;
-    text-decoration: none;
-    font-size: 1rem;
-  }
-
-  .btn:hover {
-    background: var(--primary-hover);
-  }
-
-  .custom-error {
-    background: #fef2f2;
-    border-left: 4px solid #ef4444;
-    color: #b91c1c;
-    padding: 1.5rem;
-    border-radius: var(--border-radius);
-    text-align: left;
-  }
-</style>
-{% endblock %}
-
 {% block content %}
-<div class="success-container">
-  {% if error %}
-    <div class="custom-error">
-      <h3 style="margin-top: 0; margin-bottom: 0.5rem;">Failed to retrieve codebook details</h3>
-      <p style="margin: 0;">{{ error }}</p>
-      <br>
-      <a href="{{ url_for('codebooks.upload_form', corpus_id=corpus_id) }}" class="btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Try Again</a>
-    </div>
-  {% else %}
-    <div class="success-card">
-      <div class="checkmark-circle">
-        <span class="checkmark">✓</span>
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-9">
+    {% if error %}
+      <div class="alert alert-danger" role="alert">
+        <h2 class="h5 alert-heading">Failed to retrieve codebook details</h2>
+        <p class="mb-3">{{ error }}</p>
+        <a href="{{ url_for('codebooks.upload_form', corpus_id=corpus_id) }}" class="btn btn-sm btn-danger">Try Again</a>
       </div>
-      <h1 class="success-title">Codebook Saved Successfully</h1>
-      <p class="success-subtitle">Your framework has been persisted and is ready to guide analysis runs.</p>
+    {% else %}
+      <div class="bg-white border rounded-3 shadow-sm p-4 p-md-5 text-center">
+        <div class="success-check mx-auto mb-3">✓</div>
+        <h1 class="h3 mb-1">Codebook Saved Successfully</h1>
+        <p class="text-secondary mb-4">Your framework has been persisted and is ready to guide analysis runs.</p>
 
-      <div class="meta-grid">
-        <div class="meta-item">
-          <div class="meta-label">Codebook Name</div>
-          <div class="meta-value" style="font-weight: 600;">{{ codebook.name }}</div>
-        </div>
-        <div class="meta-item">
-          <div class="meta-label">Version</div>
-          <div class="meta-value">v{{ codebook.version }}</div>
-        </div>
-        <div class="meta-item">
-          <div class="meta-label">Created By</div>
-          <div class="meta-value">{{ codebook.created_by }}</div>
-        </div>
-        <div class="meta-item">
-          <div class="meta-label">Total Themes</div>
-          <div class="meta-value">{{ codebook.themes | length }} themes</div>
-        </div>
-        <div class="meta-item" style="grid-column: span 2;">
-          <div class="meta-label">ID / Reference</div>
-          <div class="meta-value" style="font-family: monospace; font-size: 0.85rem; color: #64748b;">{{ codebook.id }}</div>
-        </div>
-      </div>
-
-      <div class="themes-preview-section">
-        <div class="themes-preview-title">Themes Enforced</div>
-        {% for theme in codebook.themes %}
-          <div class="theme-preview-item">
-            <span class="theme-preview-name">{{ theme.name }}</span>
-            <div class="theme-preview-desc">{{ theme.description or 'No description provided.' }}</div>
+        <div class="row g-3 text-start bg-light border rounded-3 p-3 p-md-4 mb-4">
+          <div class="col-sm-6">
+            <div class="text-secondary text-uppercase small fw-semibold mb-1">Codebook Name</div>
+            <div class="fw-semibold">{{ codebook.name }}</div>
           </div>
-        {% endfor %}
-      </div>
+          <div class="col-sm-6">
+            <div class="text-secondary text-uppercase small fw-semibold mb-1">Version</div>
+            <div>v{{ codebook.version }}</div>
+          </div>
+          <div class="col-sm-6">
+            <div class="text-secondary text-uppercase small fw-semibold mb-1">Created By</div>
+            <div>{{ codebook.created_by }}</div>
+          </div>
+          <div class="col-sm-6">
+            <div class="text-secondary text-uppercase small fw-semibold mb-1">Total Themes</div>
+            <div>{{ codebook.themes | length }} themes</div>
+          </div>
+          <div class="col-12">
+            <div class="text-secondary text-uppercase small fw-semibold mb-1">ID / Reference</div>
+            <div class="font-monospace small text-secondary">{{ codebook.id }}</div>
+          </div>
+        </div>
 
-      <a href="{{ url_for('codebooks.list_codebooks', corpus_id=corpus_id) }}" class="btn">View All Codebooks</a>
-    </div>
-  {% endif %}
+        <div class="text-start mb-4">
+          <h2 class="h6 panel-title">Themes Enforced</h2>
+          <ul class="list-group list-group-flush">
+            {% for theme in codebook.themes %}
+              <li class="list-group-item px-0">
+                <span class="fw-semibold text-primary">{{ theme.name }}</span>
+                <div class="text-secondary small mt-1">{{ theme.description or 'No description provided.' }}</div>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <a href="{{ url_for('codebooks.list_codebooks', corpus_id=corpus_id) }}" class="btn btn-primary px-4">View All Codebooks</a>
+      </div>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

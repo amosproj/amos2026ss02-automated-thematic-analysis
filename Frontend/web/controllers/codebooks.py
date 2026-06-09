@@ -298,18 +298,12 @@ def upload_submit(corpus_id: str) -> str:
     # CSV file upload path
     file = request.files.get("file")
     if not file or not file.filename:
-        return render_template(
-            "codebooks/upload.html",
-            corpus_id=corpus_id,
-            error="Please select a CSV file to upload or choose manual entry.",
-        )
+        flash("Please select a CSV file to upload.", "danger")
+        return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
 
     if not file.filename.lower().endswith(".csv"):
-        return render_template(
-            "codebooks/upload.html",
-            corpus_id=corpus_id,
-            error="Only CSV files (.csv extension) are supported.",
-        )
+        flash("Only CSV files (.csv extension) are supported.", "danger")
+        return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
 
     try:
         client = _backend()
@@ -324,7 +318,8 @@ def upload_submit(corpus_id: str) -> str:
             error=None,
         )
     except BackendError as exc:
-        return render_template("codebooks/upload.html", corpus_id=corpus_id, error=str(exc))
+        flash(str(exc), "danger")
+        return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
 
 @bp.get("/<corpus_id>/manual")
 def manual_form(corpus_id: str) -> str:

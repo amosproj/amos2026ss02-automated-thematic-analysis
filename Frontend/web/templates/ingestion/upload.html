@@ -392,12 +392,9 @@
       });
     })();
 
-    // Codebook form — single-file equivalent of the demographics picker:
-    // mirrors the same UI and size checks so the UX is consistent.
+    // Codebook form — single-file picker that mirrors the demographics card's
+    // preview UI.
     (() => {
-      const MAX_MB = {{ max_size_mb }};
-      const MAX_BYTES = MAX_MB * 1024 * 1024;
-
       const input    = document.getElementById("codebook_file");
       const preview  = document.getElementById("codebook-file-preview");
       const nameEl   = document.getElementById("codebook-file-name");
@@ -425,12 +422,12 @@
         nameEl.textContent = file.name;
         sizeEl.textContent = formatBytes(file.size);
 
-        const tooBig = file.size > MAX_BYTES;
-        preview.classList.toggle("is-oversize", tooBig);
-        warning.textContent = tooBig
-          ? "File must be at most " + MAX_MB + " MB. Remove or replace it."
-          : "";
-        submitBtn.disabled = tooBig;
+        const isCsv = file.name.toLowerCase().endsWith(".csv");
+        preview.classList.toggle("is-oversize", !isCsv);
+        warning.textContent = isCsv
+          ? ""
+          : "Only CSV files (.csv extension) are supported. Remove or replace it.";
+        submitBtn.disabled = !isCsv;
       }
 
       input.addEventListener("change", render);

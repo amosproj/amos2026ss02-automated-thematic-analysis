@@ -157,17 +157,30 @@ def test_upload_submit_manual_redirects_to_manual_form(client, fake_codebook_bac
     assert "/codebooks/test-corpus-id/manual" in resp.headers["Location"]
 
 
-def test_upload_submit_no_file_renders_warning(client):
+# On error the codebook upload now redirects back to the unified upload page
+# (ingestion.upload_form, mounted at /transcripts/<corpus_id>/upload) with a
+# flashed message, rather than rendering the standalone codebooks/upload.html.
+
+_UNIFIED_UPLOAD_PATH = "/transcripts/test-corpus-id/upload"
+
+
+def _session_flashes(client) -> list[tuple[str, str]]:
+    with client.session_transaction() as sess:
+        return list(sess.get("_flashes", []))
+
+
+def test_upload_submit_no_file_redirects_to_unified_with_flash(client):
     resp = client.post(
         "/codebooks/test-corpus-id/upload",
         data={"action": "upload"},
         content_type="multipart/form-data",
     )
-    assert resp.status_code == 200
-    assert b"Please select a CSV file" in resp.data
+    assert resp.status_code == 302
+    assert _UNIFIED_UPLOAD_PATH in resp.headers["Location"]
+    assert any("Please select a CSV file" in msg for _, msg in _session_flashes(client))
 
 
-def test_upload_submit_invalid_extension(client):
+def test_upload_submit_invalid_extension_redirects_to_unified_with_flash(client):
     resp = client.post(
         "/codebooks/test-corpus-id/upload",
         data={
@@ -176,8 +189,9 @@ def test_upload_submit_invalid_extension(client):
         },
         content_type="multipart/form-data",
     )
-    assert resp.status_code == 200
-    assert b"Only CSV files" in resp.data
+    assert resp.status_code == 302
+    assert _UNIFIED_UPLOAD_PATH in resp.headers["Location"]
+    assert any("Only CSV files" in msg for _, msg in _session_flashes(client))
 
 
 def test_upload_submit_surfaces_backend_parse_error(client, fake_codebook_backend):
@@ -190,8 +204,9 @@ def test_upload_submit_surfaces_backend_parse_error(client, fake_codebook_backen
         },
         content_type="multipart/form-data",
     )
-    assert resp.status_code == 200
-    assert b"simulated parse_csv_preview failure" in resp.data
+    assert resp.status_code == 302
+    assert _UNIFIED_UPLOAD_PATH in resp.headers["Location"]
+    assert any("simulated parse_csv_preview failure" in msg for _, msg in _session_flashes(client))
 
 
 # ---------------------------------------------------------------------------
