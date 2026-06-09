@@ -35,7 +35,7 @@ class BulkDocumentIngestRequest(BaseSchema):
 
 
 class CorpusDocumentSchema(BaseSchema):
-    """API response shape for a stored document (no text — fetch chunks for content)."""
+    """API response shape for a stored document (no content — fetch via document endpoint)."""
 
     id: uuid.UUID
     corpus_id: uuid.UUID
@@ -45,22 +45,16 @@ class CorpusDocumentSchema(BaseSchema):
     updated_at: datetime
 
 
-class CorpusChunkSchema(BaseSchema):
-    """API response shape for a single chunk."""
+class CorpusDocumentContentSchema(CorpusDocumentSchema):
+    """API response shape for a single document including its full text content."""
 
-    id: uuid.UUID
-    document_id: uuid.UUID
-    chunk_index: int
-    text: str
-    created_at: datetime
-    updated_at: datetime
+    content: str
 
 
 class IngestResultSchema(BaseSchema):
     """Summary returned after an ingestion call completes."""
 
     documents_created: int
-    chunks_created: int
 
 
 class UploadFileResult(BaseSchema):
@@ -70,7 +64,6 @@ class UploadFileResult(BaseSchema):
     stored_filename: str | None = None  # filename actually stored (may differ if renamed)
     success: bool
     documents_created: int = 0
-    chunks_created: int = 0
     error: str | None = None
 
 

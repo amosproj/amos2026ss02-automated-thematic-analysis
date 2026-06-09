@@ -4,12 +4,10 @@ from dataclasses import dataclass, field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import Settings
 from app.exceptions import NotFoundError, UnprocessableError
-from app.models.ingestion import Corpus, CorpusChunk, CorpusDocument
+from app.models.ingestion import Corpus, CorpusDocument
 from app.schemas.ingestion import CorpusCreate, DocumentInput
 from app.services.linking import auto_link_demographics
-from app.services.text_chunking import chunk_text_by_words
 
 
 @dataclass
@@ -17,7 +15,6 @@ class IngestResult:
     """Internal result of an ingestion call. Converted to IngestResultSchema before returning to the client."""
 
     documents: list[CorpusDocument] = field(default_factory=list)
-    chunks_created: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -26,11 +23,10 @@ class IngestResult:
 
 
 class IngestionService:
-    """Handles all database operations for corpora, documents, and chunks."""
+    """Handles all database operations for corpora and documents."""
 
-    def __init__(self, session: AsyncSession, settings: Settings) -> None:
+    def __init__(self, session: AsyncSession) -> None:
         self._session = session
-        self._settings = settings
 
     async def create_corpus(self, payload: CorpusCreate) -> Corpus:
         """Insert a new corpus and return the refreshed ORM object."""
@@ -108,8 +104,8 @@ class IngestionService:
         documents: list[DocumentInput],
         filename: str | None = None,
     ) -> IngestResult:
-        """For each non-empty document: insert a CorpusDocument, chunk its text,
-        insert CorpusChunk rows. One commit at the end; rolls back on any failure.
+        """For each non-empty document: insert a CorpusDocument with its full text content.
+        One commit at the end; rolls back on any failure.
         `filename` (if given) is deduplicated and stored on every created document."""
         await self.get_corpus(corpus_id)
 
@@ -128,27 +124,10 @@ class IngestionService:
                     corpus_id=corpus_id,
                     title=doc_input.title or stored_filename or "Untitled",
                     filename=stored_filename,
+                    content=text,
                 )
                 self._session.add(doc)
-                # Flush to get doc.id before inserting chunks that reference it.
-                await self._session.flush()
-
-                spans = chunk_text_by_words(
-                    text,
-                    chunk_size_words=self._settings.INGESTION_CHUNK_SIZE_WORDS,
-                    overlap_words=self._settings.INGESTION_CHUNK_OVERLAP_WORDS,
-                )
-                for span in spans:
-                    self._session.add(
-                        CorpusChunk(
-                            document_id=doc.id,
-                            chunk_index=span.chunk_index,
-                            text=span.text,
-                        )
-                    )
-
                 result.documents.append(doc)
-                result.chunks_created += len(spans)
 
             await self._session.commit()
         except Exception as exc:
@@ -158,6 +137,19 @@ class IngestionService:
         await auto_link_demographics(self._session, corpus_id)
 
         return result
+
+    async def get_document(self, corpus_id: uuid.UUID, document_id: uuid.UUID) -> CorpusDocument:
+        """Fetch a single document by ID within the given corpus. Raises NotFoundError if absent."""
+        result = await self._session.execute(
+            select(CorpusDocument).where(
+                CorpusDocument.id == document_id,
+                CorpusDocument.corpus_id == corpus_id,
+            )
+        )
+        doc = result.scalar_one_or_none()
+        if doc is None:
+            raise NotFoundError(f"Document '{document_id}' not found in corpus '{corpus_id}'")
+        return doc
 
     async def list_documents(
         self,
@@ -178,39 +170,6 @@ class IngestionService:
             select(CorpusDocument)
             .where(CorpusDocument.corpus_id == corpus_id)
             .order_by(CorpusDocument.created_at.desc())
-            .offset(offset)
-            .limit(page_size)
-        )
-        return list(rows.scalars().all()), total
-
-    async def list_chunks(
-        self,
-        corpus_id: uuid.UUID,
-        document_id: uuid.UUID | None = None,
-        page: int = 1,
-        page_size: int = 20,
-    ) -> tuple[list[CorpusChunk], int]:
-        """Return a paginated list of chunks for a corpus, optionally filtered to one document."""
-        base = (
-            select(CorpusChunk)
-            .join(CorpusDocument, CorpusChunk.document_id == CorpusDocument.id)
-            .where(CorpusDocument.corpus_id == corpus_id)
-        )
-        count_q = (
-            select(func.count())
-            .select_from(CorpusChunk)
-            .join(CorpusDocument, CorpusChunk.document_id == CorpusDocument.id)
-            .where(CorpusDocument.corpus_id == corpus_id)
-        )
-        if document_id is not None:
-            base = base.where(CorpusChunk.document_id == document_id)
-            count_q = count_q.where(CorpusChunk.document_id == document_id)
-
-        total: int = (await self._session.execute(count_q)).scalar_one()
-
-        offset = (page - 1) * page_size
-        rows = await self._session.execute(
-            base.order_by(CorpusDocument.id, CorpusChunk.chunk_index)
             .offset(offset)
             .limit(page_size)
         )

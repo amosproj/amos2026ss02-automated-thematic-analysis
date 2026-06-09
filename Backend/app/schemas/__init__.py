@@ -24,7 +24,6 @@ from app.schemas.demographic import (
 )
 from app.schemas.ingestion import (
     BulkDocumentIngestRequest,
-    CorpusChunkSchema,
     CorpusCreate,
     CorpusDocumentSchema,
     CorpusSchema,
@@ -54,7 +53,6 @@ __all__ = [
     "BulkDocumentIngestRequest",
     "CodebookSchema",
     "CodebookGenerateRequest",
-    "CorpusChunkSchema",
     "CorpusCreate",
     "CorpusDocumentSchema",
     "CorpusSchema",

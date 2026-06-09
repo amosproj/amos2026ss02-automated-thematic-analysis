@@ -28,7 +28,6 @@ from app.models import (
     CodebookCodeRelationship,
     CodebookThemeRelationship,
     Corpus,
-    CorpusChunk,
     CorpusDocument,
     Theme,
     ThemeCodeRelationship,
@@ -225,32 +224,26 @@ class CodebookGenerationService:
         corpus_id: UUID,
         transcript_document_ids: list[UUID],
     ) -> list[str]:
-        chunk_rows = list(
+        docs = list(
             (
-                await self._session.execute(
-                    select(CorpusChunk.document_id, CorpusChunk.text, CorpusChunk.chunk_index)
-                    .join(CorpusDocument, CorpusChunk.document_id == CorpusDocument.id)
-                    .where(
+                await self._session.scalars(
+                    select(CorpusDocument).where(
                         CorpusDocument.corpus_id == corpus_id,
-                        CorpusChunk.document_id.in_(transcript_document_ids),
+                        CorpusDocument.id.in_(transcript_document_ids),
                     )
-                    .order_by(CorpusChunk.document_id, CorpusChunk.chunk_index)
                 )
             ).all()
         )
-        if not chunk_rows:
+        if not docs:
             return []
 
-        # Preserve the caller's document order while sorting chunks inside each
-        # transcript by their original chunk index.
-        chunks_by_document: dict[UUID, list[tuple[int, str]]] = {document_id: [] for document_id in transcript_document_ids}
-        for document_id, text, chunk_index in chunk_rows:
-            chunks_by_document[document_id].append((chunk_index, text))
+        docs_by_id = {doc.id: doc for doc in docs}
 
         passages: list[str] = []
         for document_id in transcript_document_ids:
-            ordered_chunks = sorted(chunks_by_document.get(document_id, []), key=lambda row: row[0])
-            passages.extend(text.strip() for _, text in ordered_chunks if text and text.strip())
+            doc = docs_by_id.get(document_id)
+            if doc and doc.content and doc.content.strip():
+                passages.append(doc.content.strip())
         return passages
 
     async def _generate_per_passage(
