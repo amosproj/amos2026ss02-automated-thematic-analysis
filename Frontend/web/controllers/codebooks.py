@@ -230,6 +230,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         if not version and active_codebook.get("version") is not None:
             version = str(active_codebook["version"])
         research_query = active_codebook.get("research_query") or ""
+        researcher_topics = active_codebook.get("researcher_topics") or ""
 
         frequencies = client.get_theme_frequencies(active_codebook_id)
         tree = client.get_theme_tree(active_codebook_id)
@@ -249,6 +250,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             tree=[],
             codes=[],
             research_query="",
+            researcher_topics="",
             error=True,
         )
     except BackendError as exc:
@@ -265,6 +267,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             tree=[],
             codes=[],
             research_query="",
+            researcher_topics="",
             error=True,
         )
     return render_template(
@@ -279,6 +282,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         tree=tree,
         codes=codes,
         research_query=research_query,
+        researcher_topics=researcher_topics,
     )
 
 @bp.get("/<corpus_id>/<codebook_id>/export")

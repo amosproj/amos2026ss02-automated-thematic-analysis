@@ -7,6 +7,44 @@
     const tree        = JSON.parse(appRoot.dataset.tree        || "[]");
     const codes       = JSON.parse(appRoot.dataset.codes       || "[]");
 
+    // Topics the researcher asked the AI to focus on (comma-separated string).
+    const researcherTopics = (() => {
+        try {
+            const raw = JSON.parse(appRoot.dataset.researcherTopics || '""');
+            return String(raw)
+                .split(",")
+                .map(t => t.trim().toLowerCase())
+                .filter(Boolean);
+        } catch (_) {
+            return [];
+        }
+    })();
+
+    // Match a theme/code label against the requested topics. Returns the matched
+    // topic (original casing-insensitive form) or null. Space-padded token
+    // matching means "work" won't match "network", while the LLM's rephrasings
+    // still match (topic "isolation" -> theme "Social Isolation and Loneliness").
+    function matchedTopicFor(label) {
+        if (!researcherTopics.length || !label) return null;
+        const cleaned = label.replace(/^\[CODE\]\s*/i, "");
+        const normalized = " " + cleaned.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() + " ";
+        for (const topic of researcherTopics) {
+            const phrase = topic.replace(/[^a-z0-9]+/g, " ").trim();
+            if (phrase && normalized.includes(" " + phrase + " ")) return topic;
+            const words = topic.split(/[^a-z0-9]+/).filter(w => w.length >= 4);
+            if (words.some(w => normalized.includes(" " + w + " "))) return topic;
+        }
+        return null;
+    }
+
+    function makeTopicBadge(matchedTopic) {
+        const badge = document.createElement("span");
+        badge.className = "theme-topic-badge";
+        badge.textContent = "Requested topic";
+        badge.title = "Matches your requested topic: " + matchedTopic;
+        return badge;
+    }
+
     function _flattenTree(nodes, out) {
         for (const node of nodes) {
             out.push(node);
@@ -168,6 +206,10 @@
         themeDetailsEmpty.classList.add("d-none");
         themeDetailsContent.classList.remove("d-none");
         themeDetailsName.textContent     = info.theme_name ?? "-";
+        const matchedDetailTopic = matchedTopicFor(info.theme_name);
+        if (matchedDetailTopic) {
+            themeDetailsName.appendChild(makeTopicBadge(matchedDetailTopic));
+        }
         themeDetailsId.textContent       = info.theme_id   ?? "-";
         themeDetailsOccur.textContent    = String(info.occurrence_count ?? 0);
         themeDetailsCoverage.textContent = formatCoverage(info.interview_coverage_percentage ?? 0);
@@ -188,9 +230,14 @@
             row.classList.add("theme-row-selectable");
             row.addEventListener("click", () => showThemeDetails(theme.theme_id));
 
-            // Name
+            // Name (+ flag if it matches a researcher-requested topic)
             const nameCell = document.createElement("td");
-            nameCell.textContent = theme.theme_name;
+            nameCell.appendChild(document.createTextNode(theme.theme_name));
+            const matchedTopic = matchedTopicFor(theme.theme_name);
+            if (matchedTopic) {
+                row.classList.add("theme-row-matched");
+                nameCell.appendChild(makeTopicBadge(matchedTopic));
+            }
 
             // Occurrence count
             const countCell = document.createElement("td");
@@ -277,6 +324,15 @@
 
         // Label rendered via textContent — auto-escapes any HTML in the label.
         row.appendChild(document.createTextNode(theme.label));
+        // Compact star marker if this node matches a requested topic.
+        const matchedTreeTopic = matchedTopicFor(theme.label);
+        if (matchedTreeTopic) {
+            const star = document.createElement("span");
+            star.className = "theme-topic-star";
+            star.textContent = "★";
+            star.title = "Matches your requested topic: " + matchedTreeTopic;
+            row.appendChild(star);
+        }
         li.appendChild(row);
 
         let childrenUl = null;

@@ -5,7 +5,8 @@
 <div id="theme-app"
      data-frequencies='{{ frequencies | tojson }}'
      data-tree='{{ tree | tojson }}'
-     data-codes='{{ codes | tojson }}'>
+     data-codes='{{ codes | tojson }}'
+     data-researcher-topics='{{ researcher_topics | tojson }}'>
 
   {% if corpus_id and corpus_options %}
     {% set active_corpus_id = corpus_id %}
@@ -48,6 +49,23 @@
     <div class="card-body">
       <p class="text-secondary small text-uppercase fw-semibold mb-1" style="letter-spacing:.07em">Research Question</p>
       <blockquote class="mb-0 fst-italic">{{ research_query }}</blockquote>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if researcher_topics %}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+      <p class="text-secondary small text-uppercase fw-semibold mb-1" style="letter-spacing:.07em">Research Topics</p>
+      <div class="d-flex flex-wrap gap-2 mb-2">
+        {% for topic in researcher_topics.split(',') %}
+          {% if topic.strip() %}<span class="badge theme-topic-badge">{{ topic.strip() }}</span>{% endif %}
+        {% endfor %}
+      </div>
+      <p class="text-secondary small mb-0">
+        Topics you asked the AI to focus on. Extracted themes and codes that match a topic are
+        flagged <span class="theme-topic-badge">Requested topic</span> below.
+      </p>
     </div>
   </div>
   {% endif %}
