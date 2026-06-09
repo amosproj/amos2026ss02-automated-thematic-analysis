@@ -763,3 +763,26 @@ def delete_codebook(corpus_id: str, codebook_id: str):
     except BackendError as exc:
         flash(exc.user_message, "danger")
     return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
+
+
+@bp.post("/<corpus_id>/delete")
+def delete_selected_codebooks(corpus_id: str):
+    """Delete codebooks selected in the list view."""
+    codebook_ids = [item_id for item_id in request.form.getlist("item_ids") if item_id]
+    if not codebook_ids:
+        flash("Select at least one codebook to delete.", "warning")
+        return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
+
+    deleted = 0
+    try:
+        client = _backend()
+        for codebook_id in codebook_ids:
+            client.delete_codebook(codebook_id)
+            deleted += 1
+        flash(f"Deleted {deleted} codebook{'s' if deleted != 1 else ''}.", "success")
+    except BackendError as exc:
+        if deleted:
+            flash(f"Deleted {deleted} codebook{'s' if deleted != 1 else ''} before an error occurred.", "warning")
+        flash(exc.user_message, "danger")
+
+    return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))

@@ -23,22 +23,42 @@
   {% if error %}
     <p class="text-secondary">Couldn't load demographic data right now.</p>
   {% elif files %}
-    <div class="bg-white border rounded-2">
+    <div class="ata-selectable-list bg-white border rounded-2" data-selectable-list>
+      {% set selectable_list_label = 'demographic files' %}
+      {% set selectable_list_item_singular = 'demographic file' %}
+      {% set selectable_list_item_plural = 'demographic files' %}
+      {% set selectable_list_delete_action = url_for('demographic.delete_selected_files', corpus_id=corpus_id) %}
+      {% set selectable_list_delete_label = 'Delete selected' %}
+      {% set selectable_list_delete_modal_id = 'deleteSelectedDemographicFilesModal' %}
+      {% set selectable_list_delete_title = 'Confirm Deletion' %}
+      {% set selectable_list_delete_message = 'Are you sure you want to delete the selected demographic files? This action cannot be undone.' %}
+      {% set selectable_list_delete_confirm_label = 'Delete' %}
+      {% include "_selectable_list_toolbar.html" %}
       <div class="table-responsive">
         <table class="table table-sm table-hover align-middle mb-0" id="demographic-files-table">
           <thead class="table-light">
             <tr>
+              <th class="ata-selectable-list__checkbox-cell" scope="col">
+                Select
+              </th>
               <th>Name</th>
               <th>Corpus</th>
               <th>Columns</th>
               <th>Rows</th>
               <th>Uploaded</th>
-              <th></th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for f in files %}
-              <tr>
+              <tr class="ata-selectable-list__row" data-selectable-list-row data-item-id="{{ f.id }}">
+                <td class="ata-selectable-list__checkbox-cell">
+                  <input class="form-check-input"
+                         type="checkbox"
+                         value="{{ f.id }}"
+                         data-selectable-list-checkbox
+                         aria-label="Select demographic file {{ f.name }}">
+                </td>
                 <td>{{ f.name }}</td>
                 <td class="text-secondary">{{ corpus_name }}</td>
                 <td>{{ f.original_columns | length }}</td>
@@ -50,15 +70,6 @@
                      href="{{ url_for('demographic.view_data', corpus_id=corpus_id, file_id=f.id) }}">
                     View Data
                   </a>
-                  <button type="button" class="btn btn-sm btn-outline-danger ms-2"
-                          id="delete-data-btn-{{ loop.index }}"
-                          data-bs-toggle="modal" 
-                          data-bs-target="#deleteDemographicModal-{{ loop.index }}">
-                    Delete
-                  </button>
-                  {% with modal_id='deleteDemographicModal-' ~ loop.index, form_action=url_for('demographic.delete_file', corpus_id=corpus_id, file_id=f.id), item_name=f.name %}
-                    {% include "_delete_modal.html" %}
-                  {% endwith %}
                 </td>
               </tr>
             {% endfor %}

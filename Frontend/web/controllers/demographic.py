@@ -205,6 +205,29 @@ def delete_file(corpus_id: str, file_id: str):
     return redirect(url_for("demographic.list_files", corpus_id=corpus_id))
 
 
+@bp.post("/<corpus_id>/delete")
+def delete_selected_files(corpus_id: str):
+    set_active_corpus_id(corpus_id)
+    file_ids = [item_id for item_id in request.form.getlist("item_ids") if item_id]
+    if not file_ids:
+        flash("Select at least one demographic file to delete.", "warning")
+        return redirect(url_for("demographic.list_files", corpus_id=corpus_id))
+
+    deleted = 0
+    try:
+        client = _backend()
+        for file_id in file_ids:
+            client.delete_demographic_file(corpus_id, file_id)
+            deleted += 1
+        flash(f"Deleted {deleted} demographic file{'s' if deleted != 1 else ''}.", "success")
+    except BackendError as exc:
+        if deleted:
+            flash(f"Deleted {deleted} demographic file{'s' if deleted != 1 else ''} before an error occurred.", "warning")
+        flash(exc.user_message, "danger")
+
+    return redirect(url_for("demographic.list_files", corpus_id=corpus_id))
+
+
 
 # ---- View (corpus-scoped) --------------------------------------------------
 

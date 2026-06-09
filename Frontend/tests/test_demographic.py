@@ -36,6 +36,14 @@ def test_list_renders_demographic_files(client, fake_backend):
     assert b"participants" in resp.data
     assert b"View Data" in resp.data
     assert b'id="global-corpus-select"' in resp.data
+    assert b"data-selectable-list" in resp.data
+    assert b"data-selectable-list-select-all" in resp.data
+    assert resp.data.count(b"data-selectable-list-checkbox") == 1
+    assert b"0 demographic files selected" in resp.data
+    assert b"Delete selected" in resp.data
+    assert b'id="deleteSelectedDemographicFilesModal"' in resp.data
+    assert b"Confirm Deletion" in resp.data
+    assert b"<th>Actions</th>" in resp.data
     assert b"No demographic data uploaded yet" not in resp.data
 
 
@@ -389,4 +397,43 @@ def test_delete_file_backend_error(client, fake_backend):
     )
     assert resp.status_code == 200
     assert b"simulated delete_demographic_file failure" in resp.data
+
+
+def test_delete_selected_demographic_files_success(client, fake_backend):
+    fake_backend.demographic_files = [
+        {
+            "id": "file-1",
+            "corpus_id": CORPUS,
+            "name": "participants-a",
+            "original_columns": ["username"],
+            "rows_total": 1,
+            "created_at": "2026-05-20",
+            "updated_at": "2026-05-20",
+        },
+        {
+            "id": "file-2",
+            "corpus_id": CORPUS,
+            "name": "participants-b",
+            "original_columns": ["username"],
+            "rows_total": 1,
+            "created_at": "2026-05-21",
+            "updated_at": "2026-05-21",
+        },
+    ]
+
+    resp = client.post(
+        f"/demographic/{CORPUS}/delete",
+        data={"item_ids": ["file-1", "file-2"]},
+        follow_redirects=True,
+    )
+
+    assert resp.status_code == 200
+    assert b"Deleted 2 demographic files" in resp.data
+    assert fake_backend.demographic_files == []
+
+
+def test_delete_selected_demographic_files_requires_selection(client, fake_backend):
+    resp = client.post(f"/demographic/{CORPUS}/delete", data={}, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"Select at least one demographic file to delete" in resp.data
 

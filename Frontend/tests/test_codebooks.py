@@ -41,6 +41,15 @@ def test_codebook_list_renders_codebooks(client, fake_backend):
     assert b"alice" in resp.data
     assert b"bob" in resp.data
     assert b'id="global-corpus-select"' in resp.data
+    assert b"data-selectable-list" in resp.data
+    assert b"data-selectable-list-select-all" in resp.data
+    assert resp.data.count(b"data-selectable-list-checkbox") == 2
+    assert b"0 codebooks selected" in resp.data
+    assert b"Export selected" in resp.data
+    assert b"Delete selected" in resp.data
+    assert b'id="deleteSelectedCodebooksModal"' in resp.data
+    assert b"Delete Codebooks" in resp.data
+    assert b"<th>Actions</th>" in resp.data
 
 
 def test_codebook_list_renders_empty_state(client, fake_backend):
@@ -532,3 +541,34 @@ def test_delete_codebook_handles_backend_error(client, fake_backend):
     assert resp.status_code == 200
     assert b"simulated delete_codebook failure" in resp.data
     assert len(fake_backend.codebooks) == 1
+
+
+def test_delete_selected_codebooks_success(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+        {"id": "cb-2", "name": "Focus Group Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "bob", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+
+    resp = client.post(
+        f"/codebooks/{fake_backend.corpus_id}/delete",
+        data={"item_ids": ["cb-1", "cb-2"]},
+        follow_redirects=True,
+    )
+
+    assert resp.status_code == 200
+    assert b"Deleted 2 codebooks" in resp.data
+    assert fake_backend.codebooks == []
+
+
+def test_delete_selected_codebooks_requires_selection(client, fake_backend):
+    resp = client.post(
+        f"/codebooks/{fake_backend.corpus_id}/delete",
+        data={},
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"Select at least one codebook to delete" in resp.data

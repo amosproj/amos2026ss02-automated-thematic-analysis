@@ -53,20 +53,42 @@
   {% if error %}
     <p class="text-secondary">Couldn't load codebooks right now.</p>
   {% elif codebooks %}
-    <div class="bg-white border rounded-2">
+    <div class="ata-selectable-list bg-white border rounded-2" data-selectable-list>
+      {% set selectable_list_label = 'codebooks' %}
+      {% set selectable_list_item_singular = 'codebook' %}
+      {% set selectable_list_item_plural = 'codebooks' %}
+      {% set selectable_list_export_url_template = url_for('codebooks.export_codebook', corpus_id=corpus_id, codebook_id='__ITEM_ID__') %}
+      {% set selectable_list_export_label = 'Export selected' %}
+      {% set selectable_list_delete_action = url_for('codebooks.delete_selected_codebooks', corpus_id=corpus_id) %}
+      {% set selectable_list_delete_label = 'Delete selected' %}
+      {% set selectable_list_delete_modal_id = 'deleteSelectedCodebooksModal' %}
+      {% set selectable_list_delete_title = 'Delete Codebooks' %}
+      {% set selectable_list_delete_message = 'Are you sure you want to delete the selected codebooks? This action cannot be undone and will permanently remove all associated themes and codes.' %}
+      {% set selectable_list_delete_confirm_label = 'Delete' %}
+      {% include "_selectable_list_toolbar.html" %}
       <div class="table-responsive">
         <table class="table table-sm table-hover align-middle mb-0">
           <thead class="table-light">
             <tr>
+              <th class="ata-selectable-list__checkbox-cell" scope="col">
+                Select
+              </th>
               <th>Name</th>
               <th>Version</th>
               <th>Created by</th>
-              <th></th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for cb in codebooks %}
-              <tr>
+              <tr class="ata-selectable-list__row" data-selectable-list-row data-item-id="{{ cb.id }}">
+                <td class="ata-selectable-list__checkbox-cell">
+                  <input class="form-check-input"
+                         type="checkbox"
+                         value="{{ cb.id }}"
+                         data-selectable-list-checkbox
+                         aria-label="Select codebook {{ cb.name }}">
+                </td>
                 <td>{{ cb.name }}</td>
                 <td><span class="badge text-bg-secondary">v{{ cb.version }}</span></td>
                 <td class="text-secondary">{{ cb.created_by }}</td>
@@ -79,34 +101,6 @@
                      href="{{ url_for('codebooks.codebook_review', codebook_id=cb.id) }}">
                     Review &amp; edit
                   </a>
-                  <a class="btn btn-sm btn-outline-secondary ms-1"
-                     href="{{ url_for('codebooks.export_codebook', corpus_id=corpus_id, codebook_id=cb.id) }}">
-                    Export
-                  </a>
-                  <button type="button" class="btn btn-sm btn-outline-danger ms-1" data-bs-toggle="modal" data-bs-target="#deleteCodebookModal-{{ cb.id }}">
-                    Delete
-                  </button>
-
-                  <!-- Delete Modal -->
-                  <div class="modal fade" id="deleteCodebookModal-{{ cb.id }}" tabindex="-1" aria-labelledby="deleteCodebookModalLabel-{{ cb.id }}" aria-hidden="true">
-                    <div class="modal-dialog">
-                      <div class="modal-content">
-                        <div class="modal-header">
-                          <h5 class="modal-title" id="deleteCodebookModalLabel-{{ cb.id }}">Delete Codebook</h5>
-                          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body text-wrap text-break" style="white-space: normal;">
-                          Are you sure you want to delete the codebook <strong>{{ cb.name }}</strong>? This action cannot be undone and will permanently remove all associated themes and codes.
-                        </div>
-                        <div class="modal-footer">
-                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                          <form action="{{ url_for('codebooks.delete_codebook', corpus_id=corpus_id, codebook_id=cb.id) }}" method="post" class="d-inline">
-                            <button type="submit" class="btn btn-danger">Delete</button>
-                          </form>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </td>
               </tr>
             {% endfor %}

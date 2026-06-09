@@ -229,6 +229,14 @@ def test_list_renders_documents_from_backend(client, fake_backend):
     assert resp.status_code == 200
     assert b"interview1.txt" in resp.data
     assert b"interview2.pdf" in resp.data
+    assert b"data-selectable-list" in resp.data
+    assert b"data-selectable-list-select-all" in resp.data
+    assert resp.data.count(b"data-selectable-list-checkbox") == 2
+    assert b"0 transcripts selected" in resp.data
+    assert b"Delete selected" in resp.data
+    assert b'id="deleteSelectedTranscriptsModal"' in resp.data
+    assert b"Yes, Delete Transcripts" in resp.data
+    assert b"<th>Filename</th>" in resp.data
     assert b"No transcripts uploaded yet" not in resp.data
 
 
@@ -283,3 +291,27 @@ def test_delete_transcript_backend_error(client, fake_backend):
     resp = client.post(f"/transcripts/{CORPUS}/doc-1/delete", follow_redirects=True)
     assert resp.status_code == 200
     assert b"simulated delete_document failure" in resp.data
+
+
+def test_delete_selected_transcripts_success(client, fake_backend):
+    fake_backend.documents = [
+        {"id": "doc-1", "title": "Interview 1", "filename": "1.txt", "created_at": "2026-05-12"},
+        {"id": "doc-2", "title": "Interview 2", "filename": "2.txt", "created_at": "2026-05-13"},
+        {"id": "doc-3", "title": "Interview 3", "filename": "3.txt", "created_at": "2026-05-14"},
+    ]
+
+    resp = client.post(
+        f"/transcripts/{CORPUS}/delete",
+        data={"item_ids": ["doc-1", "doc-2"]},
+        follow_redirects=True,
+    )
+
+    assert resp.status_code == 200
+    assert b"Deleted 2 transcripts" in resp.data
+    assert [d["id"] for d in fake_backend.documents] == ["doc-3"]
+
+
+def test_delete_selected_transcripts_requires_selection(client, fake_backend):
+    resp = client.post(f"/transcripts/{CORPUS}/delete", data={}, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"Select at least one transcript to delete" in resp.data
