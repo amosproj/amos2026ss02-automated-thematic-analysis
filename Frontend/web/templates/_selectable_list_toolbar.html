@@ -15,9 +15,23 @@
     </span>
   </div>
 
-  {% if selectable_list_delete_action or selectable_list_export_url_template %}
+  {% if selectable_list_delete_action or selectable_list_export_url_template or selectable_list_export_action %}
     <div class="ata-selectable-list__actions" aria-label="{{ selectable_list_label }} selection actions">
-      {% if selectable_list_export_url_template %}
+      {% if selectable_list_export_action %}
+        <form method="POST"
+              action="{{ selectable_list_export_action }}"
+              class="d-inline"
+              data-selectable-list-selected-form>
+          <button type="submit"
+                  class="btn btn-sm btn-outline-secondary"
+                  data-selectable-list-action
+                  data-min-selected="1"
+                  data-disabled-title="Select at least one {{ selectable_list_item_singular }} to export."
+                  disabled>
+            {{ selectable_list_export_label | default('Export selected') }}
+          </button>
+        </form>
+      {% elif selectable_list_export_url_template %}
         <a class="btn btn-sm btn-outline-secondary disabled"
            href="#"
            aria-disabled="true"

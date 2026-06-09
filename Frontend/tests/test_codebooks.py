@@ -46,6 +46,7 @@ def test_codebook_list_renders_codebooks(client, fake_backend):
     assert resp.data.count(b"data-selectable-list-checkbox") == 2
     assert b"0 codebooks selected" in resp.data
     assert b"Export selected" in resp.data
+    assert b'action="/codebooks/test-corpus-id/export"' in resp.data
     assert b"Delete selected" in resp.data
     assert b'id="deleteSelectedCodebooksModal"' in resp.data
     assert b"Delete Codebooks" in resp.data

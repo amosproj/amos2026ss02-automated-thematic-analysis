@@ -57,7 +57,7 @@
       {% set selectable_list_label = 'codebooks' %}
       {% set selectable_list_item_singular = 'codebook' %}
       {% set selectable_list_item_plural = 'codebooks' %}
-      {% set selectable_list_export_url_template = url_for('codebooks.export_codebook', corpus_id=corpus_id, codebook_id='__ITEM_ID__') %}
+      {% set selectable_list_export_action = url_for('codebooks.export_selected_codebooks', corpus_id=corpus_id) %}
       {% set selectable_list_export_label = 'Export selected' %}
       {% set selectable_list_delete_action = url_for('codebooks.delete_selected_codebooks', corpus_id=corpus_id) %}
       {% set selectable_list_delete_label = 'Delete selected' %}

@@ -1,6 +1,7 @@
 import csv
 import io
 import time
+import zipfile
 from urllib.parse import quote_plus
 
 from flask import (
@@ -24,6 +25,53 @@ from web.services.corpus_context import resolve_active_corpus, set_active_corpus
 bp = Blueprint("codebooks", __name__)
 
 CODING_MODES = ("auto", "semi", "manual")
+
+
+def _safe_export_filename(name: str, version: int | str | None) -> str:
+    safe_name = "".join(
+        ch if ch.isalnum() or ch in ("-", "_") else "_"
+        for ch in (name or "codebook").strip()
+    ).strip("_")
+    if not safe_name:
+        safe_name = "codebook"
+    return f"{safe_name}_v{version or 1}.csv"
+
+
+def _codebook_to_csv(codebook: dict) -> str:
+    themes = codebook.get("themes", [])
+    codes = codebook.get("codes", [])
+
+    flat_rows = []
+    exported_ids = set()
+
+    def traverse(node: dict, parent_name: str) -> None:
+        exported_ids.add(node.get("id"))
+        flat_rows.append({
+            "Node Type": node.get("node_type", "THEME"),
+            "Name": node.get("name", ""),
+            "Description": node.get("description", ""),
+            "Parent Name": parent_name,
+        })
+        for child in node.get("children", []):
+            traverse(child, node.get("name", ""))
+
+    for theme in themes:
+        traverse(theme, "")
+
+    for code in codes:
+        if code.get("id") not in exported_ids:
+            flat_rows.append({
+                "Node Type": "CODE",
+                "Name": code.get("name", ""),
+                "Description": code.get("description", ""),
+                "Parent Name": "",
+            })
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["Node Type", "Name", "Description", "Parent Name"])
+    writer.writeheader()
+    writer.writerows(flat_rows)
+    return output.getvalue()
 
 
 @bp.get("/")
@@ -232,42 +280,8 @@ def export_codebook(corpus_id: str, codebook_id: str) -> Response | str:
     try:
         client = _backend()
         codebook = client.get_codebook(codebook_id)
-        themes = codebook.get("themes", [])
-        codes = codebook.get("codes", [])
-
-        flat_rows = []
-        exported_ids = set()
-
-        def traverse(node: dict, parent_name: str) -> None:
-            exported_ids.add(node.get("id"))
-            flat_rows.append({
-                "Node Type": node.get("node_type", "THEME"),
-                "Name": node.get("name", ""),
-                "Description": node.get("description", ""),
-                "Parent Name": parent_name,
-            })
-            for child in node.get("children", []):
-                traverse(child, node.get("name", ""))
-
-        for t in themes:
-            traverse(t, "")
-
-        for c in codes:
-            if c.get("id") not in exported_ids:
-                flat_rows.append({
-                    "Node Type": "CODE",
-                    "Name": c.get("name", ""),
-                    "Description": c.get("description", ""),
-                    "Parent Name": "",
-                })
-
-        output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=["Node Type", "Name", "Description", "Parent Name"])
-        writer.writeheader()
-        writer.writerows(flat_rows)
-
-        csv_data = output.getvalue()
-        filename = f"{codebook.get('name', 'codebook').replace(' ', '_')}_v{codebook.get('version', 1)}.csv"
+        csv_data = _codebook_to_csv(codebook)
+        filename = _safe_export_filename(codebook.get("name", "codebook"), codebook.get("version", 1))
 
         return Response(
             csv_data,
@@ -280,6 +294,46 @@ def export_codebook(corpus_id: str, codebook_id: str) -> Response | str:
     except BackendError as exc:
         flash(exc.user_message, "danger")
         return redirect(url_for("codebooks.list_codebooks", corpus_id=corpus_id))
+
+
+@bp.post("/<corpus_id>/export")
+def export_selected_codebooks(corpus_id: str) -> Response | str:
+    """Export selected codebooks as one ZIP containing one CSV per codebook."""
+    codebook_ids = [item_id for item_id in request.form.getlist("item_ids") if item_id]
+    if not codebook_ids:
+        flash("Select at least one codebook to export.", "warning")
+        return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
+
+    try:
+        client = _backend()
+        archive_buffer = io.BytesIO()
+        used_filenames: set[str] = set()
+
+        with zipfile.ZipFile(archive_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for codebook_id in codebook_ids:
+                codebook = client.get_codebook(codebook_id)
+                filename = _safe_export_filename(
+                    codebook.get("name", "codebook"),
+                    codebook.get("version", 1),
+                )
+                if filename in used_filenames:
+                    stem, ext = filename.rsplit(".", 1)
+                    filename = f"{stem}_{codebook_id}.{ext}"
+                used_filenames.add(filename)
+                archive.writestr(filename, _codebook_to_csv(codebook))
+
+        archive_buffer.seek(0)
+        return Response(
+            archive_buffer.getvalue(),
+            mimetype="application/zip",
+            headers={"Content-Disposition": "attachment; filename=selected_codebooks.zip"},
+        )
+    except BackendNotFoundError:
+        flash("One of the selected codebooks couldn't be found. It may have been deleted.", "danger")
+        return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
 
 
 @bp.get("/<corpus_id>/upload")
