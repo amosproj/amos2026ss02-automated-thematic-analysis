@@ -42,7 +42,7 @@
                     {% if r.stored_filename != r.filename %}
                       Renamed to <code>{{ r.stored_filename }}</code> (duplicate name).<br>
                     {% endif %}
-                    {{ r.documents_created }} document(s), {{ r.chunks_created }} chunk(s).
+                    {{ r.documents_created }} document(s) uploaded.
                   {% else %}
                     {{ r.error }}
                   {% endif %}

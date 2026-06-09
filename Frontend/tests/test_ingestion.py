@@ -22,9 +22,9 @@ def test_upload_submit_renders_per_file_results(client, fake_backend):
     one row per file."""
     fake_backend.upload_results = [
         {"filename": "a.txt", "stored_filename": "a.txt", "success": True,
-         "documents_created": 1, "chunks_created": 2, "error": None},
+         "documents_created": 1, "error": None},
         {"filename": "b.pdf", "stored_filename": "b.pdf", "success": True,
-         "documents_created": 1, "chunks_created": 5, "error": None},
+         "documents_created": 1, "error": None},
     ]
 
     resp = client.post(
@@ -53,10 +53,9 @@ def test_upload_submit_renders_per_file_errors(client, fake_backend):
     failure row shows the backend's error message verbatim."""
     fake_backend.upload_results = [
         {"filename": "good.txt", "stored_filename": "good.txt", "success": True,
-         "documents_created": 1, "chunks_created": 1, "error": None},
+         "documents_created": 1, "error": None},
         {"filename": "bad.csv", "stored_filename": None, "success": False,
-         "documents_created": 0, "chunks_created": 0,
-         "error": "Unsupported file extension '.csv'"},
+         "documents_created": 0, "error": "Unsupported file extension '.csv'"},
     ]
 
     resp = client.post(
@@ -79,7 +78,7 @@ def test_upload_submit_surfaces_renamed_filename(client, fake_backend):
     """Duplicate filename: backend renames it; the UI mentions the renaming."""
     fake_backend.upload_results = [
         {"filename": "dup.txt", "stored_filename": "dup (2).txt", "success": True,
-         "documents_created": 1, "chunks_created": 1, "error": None},
+         "documents_created": 1, "error": None},
     ]
 
     resp = client.post(

@@ -53,7 +53,6 @@ __all__ = [
     "BulkDocumentIngestRequest",
     "CodebookSchema",
     "CodebookGenerateRequest",
-    "CorpusChunkSchema",
     "CorpusCreate",
     "CorpusDocumentSchema",
     "CorpusSchema",
