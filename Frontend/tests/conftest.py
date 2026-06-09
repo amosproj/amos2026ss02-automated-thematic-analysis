@@ -84,12 +84,17 @@ class FakeBackend:
 
     def upload_files(self, corpus_id, files) -> list[dict]:
         self._maybe_raise("upload_files")
-        self.uploaded_files = [f.filename for f in files]
+        for f in files:
+            self.uploaded_files.append(f.filename)
         return self.upload_results
 
     def list_documents(self, corpus_id, page_size: int = 50) -> list[dict]:
         self._maybe_raise("list_documents")
         return self.documents
+
+    def delete_document(self, corpus_id, document_id) -> None:
+        self._maybe_raise("delete_document")
+        self.documents = [d for d in self.documents if d["id"] != document_id]
 
     # ---- Codebooks / themes -------------------------------------------------
 

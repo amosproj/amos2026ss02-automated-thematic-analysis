@@ -105,3 +105,25 @@ async def test_list_documents_paginated(db_session):
     page2, _ = await svc.list_documents(corpus_id=corpus.id, page=2, page_size=3)
     assert len(page2) == 2
 
+
+async def test_delete_document_success(db_session):
+    svc = IngestionService(db_session)
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
+    result = await svc.ingest_documents(
+        corpus_id=corpus.id,
+        documents=[DocumentInput(title="Doc 1", text="some text here")],
+    )
+    doc_id = result.documents[0].id
+
+    await svc.delete_document(corpus.id, doc_id)
+
+    with pytest.raises(NotFoundError):
+        await svc.get_document(corpus.id, doc_id)
+
+
+async def test_delete_document_not_found(db_session):
+    svc = IngestionService(db_session)
+    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="C"))
+
+    with pytest.raises(NotFoundError):
+        await svc.delete_document(corpus.id, uuid.uuid4())

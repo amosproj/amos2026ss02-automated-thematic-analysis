@@ -68,6 +68,7 @@ All routes are under `/api/v1/ingestion`.
 | `POST` | `/corpora/{corpus_id}/documents/bulk` | Ingest documents from JSON body |
 | `POST` | `/corpora/{corpus_id}/upload` | Ingest from a `.jsonl` file upload |
 | `GET` | `/corpora/{corpus_id}/documents` | List documents (paginated) |
+| `DELETE` | `/corpora/{corpus_id}/documents/{document_id}` | Delete a single document |
 | `GET` | `/corpora/{corpus_id}/chunks` | List chunks (paginated, filterable by `document_id`) |
 
 All responses are wrapped in `{"success": true, "data": ...}`. Paginated responses include a `meta` object with `total`, `page`, `page_size`, and `pages`.

@@ -151,6 +151,12 @@ class IngestionService:
             raise NotFoundError(f"Document '{document_id}' not found in corpus '{corpus_id}'")
         return doc
 
+    async def delete_document(self, corpus_id: uuid.UUID, document_id: uuid.UUID) -> None:
+        """Delete a single document by ID. Raises NotFoundError if absent."""
+        doc = await self.get_document(corpus_id, document_id)
+        await self._session.delete(doc)
+        await self._session.commit()
+
     async def list_documents(
         self,
         corpus_id: uuid.UUID,
