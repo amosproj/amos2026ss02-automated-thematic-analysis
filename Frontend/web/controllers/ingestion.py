@@ -215,3 +215,15 @@ def list_transcripts(corpus_id: str) -> str:
         corpus_options=corpus_options,
         active_corpus_name=active_corpus_name,
     )
+
+
+@bp.post("/<corpus_id>/<document_id>/delete")
+def delete_transcript(corpus_id: str, document_id: str):
+    """Delete a single transcript from the active corpus."""
+    set_active_corpus_id(corpus_id)
+    try:
+        _backend().delete_document(corpus_id, document_id)
+        flash("Transcript deleted successfully.", "success")
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+    return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))

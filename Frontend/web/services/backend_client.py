@@ -153,6 +153,19 @@ class BackendClient:
             sub_key="items",
         )
 
+    def delete_document(self, corpus_id: str, document_id: str) -> None:
+        """Delete a document from a corpus."""
+        path = f"/ingestion/corpora/{corpus_id}/documents/{document_id}"
+        started_at = time.monotonic()
+        try:
+            r = self._client.delete(path)
+            r.raise_for_status()
+            return self._unwrap(r)
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+        except (json.JSONDecodeError, KeyError) as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+
     # ---- Codebooks ----------------------------------------------------------
 
 

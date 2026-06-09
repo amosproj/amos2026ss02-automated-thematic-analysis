@@ -466,3 +466,36 @@ async def test_upload_duplicate_filename_is_renamed(client):
         f"both stored, second renamed ({filenames})",
     )
     log.report("Duplicate rename [dup.txt uploaded twice]")
+
+
+# ---------------------------------------------------------------------------
+# DELETE /ingestion/corpora/{corpus_id}/documents/{document_id}
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_document_success(client):
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
+    corpus_id = create.json()["data"]["id"]
+
+    await client.post(
+        f"{API}/corpora/{corpus_id}/documents/bulk",
+        json={"documents": [{"title": "Doc to delete", "text": "content"}]},
+    )
+
+    docs_resp = await client.get(f"{API}/corpora/{corpus_id}/documents")
+    document_id = docs_resp.json()["data"]["items"][0]["id"]
+
+    del_resp = await client.delete(f"{API}/corpora/{corpus_id}/documents/{document_id}")
+    assert del_resp.status_code == 200
+    assert del_resp.json()["success"] is True
+
+    get_resp = await client.get(f"{API}/corpora/{corpus_id}/documents/{document_id}")
+    assert get_resp.status_code == 404
+
+
+async def test_delete_document_not_found(client):
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
+    corpus_id = create.json()["data"]["id"]
+
+    del_resp = await client.delete(f"{API}/corpora/{corpus_id}/documents/{MISSING_STR}")
+    assert del_resp.status_code == 404

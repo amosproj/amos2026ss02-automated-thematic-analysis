@@ -220,3 +220,18 @@ async def get_document_content(
     service = IngestionService(session)
     doc = await service.get_document(corpus_id=corpus_id, document_id=document_id)
     return ResponseEnvelope.ok(CorpusDocumentContentSchema.model_validate(doc))
+
+
+@router.delete(
+    "/corpora/{corpus_id}/documents/{document_id}",
+    response_model=ResponseEnvelope[None],
+)
+async def delete_document(
+    corpus_id: uuid.UUID,
+    document_id: uuid.UUID,
+    session: DbSession,
+) -> ResponseEnvelope[None]:
+    """Delete a single document and its relationships."""
+    service = IngestionService(session)
+    await service.delete_document(corpus_id=corpus_id, document_id=document_id)
+    return ResponseEnvelope.ok(None)

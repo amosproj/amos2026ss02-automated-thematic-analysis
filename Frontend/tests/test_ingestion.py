@@ -256,3 +256,30 @@ def test_list_shows_unavailable_message_when_backend_down(client, fake_backend):
     # Substring chosen to avoid the apostrophe in "can't" (Jinja2 HTML-escapes it).
     assert b"reach the analysis service" in resp.data
     assert b"No transcripts uploaded yet" not in resp.data
+
+
+# POST /transcripts/<corpus_id>/<document_id>/delete
+
+
+def test_delete_transcript_success(client, fake_backend):
+    fake_backend.documents = [
+        {"id": "doc-1", "title": "Interview 1", "filename": "1.txt", "created_at": "2026-05-12"},
+        {"id": "doc-2", "title": "Interview 2", "filename": "2.txt", "created_at": "2026-05-13"}
+    ]
+
+    resp = client.post(f"/transcripts/{CORPUS}/doc-1/delete")
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith(f"/transcripts/{CORPUS}/")
+    
+    # Check flash message
+    follow = client.get(resp.headers["Location"])
+    assert b"Transcript deleted successfully" in follow.data
+    assert len(fake_backend.documents) == 1
+    assert fake_backend.documents[0]["id"] == "doc-2"
+
+
+def test_delete_transcript_backend_error(client, fake_backend):
+    fake_backend.raise_on = "delete_document"
+    resp = client.post(f"/transcripts/{CORPUS}/doc-1/delete", follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"simulated delete_document failure" in resp.data
