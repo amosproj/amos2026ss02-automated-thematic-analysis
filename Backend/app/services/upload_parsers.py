@@ -102,7 +102,7 @@ def parse_jsonl_upload(filename: str, content: bytes) -> list[DocumentInput]:
             content = str(m.get("message_content", "")).strip()
             if not content:
                 continue
-            
+
             if event_type == "chatbot_response":
                 turns.append(f"Interviewer: {content}")
             elif event_type == "human_response":
