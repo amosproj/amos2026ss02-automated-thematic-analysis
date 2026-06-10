@@ -166,6 +166,9 @@ class BackendClient:
         except (json.JSONDecodeError, KeyError) as exc:
             self._handle_exc(exc, path, "DELETE", started_at)
 
+    def get_document_content(self, corpus_id: str, document_id: str) -> dict:
+        return self._get(f"/ingestion/corpora/{corpus_id}/documents/{document_id}")
+
     # ---- Codebooks ----------------------------------------------------------
 
 

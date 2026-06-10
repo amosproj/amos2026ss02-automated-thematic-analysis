@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ document.title }} — Transcript{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-3">
+  <a href="{{ url_for('ingestion.list_transcripts', corpus_id=corpus_id) }}"
+     class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to Transcripts
+  </a>
+  <h1 class="h4 mb-0">{{ document.title }}</h1>
+</div>
+
+<div class="d-flex flex-wrap gap-3 mb-3 text-secondary small">
+  {% if document.filename %}
+    <span><i class="bi bi-file-text me-1"></i>{{ document.filename }}</span>
+  {% endif %}
+  <span><i class="bi bi-calendar me-1"></i>Uploaded {{ document.created_at }}</span>
+</div>
+
+<div class="bg-white border rounded-2 p-4">
+  <div id="transcript-content" class="transcript-body">{{ document.content }}</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+(function () {
+  var el = document.getElementById('transcript-content');
+  if (!el) return;
+  var text = el.textContent;
+  var speakerRe = /^([^:\n]{1,60}):\s(.+)$/;
+  function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  var html = text.split('\n').map(function (line) {
+    var m = line.match(speakerRe);
+    if (m) return '<strong class="transcript-speaker">' + esc(m[1]) + ':</strong> ' + esc(m[2]);
+    return esc(line);
+  }).join('\n');
+  el.innerHTML = html;
+})();
+</script>
+{% endblock %}

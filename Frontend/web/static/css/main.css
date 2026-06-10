@@ -628,3 +628,18 @@
 }
 .ata-toast-title { font-weight: 600; margin-bottom: .2rem; }
 .ata-toast-body  { color: #495057; }
+
+/* ── Transcript viewer ──────────────────────────────────────────────────────── */
+.transcript-body {
+    font-size: 1rem;
+    line-height: 1.75;
+    color: #212529;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+.transcript-speaker {
+    color: #1e1b4b;
+    font-weight: 600;
+}

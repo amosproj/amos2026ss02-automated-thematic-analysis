@@ -283,3 +283,38 @@ def test_delete_transcript_backend_error(client, fake_backend):
     resp = client.post(f"/transcripts/{CORPUS}/doc-1/delete", follow_redirects=True)
     assert resp.status_code == 200
     assert b"simulated delete_document failure" in resp.data
+
+
+# GET /transcripts/<corpus_id>/<document_id>/view
+
+
+def test_view_transcript_renders_full_content(client, fake_backend):
+    fake_backend.documents = [
+        {
+            "id": "doc-1",
+            "title": "Interview Alpha",
+            "filename": "alpha.txt",
+            "created_at": "2026-05-12T10:00:00Z",
+            "content": "Interviewer: How are you?\nParticipant: Fine, thanks.",
+        }
+    ]
+    resp = client.get(f"/transcripts/{CORPUS}/doc-1/view")
+    assert resp.status_code == 200
+    assert b"Interview Alpha" in resp.data
+    assert b"How are you?" in resp.data
+    assert b"Fine, thanks." in resp.data
+    assert b"alpha.txt" in resp.data
+
+
+def test_view_transcript_not_found_redirects(client, fake_backend):
+    fake_backend.documents = []
+    resp = client.get(f"/transcripts/{CORPUS}/missing-id/view", follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"Transcript not found" in resp.data
+
+
+def test_view_transcript_backend_error_redirects(client, fake_backend):
+    fake_backend.raise_on = "get_document_content"
+    resp = client.get(f"/transcripts/{CORPUS}/doc-1/view", follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"simulated get_document_content failure" in resp.data

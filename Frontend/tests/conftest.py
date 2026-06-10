@@ -96,6 +96,14 @@ class FakeBackend:
         self._maybe_raise("delete_document")
         self.documents = [d for d in self.documents if d["id"] != document_id]
 
+    def get_document_content(self, corpus_id: str, document_id: str) -> dict:
+        self._maybe_raise("get_document_content")
+        for d in self.documents:
+            if d["id"] == document_id:
+                return {**d, "content": d.get("content", "")}
+        from web.services.backend_client import BackendNotFoundError
+        raise BackendNotFoundError(user_message="Transcript not found.")
+
     # ---- Codebooks / themes -------------------------------------------------
 
     def delete_codebook(self, codebook_id: str) -> None:

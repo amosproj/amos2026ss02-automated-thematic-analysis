@@ -3,6 +3,7 @@ from flask import Blueprint, current_app, flash, redirect, render_template, requ
 
 from web.services.backend_client import (
     BackendError,
+    BackendNotFoundError,
     BackendValidationError,
     get_backend_client as _backend,
 )
@@ -214,6 +215,24 @@ def list_transcripts(corpus_id: str) -> str:
         corpus_id=active_corpus_id,
         corpus_options=corpus_options,
         active_corpus_name=active_corpus_name,
+    )
+
+
+@bp.get("/<corpus_id>/<document_id>/view")
+def view_transcript(corpus_id: str, document_id: str) -> str:
+    set_active_corpus_id(corpus_id)
+    try:
+        document = _backend().get_document_content(corpus_id, document_id)
+    except BackendNotFoundError:
+        flash("Transcript not found.", "danger")
+        return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+    return render_template(
+        "ingestion/view.html",
+        document=document,
+        corpus_id=corpus_id,
     )
 
 
