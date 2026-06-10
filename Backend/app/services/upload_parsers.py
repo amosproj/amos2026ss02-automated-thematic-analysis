@@ -76,11 +76,15 @@ def parse_jsonl_upload(filename: str, content: bytes) -> list[DocumentInput]:
         try:
             record = json.loads(raw)
         except json.JSONDecodeError as exc:
-            raise UnprocessableError(f"'{filename}': invalid JSON on line {line_no}: {exc}") from exc
+            raise UnprocessableError(
+                f"'{filename}': invalid JSON on line {line_no}: {exc}"
+            ) from exc
 
         username = record.get("username")
         if not username:
-            raise UnprocessableError(f"'{filename}': line {line_no} is missing 'username'")
+            raise UnprocessableError(
+                f"'{filename}': line {line_no} is missing 'username'"
+            )
         participants.setdefault(username, []).append(record)
 
     if not participants:
@@ -89,14 +93,29 @@ def parse_jsonl_upload(filename: str, content: bytes) -> list[DocumentInput]:
     docs: list[DocumentInput] = []
     for username, messages in participants.items():
         messages.sort(key=lambda m: m.get("message_index", 0))
-        human_turns = [
-            m for m in messages
-            if m.get("event_type") == "human_response"
+        has_human = any(
+            m.get("event_type") == "human_response"
             and str(m.get("message_content", "")).strip()
-        ]
-        if not human_turns:
+            for m in messages
+        )
+        if not has_human:
             continue
-        text = "\n\n".join(str(m["message_content"]) for m in human_turns)
+
+        turns = []
+        for m in messages:
+            event_type = m.get("event_type")
+            msg_content = str(m.get("message_content", "")).strip()
+            if not msg_content:
+                continue
+
+            if event_type == "chatbot_response":
+                turns.append(f"Interviewer: {msg_content}")
+            elif event_type == "human_response":
+                turns.append(f"Interviewee: {msg_content}")
+
+        if not turns:
+            continue
+        text = "\n\n".join(turns)
         docs.append(DocumentInput(title=username, text=text))
     return docs
 

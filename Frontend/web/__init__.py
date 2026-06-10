@@ -43,6 +43,105 @@ def create_app(config: Config | None = None) -> Flask:
     app.register_blueprint(codebooks_bp, url_prefix="/codebooks")
     app.register_blueprint(analysis_bp, url_prefix="/analysis")
 
+    @app.template_filter('highlight_speakers')
+    def highlight_speakers_filter(text):
+        """Add a Q/A role badge before every non-blank line of a transcript.
+
+        Two modes, auto-detected:
+        1. Labelled transcripts — lines that begin with a recognisable speaker
+           label ("Interviewer:", "I:", "P:", …) get a badge derived from the
+           label (Q for interviewers, A for interviewees).
+        2. Plain transcripts — no speaker labels present.  Every non-blank
+           paragraph is assigned Q/A by alternating, starting with Q.
+        """
+        if not text:
+            return text
+        import re
+        from markupsafe import Markup, escape
+
+        INTERVIEWER_KEYWORDS = {
+            "interviewer", "moderator", "facilitator", "researcher",
+            "investigator", "int", "i", "mod", "r",
+        }
+
+        # Matches a speaker label at the very start of a line: "Name:"
+        SPEAKER_RE = re.compile(r"^([ \t]*)([A-Za-z0-9 _\.\-]{1,40}):", re.MULTILINE)
+
+        escaped = str(escape(text))
+        all_lines = escaped.splitlines(keepends=True)
+
+        # ── Detect whether this transcript uses explicit speaker labels ───────
+        labelled_count = sum(1 for ln in all_lines if SPEAKER_RE.match(ln))
+        has_labels = labelled_count >= max(1, len([l for l in all_lines if l.strip()]) // 4)
+
+        def make_badge(is_q):
+            cls = "q" if is_q else "a"
+            letter = "Q" if is_q else "A"
+            return (
+                f'<span class="transcript-badge transcript-badge--{cls}">{letter}</span>'
+            )
+
+        result = []
+
+        if has_labels:
+            # ── Mode 1: use explicit speaker labels ───────────────────────────
+            for line in all_lines:
+                m = SPEAKER_RE.match(line)
+                if m:
+                    indent = m.group(1)
+                    speaker = m.group(2)
+                    rest = line[m.end():]
+                    normalised = speaker.strip().lower()
+                    is_q = normalised in INTERVIEWER_KEYWORDS
+                    cls = "q" if is_q else "a"
+                    result.append(
+                        f'{indent}{make_badge(is_q)}'
+                        f'<span class="transcript-speaker transcript-speaker--{cls}">{speaker}</span>'
+                        f'<span class="transcript-colon">:</span>'
+                        f'{rest}'
+                    )
+                else:
+                    result.append(line)
+        else:
+            # ── Mode 2: alternate Q/A on every non-blank paragraph ────────────
+            # Group consecutive non-blank lines into paragraphs.
+            paragraphs = []   # list of (start_idx, end_idx_exclusive, is_blank)
+            i = 0
+            while i < len(all_lines):
+                if all_lines[i].strip():
+                    j = i
+                    while j < len(all_lines) and all_lines[j].strip():
+                        j += 1
+                    paragraphs.append((i, j, False))
+                    i = j
+                else:
+                    # blank run
+                    j = i
+                    while j < len(all_lines) and not all_lines[j].strip():
+                        j += 1
+                    paragraphs.append((i, j, True))
+                    i = j
+
+            turn = 0  # counts non-blank paragraphs; even → Q, odd → A
+            for start, end, is_blank in paragraphs:
+                if is_blank:
+                    result.extend(all_lines[start:end])
+                else:
+                    is_q = (turn % 2 == 0)
+                    badge = make_badge(is_q)
+                    for k, line in enumerate(all_lines[start:end]):
+                        if k == 0:
+                            # Badge only on the first line of the paragraph
+                            result.append(f'{badge}{line}')
+                        else:
+                            # Continuation lines: indent to align with text
+                            result.append(
+                                f'<span class="transcript-badge-spacer"></span>{line}'
+                            )
+                    turn += 1
+
+        return Markup("".join(result))
+
     _register_error_handlers(app)
 
     return app

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Read Transcript: {{ document.title }}{% endblock %}
+
+{% block content %}
+<style>
+  /* ── Transcript speaker badges ──────────────────────────────────────────── */
+  .transcript-content {
+    font-family: system-ui, -apple-system, sans-serif;
+    color: #212529;
+    white-space: pre-wrap;
+    line-height: 1.8;
+  }
+
+  /* Pill badge: Q / A */
+  .transcript-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6em;
+    height: 1.6em;
+    border-radius: 50%;
+    font-size: 0.72em;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
+    margin-right: 0.4em;
+    flex-shrink: 0;
+  }
+
+  /* Invisible spacer to keep continuation lines aligned with badge lines */
+  .transcript-badge-spacer {
+    display: inline-block;
+    width: calc(1.6em + 0.4em);  /* badge width + margin-right */
+    visibility: hidden;
+  }
+
+  /* Interviewer / Question side — indigo */
+  .transcript-badge--q {
+    background-color: #4f46e5;
+    color: #fff;
+  }
+  .transcript-speaker--q {
+    color: #4338ca;
+    font-weight: 600;
+  }
+
+  /* Interviewee / Answer side — teal */
+  .transcript-badge--a {
+    background-color: #0d9488;
+    color: #fff;
+  }
+  .transcript-speaker--a {
+    color: #0f766e;
+    font-weight: 600;
+  }
+
+  .transcript-colon {
+    color: #6b7280;
+    margin-right: 0.2em;
+  }
+
+  /* Legend row */
+  .transcript-legend {
+    display: flex;
+    gap: 1.25rem;
+    align-items: center;
+    font-size: 0.85rem;
+    color: #6b7280;
+  }
+  .transcript-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+</style>
+
+  <div class="mb-3">
+    <a href="{{ url_for('ingestion.list_transcripts', corpus_id=corpus_id) }}" class="btn btn-sm btn-outline-secondary">
+      &larr; Back to Transcripts
+    </a>
+  </div>
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-white pb-0 border-bottom-0 pt-4 px-4">
+      <h1 class="h3 mb-2">{{ document.title }}</h1>
+      {% if document.filename and document.filename != document.title %}
+        <p class="text-muted small mb-0"><i class="bi bi-file-earmark"></i> {{ document.filename }}</p>
+      {% endif %}
+
+      {# Legend — only shown if there is content to parse #}
+      {% if document.content %}
+      <div class="transcript-legend mt-3 pb-2">
+        <div class="transcript-legend-item">
+          <span class="transcript-badge transcript-badge--q">Q</span>
+          <span>Interviewer</span>
+        </div>
+        <div class="transcript-legend-item">
+          <span class="transcript-badge transcript-badge--a">A</span>
+          <span>Interviewee</span>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    <div class="card-body p-4">
+      <div class="transcript-content fs-6">
+{{ document.content | highlight_speakers }}
+      </div>
+    </div>
+  </div>
+{% endblock %}

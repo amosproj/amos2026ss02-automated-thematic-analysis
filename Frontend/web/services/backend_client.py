@@ -153,6 +153,10 @@ class BackendClient:
             sub_key="items",
         )
 
+    def get_document_content(self, corpus_id: str, document_id: str) -> dict:
+        """Fetch a single document including its full text content."""
+        return self._get(f"/ingestion/corpora/{corpus_id}/documents/{document_id}")
+
     def delete_document(self, corpus_id: str, document_id: str) -> None:
         """Delete a document from a corpus."""
         path = f"/ingestion/corpora/{corpus_id}/documents/{document_id}"
