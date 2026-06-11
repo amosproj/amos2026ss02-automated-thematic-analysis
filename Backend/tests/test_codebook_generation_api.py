@@ -154,7 +154,7 @@ async def test_generate_codebook_creates_deduplicated_themes_and_codes(
 ) -> None:
     corpus_id, document_ids = await _create_corpus_and_docs(client)
 
-    def _fake_generate_codebook_for_passage(passage: str) -> PassageCodebookGeneration:
+    def _fake_generate_codebook_for_passage(passage: str, **_kwargs) -> PassageCodebookGeneration:
         if "Alpha" in passage:
             return PassageCodebookGeneration(
                 themes=[
@@ -217,6 +217,7 @@ async def test_generate_codebook_creates_deduplicated_themes_and_codes(
             "codebook_name": "Generated v1",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 201
@@ -310,7 +311,7 @@ async def test_generate_codebook_post_processes_codes_with_llm_consolidation(
 ) -> None:
     corpus_id, document_ids = await _create_corpus_and_docs(client)
 
-    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+    def _fake_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
         return PassageCodebookGeneration(
             themes=[
                 GeneratedThemePath(
@@ -355,6 +356,7 @@ async def test_generate_codebook_post_processes_codes_with_llm_consolidation(
             "codebook_name": "Consolidated Codes",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 201
@@ -400,7 +402,7 @@ async def test_generate_codebook_post_processes_themes_with_llm_consolidation(
 ) -> None:
     corpus_id, document_ids = await _create_corpus_and_docs(client)
 
-    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+    def _fake_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
         return PassageCodebookGeneration(
             themes=[
                 GeneratedThemePath(
@@ -455,6 +457,7 @@ async def test_generate_codebook_post_processes_themes_with_llm_consolidation(
             "codebook_name": "Consolidated Themes",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 201
@@ -522,7 +525,7 @@ async def test_generate_codebook_rejects_documents_outside_selected_corpus(
     corpus_a_id, _ = await _create_corpus_and_docs(client)
     corpus_b_id, corpus_b_document_ids = await _create_corpus_and_docs(client)
 
-    def _never_called(_: str) -> PassageCodebookGeneration:
+    def _never_called(_: str, **_kwargs) -> PassageCodebookGeneration:
         raise AssertionError("LLM generation should not be called for invalid transcript selection")
 
     _patch_batched_generation(monkeypatch, _never_called)
@@ -533,6 +536,7 @@ async def test_generate_codebook_rejects_documents_outside_selected_corpus(
             "codebook_name": "Invalid Selection",
             "corpus_id": corpus_a_id,
             "transcript_document_ids": corpus_b_document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 422
@@ -551,6 +555,7 @@ async def test_generate_codebook_returns_404_for_unknown_corpus(client) -> None:
             "codebook_name": "Unknown Corpus",
             "corpus_id": str(uuid4()),
             "transcript_document_ids": [str(uuid4())],
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 404
@@ -563,7 +568,7 @@ async def test_generate_codebook_uses_all_corpus_documents_when_ids_omitted(
 ) -> None:
     corpus_id, _ = await _create_corpus_and_docs(client)
 
-    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+    def _fake_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
         return PassageCodebookGeneration(
             themes=[
                 GeneratedThemePath(
@@ -588,6 +593,7 @@ async def test_generate_codebook_uses_all_corpus_documents_when_ids_omitted(
         json={
             "codebook_name": "All Docs",
             "corpus_id": corpus_id,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 201
@@ -602,7 +608,7 @@ async def test_generate_codebook_merges_duplicate_theme_labels_across_paths(
 ) -> None:
     corpus_id, document_ids = await _create_corpus_and_docs(client)
 
-    def _fake_generate_codebook_for_passage(passage: str) -> PassageCodebookGeneration:
+    def _fake_generate_codebook_for_passage(passage: str, **_kwargs) -> PassageCodebookGeneration:
         if "Alpha" in passage:
             return PassageCodebookGeneration(
                 themes=[
@@ -635,6 +641,7 @@ async def test_generate_codebook_merges_duplicate_theme_labels_across_paths(
             "codebook_name": "Duplicate Labels",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 201
@@ -678,6 +685,7 @@ async def test_generate_codebook_continues_when_one_passage_has_output_parse_err
             "codebook_name": "Partial Parse Failure",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 201
@@ -734,9 +742,81 @@ async def test_generate_codebook_continues_when_one_passage_has_validation_error
             "codebook_name": "Partial Validation Failure",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 201
     payload = response.json()["data"]
     assert payload["passages_failed"] == 1
     assert len(payload["failed_passages"]) == 1
+
+
+async def test_generate_codebook_allows_missing_research_query(client, monkeypatch) -> None:
+    # research_query is optional: omitting it generates a codebook with no
+    # research-focus steering rather than being rejected.
+    corpus_id, document_ids = await _create_corpus_and_docs(client)
+
+    def _fake(passage: str, **_kwargs) -> PassageCodebookGeneration:
+        return PassageCodebookGeneration(
+            themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Workflow Friction")])],
+            codes=[GeneratedCodeSuggestion(label="Delay", description=None, theme_path=["Workflow Friction"])],
+        )
+
+    _patch_batched_generation(monkeypatch, _fake)
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate",
+        json={
+            "codebook_name": "No Query",
+            "corpus_id": corpus_id,
+            "transcript_document_ids": document_ids,
+        },
+    )
+    assert response.status_code == 201
+
+
+async def test_generate_codebook_rejects_too_long_research_query(client) -> None:
+    corpus_id, document_ids = await _create_corpus_and_docs(client)
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate",
+        json={
+            "codebook_name": "Long Query",
+            "corpus_id": corpus_id,
+            "transcript_document_ids": document_ids,
+            "research_query": "a" * 501,
+        },
+    )
+    assert response.status_code == 422
+
+
+async def test_generate_codebook_persists_research_query_on_codebook(
+    client,
+    db_engine,
+    monkeypatch,
+) -> None:
+    corpus_id, document_ids = await _create_corpus_and_docs(client)
+    query = "How do participants describe workflow friction and manual bottlenecks?"
+
+    def _fake(passage: str, **_kwargs) -> PassageCodebookGeneration:
+        return PassageCodebookGeneration(
+            themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Workflow Friction")])],
+            codes=[GeneratedCodeSuggestion(label="Delay", description=None, theme_path=["Workflow Friction"])],
+        )
+
+    _patch_batched_generation(monkeypatch, _fake)
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate",
+        json={
+            "codebook_name": "Query Persistence",
+            "corpus_id": corpus_id,
+            "research_query": query,
+        },
+    )
+    assert response.status_code == 201
+
+    codebook_id = UUID(response.json()["data"]["codebook"]["id"])
+    session_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_factory() as session:
+        codebook = (await session.execute(select(Codebook).where(Codebook.id == codebook_id))).scalar_one()
+        assert codebook.research_query == query

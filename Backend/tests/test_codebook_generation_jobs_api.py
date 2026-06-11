@@ -86,7 +86,7 @@ async def test_generate_codebook_job_completes_successfully(client, monkeypatch)
         ],
     )
 
-    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+    def _fake_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
         return PassageCodebookGeneration(
             themes=[
                 GeneratedThemePath(
@@ -113,6 +113,7 @@ async def test_generate_codebook_job_completes_successfully(client, monkeypatch)
             "codebook_name": "Generated Async",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert create_response.status_code == 202
@@ -136,7 +137,7 @@ async def test_generate_codebook_job_accepts_payload_without_confirmation_field(
         texts=["Short transcript about operations and delays."],
     )
 
-    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+    def _fake_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
         return PassageCodebookGeneration(
             themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Operations")])],
             codes=[GeneratedCodeSuggestion(label="Delay", description=None, theme_path=["Operations"])],
@@ -150,6 +151,7 @@ async def test_generate_codebook_job_accepts_payload_without_confirmation_field(
             "codebook_name": "Generated Async",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 202
@@ -160,7 +162,7 @@ async def test_generate_codebook_job_can_be_cancelled_while_running(client, monk
     long_text = " ".join(f"token{i}" for i in range(0, 260))
     corpus_id, document_ids = await _create_corpus_with_docs(client, texts=[long_text])
 
-    def _slow_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+    def _slow_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
         time.sleep(0.03)
         return PassageCodebookGeneration(
             themes=[
@@ -187,6 +189,7 @@ async def test_generate_codebook_job_can_be_cancelled_while_running(client, monk
             "codebook_name": "Generated Async Cancel",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert create_response.status_code == 202
@@ -211,7 +214,7 @@ async def test_generate_codebook_job_uses_all_corpus_documents_when_ids_omitted(
         ],
     )
 
-    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+    def _fake_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
         return PassageCodebookGeneration(
             themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Collaboration")])],
             codes=[GeneratedCodeSuggestion(label="Team Alignment", description=None, theme_path=["Collaboration"])],
@@ -224,6 +227,7 @@ async def test_generate_codebook_job_uses_all_corpus_documents_when_ids_omitted(
         json={
             "codebook_name": "Generated Async All Docs",
             "corpus_id": corpus_id,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 202
@@ -261,6 +265,7 @@ async def test_generate_codebook_job_records_partial_parse_failures_and_succeeds
             "codebook_name": "Generated Async Partial Parse Failure",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 202

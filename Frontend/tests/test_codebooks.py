@@ -343,6 +343,8 @@ def test_auto_submit_creates_job_and_redirects_to_codebook_list(client, fake_bac
         "codebook_name": "Interview Codebook",
         "corpus_id": "corpus-xyz",
         "transcript_document_ids": None,
+        "research_query": None,
+        "researcher_topics": None,
     }
 
 
@@ -372,6 +374,56 @@ def test_auto_submit_surfaces_backend_error(client, fake_backend):
     )
     assert resp.status_code == 200
     assert b"simulated create_generation_job failure" in resp.data
+
+
+def test_auto_submit_forwards_research_query_and_topics(client, fake_backend):
+    resp = client.post(
+        "/codebooks/new/corpus-xyz/auto",
+        data={
+            "mode": "auto",
+            "codebook_name": "Interview Codebook",
+            "research_query": "How do participants describe remote work challenges?",
+            "researcher_topics": "isolation, productivity",
+        },
+    )
+    assert resp.status_code == 302
+    assert fake_backend.last_generation_job_request == {
+        "codebook_name": "Interview Codebook",
+        "corpus_id": "corpus-xyz",
+        "transcript_document_ids": None,
+        "research_query": "How do participants describe remote work challenges?",
+        "researcher_topics": "isolation, productivity",
+    }
+
+
+def test_auto_submit_rejects_too_short_research_query(client, fake_backend):
+    # research_query is optional, but once provided it must be >= 10 chars.
+    resp = client.post(
+        "/codebooks/new/corpus-xyz/auto",
+        data={
+            "mode": "auto",
+            "codebook_name": "Interview Codebook",
+            "research_query": "too short",  # 9 chars
+        },
+    )
+    assert resp.status_code == 200
+    assert b"at least 10 characters" in resp.data
+    # No job should have been created from an invalid submission.
+    assert fake_backend.last_generation_job_request is None
+
+
+def test_auto_submit_rejects_whitespace_only_research_query(client, fake_backend):
+    resp = client.post(
+        "/codebooks/new/corpus-xyz/auto",
+        data={
+            "mode": "auto",
+            "codebook_name": "Interview Codebook",
+            "research_query": "          ",
+        },
+    )
+    assert resp.status_code == 200
+    assert b"only whitespace" in resp.data
+    assert fake_backend.last_generation_job_request is None
 
 
 # Wizard step 3: progress page + JSON poller --------------------------------

@@ -166,6 +166,8 @@ class CodebookGenerationJobRunner:
                     codebook_name=job.codebook_name,
                     corpus_id=job.corpus_id,
                     transcript_document_ids=transcript_document_ids,
+                    research_query=job.research_query,
+                    researcher_topics=job.researcher_topics,
                     on_progress=_on_progress,
                     on_phase=_on_phase,
                     should_cancel=_should_cancel,

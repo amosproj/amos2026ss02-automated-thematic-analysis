@@ -7,6 +7,8 @@ from langchain_core.runnables import Runnable, RunnableConfig
 
 from app.llm.client import build_chat_model
 from app.llm.prompts import (
+    _build_research_query_block,
+    _build_researcher_topics_block,
     build_code_consolidation_prompt,
     build_codebook_application_prompt,
     build_codebook_generation_prompt,
@@ -71,13 +73,19 @@ def build_codebook_generation_chain(
 def generate_codebook_for_passage(
     passage: str,
     *,
+    research_query: str | None = None,
+    researcher_topics: str | None = None,
     model: BaseChatModel | None = None,
 ) -> PassageCodebookGeneration:
     if not passage.strip():
         raise ValueError("Passage is empty.")
 
     chain = build_codebook_generation_chain(model=model)
-    raw_result = chain.invoke({"passage": passage})
+    raw_result = chain.invoke({
+        "passage": passage,
+        "research_query_block": _build_research_query_block(research_query or ""),
+        "researcher_topics_block": _build_researcher_topics_block(researcher_topics or ""),
+    })
     return PassageCodebookGeneration(**raw_result)
 
 
@@ -87,6 +95,8 @@ async def generate_codebook_for_passages(
     chain: Runnable[dict[str, str], dict[str, Any]] | None = None,
     model: BaseChatModel | None = None,
     max_concurrency: int | None = None,
+    research_query: str | None = None,
+    researcher_topics: str | None = None,
 ) -> list[PassageCodebookGeneration | Exception]:
     if not passages:
         return []
@@ -95,11 +105,21 @@ async def generate_codebook_for_passages(
             raise ValueError("Passage is empty.")
 
     runnable = chain or build_codebook_generation_chain(model=model)
+    # Researcher focus is constant across the batch, so build the blocks once.
+    research_query_block = _build_research_query_block(research_query or "")
+    researcher_topics_block = _build_researcher_topics_block(researcher_topics or "")
     config: RunnableConfig | None = (
         {"max_concurrency": max_concurrency} if max_concurrency is not None else None
     )
     raw_results = await runnable.abatch(
-        [{"passage": passage} for passage in passages],
+        [
+            {
+                "passage": passage,
+                "research_query_block": research_query_block,
+                "researcher_topics_block": researcher_topics_block,
+            }
+            for passage in passages
+        ],
         config=config,
         return_exceptions=True,
     )

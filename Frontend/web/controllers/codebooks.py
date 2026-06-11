@@ -26,6 +26,9 @@ bp = Blueprint("codebooks", __name__)
 
 CODING_MODES = ("auto", "semi", "manual")
 
+_QUERY_MIN = 10
+_QUERY_MAX = 500
+
 
 def _safe_export_filename(name: str, version: int | str | None) -> str:
     safe_name = "".join(
@@ -226,6 +229,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             name = active_codebook.get("name", "")
         if not version and active_codebook.get("version") is not None:
             version = str(active_codebook["version"])
+        research_query = active_codebook.get("research_query") or ""
 
         frequencies = client.get_theme_frequencies(active_codebook_id)
         tree = client.get_theme_tree(active_codebook_id)
@@ -244,6 +248,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             frequencies=[],
             tree=[],
             codes=[],
+            research_query="",
             error=True,
         )
     except BackendError as exc:
@@ -259,6 +264,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             frequencies=[],
             tree=[],
             codes=[],
+            research_query="",
             error=True,
         )
     return render_template(
@@ -272,6 +278,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         frequencies=frequencies,
         tree=tree,
         codes=codes,
+        research_query=research_query,
     )
 
 @bp.get("/<corpus_id>/<codebook_id>/export")
@@ -563,6 +570,8 @@ def new_codebook_auto_form(corpus_id: str) -> str:
         corpus_id=corpus_id,
         mode=mode,
         codebook_name=request.args.get("name", ""),
+        research_query=request.args.get("rq", ""),
+        researcher_topics=request.args.get("rt", ""),
     )
 
 
@@ -570,28 +579,52 @@ def new_codebook_auto_form(corpus_id: str) -> str:
 def new_codebook_auto_submit(corpus_id: str):
     mode = _resolve_mode(request.form.get("mode", ""))
     name = (request.form.get("codebook_name") or "").strip()
-    if not name:
-        flash("Please give your codebook a name.", "danger")
+    raw_research_query = request.form.get("research_query") or ""
+    research_query = raw_research_query.strip()
+    researcher_topics = (request.form.get("researcher_topics") or "").strip()
+
+    def _render_form(rq_error: str | None = None, rt_error: str | None = None):
         return render_template(
             "codebooks/new/auto_form.html",
             corpus_id=corpus_id,
             mode=mode,
-            codebook_name="",
+            codebook_name=name,
+            research_query=research_query,
+            researcher_topics=researcher_topics,
+            rq_error=rq_error,
+            rt_error=rt_error,
         )
+
+    if not name:
+        flash("Please give your codebook a name.", "danger")
+        return _render_form()
+
+    # The research question is optional: leaving it blank is fine. But if the
+    # researcher actually types something it must be a real question — not just
+    # whitespace, and within the length bounds.
+    if raw_research_query and not research_query:
+        return _render_form(rq_error="Research question cannot be only whitespace.")
+    if research_query and len(research_query) < _QUERY_MIN:
+        return _render_form(
+            rq_error=f"Research question must be at least {_QUERY_MIN} characters."
+        )
+    if len(research_query) > _QUERY_MAX:
+        return _render_form(rq_error=f"Research question must be at most {_QUERY_MAX} characters.")
+
+    # Topics are optional, free-form keywords; only cap their length.
+    if len(researcher_topics) > _QUERY_MAX:
+        return _render_form(rt_error=f"Topics must be at most {_QUERY_MAX} characters.")
 
     try:
         job = _backend().create_generation_job(
             codebook_name=name,
             corpus_id=corpus_id,
+            research_query=research_query or None,
+            researcher_topics=researcher_topics or None,
         )
     except BackendError as exc:
         flash(exc.user_message, "danger")
-        return render_template(
-            "codebooks/new/auto_form.html",
-            corpus_id=corpus_id,
-            mode=mode,
-            codebook_name=name,
-        )
+        return _render_form()
 
     encoded_job = quote_plus(str(job["id"]))
     encoded_name = quote_plus(name)
