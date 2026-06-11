@@ -1,6 +1,83 @@
 {% extends "base.html" %}
-{% block title %}Analysis{% endblock %}
+
+{% block title %}Trigger Analysis{% endblock %}
+
 {% block content %}
-  <h1 class="h3 mb-4">Analysis</h1>
-  <p class="text-secondary">Analysis execution and results — coming once backend analysis routes are ready.</p>
+<div class="row mb-4 align-items-center">
+  <div class="col-md-8">
+    <h1 class="h3 mb-0">Trigger Analysis</h1>
+    <p class="text-secondary mt-1 mb-0">Apply your codebook to the corpus to discover thematic patterns.</p>
+  </div>
+  <div class="col-md-4 text-md-end mt-3 mt-md-0">
+    {% include "_corpus_select.html" %}
+  </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-body p-4">
+    <h5 class="card-title fw-bold mb-3">Prerequisites</h5>
+    <ul class="list-group list-group-flush mb-4">
+      <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+        <span>Active Corpus</span>
+        {% if corpus_id %}
+          <span class="badge bg-success rounded-pill">✓ Selected</span>
+        {% else %}
+          <span class="badge bg-danger rounded-pill">Missing</span>
+        {% endif %}
+      </li>
+      <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+        <span>Transcripts</span>
+        {% if transcripts_count > 0 %}
+          <span class="badge bg-success rounded-pill">✓ {{ transcripts_count }} ready</span>
+        {% else %}
+          <span class="badge bg-danger rounded-pill">Missing</span>
+        {% endif %}
+      </li>
+      <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+        <span>Codebook</span>
+        {% if codebook %}
+          <span class="badge bg-success rounded-pill">✓ {{ codebook.name }} (v{{ codebook.version }})</span>
+        {% else %}
+          <span class="badge bg-danger rounded-pill">Missing</span>
+        {% endif %}
+      </li>
+      <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+        <span>Research Query</span>
+        {% if codebook and codebook.research_query %}
+          <span class="badge bg-success rounded-pill">✓ Configured</span>
+        {% elif codebook %}
+          <span class="badge bg-secondary rounded-pill">None provided</span>
+        {% else %}
+          <span class="badge bg-danger rounded-pill">Missing</span>
+        {% endif %}
+      </li>
+    </ul>
+
+    <form method="POST" action="{{ url_for('analysis.trigger_analysis') }}" class="mt-4">
+      <input type="hidden" name="corpus_id" value="{{ corpus_id }}">
+      {% if codebook %}
+      <input type="hidden" name="codebook_id" value="{{ codebook.id }}">
+      {% endif %}
+      
+      <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+        <span {% if not can_run_analysis %}data-bs-toggle="tooltip" title="{{ disabled_reason }}" tabindex="0"{% endif %}>
+          <button type="submit" class="btn btn-primary px-4 py-2" {% if not can_run_analysis %}disabled style="pointer-events: none;"{% endif %}>
+            Run Analysis
+          </button>
+        </span>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl)
+    })
+  });
+</script>
 {% endblock %}
