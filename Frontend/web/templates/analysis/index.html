@@ -9,6 +9,7 @@
     <p class="text-secondary mt-1 mb-0">Apply your codebook to the corpus to discover thematic patterns.</p>
   </div>
   <div class="col-md-4 text-md-end mt-3 mt-md-0">
+    {% set switch_template_url = url_for('analysis.index', corpus_id='__CORPUS_ID__') %}
     {% include "_corpus_select.html" %}
   </div>
 </div>
@@ -41,14 +42,10 @@
           <span class="badge bg-danger rounded-pill">Missing</span>
         {% endif %}
       </li>
-      <li class="list-group-item px-0 d-flex justify-content-between align-items-center text-muted text-decoration-line-through">
-        <span>Research Query</span>
-        <span class="badge bg-secondary rounded-pill">Not yet available</span>
-      </li>
     </ul>
 
     <form method="POST" action="{{ url_for('analysis.trigger_analysis') }}" class="mt-4">
-      <input type="hidden" name="corpus_id" value="{{ corpus_id }}">
+      <input type="hidden" name="corpus_id" value="{{ active_corpus_id }}">
       {% if codebook %}
       <input type="hidden" name="codebook_id" value="{{ codebook.id }}">
       {% endif %}

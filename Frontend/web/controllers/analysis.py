@@ -49,10 +49,8 @@ def index() -> str:
         disabled_reason=disabled_reason,
         codebook=codebook,
         transcripts_count=transcripts_count,
-        corpus_id=active_corpus_id,
+        active_corpus_id=active_corpus_id,
         corpus_options=corpus_options if active_corpus_id else [],
-        switch_template_url=url_for("analysis.index", corpus_id="__CORPUS_ID__"),
-        helper_text="Select a corpus to analyze.",
     )
 
 @bp.post("/trigger")
