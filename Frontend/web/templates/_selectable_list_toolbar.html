@@ -1,0 +1,96 @@
+<div class="ata-selectable-list__toolbar">
+  <div class="ata-selectable-list__selection">
+    <label class="ata-selectable-list__select-all form-check mb-0">
+      <input class="form-check-input"
+             type="checkbox"
+             data-selectable-list-select-all
+             aria-label="Select all {{ selectable_list_label }}">
+      <span class="form-check-label">Select all</span>
+    </label>
+    <span class="ata-selectable-list__selected-count"
+          data-selectable-list-selected-count
+          data-count-singular="{{ selectable_list_item_singular }}"
+          data-count-plural="{{ selectable_list_item_plural }}">
+      0 {{ selectable_list_item_plural }} selected
+    </span>
+  </div>
+
+  {% if selectable_list_delete_action or selectable_list_export_url_template or selectable_list_export_action %}
+    <div class="ata-selectable-list__actions" aria-label="{{ selectable_list_label }} selection actions">
+      {% if selectable_list_export_action %}
+        <form method="POST"
+              action="{{ selectable_list_export_action }}"
+              class="d-inline"
+              data-selectable-list-selected-form>
+          <button type="submit"
+                  class="btn btn-sm btn-outline-secondary"
+                  data-selectable-list-action
+                  data-min-selected="1"
+                  data-disabled-title="Select at least one {{ selectable_list_item_singular }} to export."
+                  disabled>
+            {{ selectable_list_export_label | default('Export selected') }}
+          </button>
+        </form>
+      {% elif selectable_list_export_url_template %}
+        <a class="btn btn-sm btn-outline-secondary disabled"
+           href="#"
+           aria-disabled="true"
+           tabindex="-1"
+           data-selectable-list-action
+           data-selected-url-template="{{ selectable_list_export_url_template }}"
+           data-min-selected="1"
+           data-max-selected="1"
+           data-disabled-title="Select exactly one {{ selectable_list_item_singular }} to export.">
+          {{ selectable_list_export_label | default('Export selected') }}
+        </a>
+      {% endif %}
+
+      {% if selectable_list_delete_action %}
+        {% set delete_modal_id = selectable_list_delete_modal_id | default('selectedDeleteModal') %}
+        <button type="button"
+                class="btn btn-sm btn-outline-danger"
+                data-bs-toggle="modal"
+                data-bs-target="#{{ delete_modal_id }}"
+                data-selectable-list-action
+                data-min-selected="1"
+                data-disabled-title="Select at least one {{ selectable_list_item_singular }} to delete."
+                disabled>
+          {{ selectable_list_delete_label | default('Delete selected') }}
+        </button>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+
+{% if selectable_list_delete_action %}
+  {% set delete_modal_id = selectable_list_delete_modal_id | default('selectedDeleteModal') %}
+  <div class="modal fade text-start"
+       id="{{ delete_modal_id }}"
+       tabindex="-1"
+       aria-labelledby="{{ delete_modal_id }}Label"
+       aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form method="POST"
+              action="{{ selectable_list_delete_action }}"
+              data-selectable-list-selected-form>
+          <div class="modal-header {{ selectable_list_delete_header_class | default('') }}">
+            <h5 class="modal-title" id="{{ delete_modal_id }}Label">
+              {{ selectable_list_delete_icon | default('') | safe }}{{ selectable_list_delete_title | default('Confirm Deletion') }}
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>{{ selectable_list_delete_message | default('Are you sure you want to delete the selected items? This action cannot be undone.') | safe }}</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-danger">
+              {{ selectable_list_delete_confirm_label | default('Delete') }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endif %}
