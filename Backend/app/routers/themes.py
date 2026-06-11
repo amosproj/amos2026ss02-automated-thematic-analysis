@@ -20,10 +20,17 @@ router = APIRouter(prefix="/codebooks/{codebook_id}/themes", tags=["themes"])
 async def list_themes_with_frequency(
     codebook_id: UUID,
     session: DbSession,
+    application_run_id: UUID | None = Query(
+        default=None,
+        description="Optional application run used to compute theme coverage. Defaults to the latest successful run.",
+    ),
 ) -> JSONResponse:
     service = ThemeFrequencyService(session)
     try:
-        payload = await service.list_theme_frequencies(codebook_id=codebook_id)
+        payload = await service.list_theme_frequencies(
+            codebook_id=codebook_id,
+            application_run_id=application_run_id,
+        )
     except ThemeNotFoundError as exc:
         raise NotFoundError(str(exc)) from exc
 
