@@ -71,6 +71,14 @@ class IngestionService:
         )
         return list(rows.scalars().all()), total
 
+    async def delete_corpus(self, corpus_id: uuid.UUID) -> None:
+        """Delete a corpus and all its associated data.
+        Relies on database CASCADE ON DELETE constraints.
+        """
+        corpus = await self.get_corpus(corpus_id)
+        await self._session.delete(corpus)
+        await self._session.commit()
+
     async def _resolve_filename_conflict(
         self, corpus_id: uuid.UUID, filename: str
     ) -> str:

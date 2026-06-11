@@ -82,6 +82,10 @@ class FakeBackend:
         self.last_created_corpus = created
         return created
 
+    def delete_corpus(self, corpus_id: str) -> None:
+        self._maybe_raise("delete_corpus")
+        self.corpora = [c for c in self.corpora if c.get("id") != corpus_id]
+
     def upload_files(self, corpus_id, files) -> list[dict]:
         self._maybe_raise("upload_files")
         for f in files:

@@ -86,6 +86,17 @@ async def get_corpus(
     return ResponseEnvelope.ok(CorpusSchema.model_validate(corpus))
 
 
+@router.delete("/corpora/{corpus_id}", response_model=ResponseEnvelope[bool])
+async def delete_corpus(
+    corpus_id: uuid.UUID,
+    session: DbSession,
+    settings: AppSettings,
+) -> ResponseEnvelope[bool]:
+    service = IngestionService(session)
+    await service.delete_corpus(corpus_id)
+    return ResponseEnvelope.ok(True)
+
+
 # ---------------------------------------------------------------------------
 # Document ingestion endpoints
 # ---------------------------------------------------------------------------

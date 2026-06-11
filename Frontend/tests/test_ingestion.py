@@ -283,3 +283,29 @@ def test_delete_transcript_backend_error(client, fake_backend):
     resp = client.post(f"/transcripts/{CORPUS}/doc-1/delete", follow_redirects=True)
     assert resp.status_code == 200
     assert b"simulated delete_document failure" in resp.data
+
+
+# POST /transcripts/<corpus_id>/delete
+
+
+def test_delete_corpus_success(client, fake_backend):
+    fake_backend.corpora = [
+        {"id": CORPUS, "name": "Corpus 1"},
+        {"id": "other-id", "name": "Corpus 2"}
+    ]
+    
+    resp = client.post(f"/transcripts/{CORPUS}/delete")
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/transcripts/")
+
+    follow = client.get(resp.headers["Location"], follow_redirects=True)
+    assert b"Corpus deleted successfully" in follow.data
+    assert len(fake_backend.corpora) == 1
+    assert fake_backend.corpora[0]["id"] == "other-id"
+
+
+def test_delete_corpus_backend_error(client, fake_backend):
+    fake_backend.raise_on = "delete_corpus"
+    resp = client.post(f"/transcripts/{CORPUS}/delete", follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"simulated delete_corpus failure" in resp.data
