@@ -46,7 +46,7 @@ async def test_list_corpora_filters_by_project(db_session):
 
 async def test_delete_corpus_success(db_session):
     svc = IngestionService(db_session)
-    corpus = await svc.create_corpus(CorpusCreate(corpus_id=P1, name="A"))
+    await svc.create_corpus(CorpusCreate(corpus_id=P1, name="A"))
     assert await svc.get_corpus(P1)
     await svc.delete_corpus(P1)
     with pytest.raises(NotFoundError):
