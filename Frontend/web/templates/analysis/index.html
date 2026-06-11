@@ -41,15 +41,9 @@
           <span class="badge bg-danger rounded-pill">Missing</span>
         {% endif %}
       </li>
-      <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+      <li class="list-group-item px-0 d-flex justify-content-between align-items-center text-muted text-decoration-line-through">
         <span>Research Query</span>
-        {% if codebook and codebook.research_query %}
-          <span class="badge bg-success rounded-pill">✓ Configured</span>
-        {% elif codebook %}
-          <span class="badge bg-secondary rounded-pill">None provided</span>
-        {% else %}
-          <span class="badge bg-danger rounded-pill">Missing</span>
-        {% endif %}
+        <span class="badge bg-secondary rounded-pill">Not yet available</span>
       </li>
     </ul>
 
@@ -61,7 +55,7 @@
       
       <div class="d-grid gap-2 d-md-flex justify-content-md-start">
         <span {% if not can_run_analysis %}data-bs-toggle="tooltip" title="{{ disabled_reason }}" tabindex="0"{% endif %}>
-          <button type="submit" class="btn btn-primary px-4 py-2" {% if not can_run_analysis %}disabled style="pointer-events: none;"{% endif %}>
+          <button type="submit" class="btn btn-secondary px-4 py-2" {% if not can_run_analysis %}disabled style="pointer-events: none;"{% endif %}>
             Run Analysis
           </button>
         </span>

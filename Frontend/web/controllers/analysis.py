@@ -15,8 +15,11 @@ def index() -> str:
     transcripts_count = 0
     active_corpus_id = None
     
+    requested_corpus_id = request.args.get("corpus_id")
     try:
-        active_corpus_id, corpus_options, active_corpus = resolve_active_corpus(client)
+        active_corpus_id, corpus_options, active_corpus = resolve_active_corpus(
+            client, requested_corpus_id=requested_corpus_id
+        )
     except BackendError:
         active_corpus_id = None
         
@@ -47,6 +50,9 @@ def index() -> str:
         codebook=codebook,
         transcripts_count=transcripts_count,
         corpus_id=active_corpus_id,
+        corpus_options=corpus_options if active_corpus_id else [],
+        switch_template_url=url_for("analysis.index", corpus_id="__CORPUS_ID__"),
+        helper_text="Select a corpus to analyze.",
     )
 
 @bp.post("/trigger")
