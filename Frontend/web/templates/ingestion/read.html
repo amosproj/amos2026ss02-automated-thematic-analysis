@@ -72,6 +72,24 @@
     align-items: center;
     gap: 0.4rem;
   }
+
+  /* Demographic collapse icon */
+  .collapse-icon {
+    transition: transform 0.2s ease;
+    color: #495057 !important;
+  }
+  .collapsed .collapse-icon {
+    transform: rotate(-90deg);
+  }
+
+  .demo-panel {
+    width: 100%;
+  }
+  @media (min-width: 992px) {
+    .demo-panel {
+      width: 300px;
+    }
+  }
 </style>
 
   <div class="mb-3">
@@ -80,30 +98,57 @@
     </a>
   </div>
 
-  <div class="card shadow-sm mb-4">
-    <div class="card-header bg-white pb-0 border-bottom-0 pt-4 px-4">
-      <h1 class="h3 mb-2">{{ document.title }}</h1>
-      {% if document.filename and document.filename != document.title %}
-        <p class="text-muted small mb-0"><i class="bi bi-file-earmark"></i> {{ document.filename }}</p>
-      {% endif %}
+  <div class="d-flex flex-column flex-lg-row gap-4 align-items-start">
+    <div class="card shadow-sm flex-grow-1 w-100 order-2 order-lg-1" style="min-width: 0;">
+      <div class="card-header bg-white pb-0 border-bottom-0 pt-4 px-4 d-flex justify-content-between align-items-start">
+        <div>
+          <h1 class="h3 mb-2">{{ document.title }}</h1>
+          {% if document.filename and document.filename != document.title %}
+            <p class="text-muted small mb-0"><i class="bi bi-file-earmark"></i> {{ document.filename }}</p>
+          {% endif %}
 
-      {# Legend — only shown if there is content to parse #}
-      {% if document.content %}
-      <div class="transcript-legend mt-3 pb-2">
-        <div class="transcript-legend-item">
-          <span class="transcript-badge transcript-badge--q">Q</span>
-          <span>Interviewer</span>
-        </div>
-        <div class="transcript-legend-item">
-          <span class="transcript-badge transcript-badge--a">A</span>
-          <span>Interviewee</span>
+          {# Legend — only shown if there is content to parse #}
+          {% if document.content %}
+          <div class="transcript-legend mt-3 pb-2">
+            <div class="transcript-legend-item">
+              <span class="transcript-badge transcript-badge--q">Q</span>
+              <span>Interviewer</span>
+            </div>
+            <div class="transcript-legend-item">
+              <span class="transcript-badge transcript-badge--a">A</span>
+              <span>Interviewee</span>
+            </div>
+          </div>
+          {% endif %}
         </div>
       </div>
-      {% endif %}
-    </div>
-    <div class="card-body p-4">
-      <div class="transcript-content fs-6">
+      <div class="card-body p-4">
+        <div class="transcript-content fs-6">
 {{ document.content | highlight_speakers }}
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm flex-shrink-0 sticky-top demo-panel order-1 order-lg-2" id="demoPanel" style="top: 1rem; z-index: 1; max-height: calc(100vh - 2rem); display: flex; flex-direction: column;">
+      <a class="card-header bg-light text-decoration-none text-dark d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#demoCollapse" role="button" aria-expanded="true" aria-controls="demoCollapse">
+        <h5 class="mb-0 fs-6 fw-bold">Demographic Profile</h5>
+        <i class="bi bi-caret-down-fill collapse-icon text-secondary"></i>
+      </a>
+      <div class="collapse show" id="demoCollapse" style="overflow-y: auto; min-height: 0;">
+        <div class="card-body">
+          {% if document.demographic_data %}
+            <div class="vstack gap-3">
+            {% for key, value in document.demographic_data.items() %}
+              <div>
+                <div class="text-muted small fw-bold text-uppercase">{{ key }}</div>
+                <div>{{ value }}</div>
+              </div>
+            {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-muted small mb-0">No demographic data available.</p>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
