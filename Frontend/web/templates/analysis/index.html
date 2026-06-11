@@ -20,7 +20,7 @@
     <ul class="list-group list-group-flush mb-4">
       <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
         <span>Active Corpus</span>
-        {% if corpus_id %}
+        {% if active_corpus_id %}
           <span class="badge bg-success rounded-pill">✓ Selected</span>
         {% else %}
           <span class="badge bg-danger rounded-pill">Missing</span>
@@ -52,7 +52,7 @@
       
       <div class="d-grid gap-2 d-md-flex justify-content-md-start">
         <span {% if not can_run_analysis %}data-bs-toggle="tooltip" title="{{ disabled_reason }}" tabindex="0"{% endif %}>
-          <button type="submit" class="btn btn-secondary px-4 py-2" {% if not can_run_analysis %}disabled style="pointer-events: none;"{% endif %}>
+          <button type="submit" class="btn {% if can_run_analysis %}btn-primary{% else %}btn-outline-primary{% endif %} px-4 py-2 fw-semibold rounded-3" {% if not can_run_analysis %}disabled style="pointer-events: none;"{% endif %}>
             Run Analysis
           </button>
         </span>
