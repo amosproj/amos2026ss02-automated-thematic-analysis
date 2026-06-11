@@ -237,6 +237,9 @@ def test_list_renders_documents_from_backend(client, fake_backend):
     assert b'id="deleteSelectedTranscriptsModal"' in resp.data
     assert b"Yes, Delete Transcripts" in resp.data
     assert b"<th>Filename</th>" in resp.data
+    assert b'<th class="text-end">Actions</th>' in resp.data
+    assert b"deleteTranscriptModal-" not in resp.data
+    assert b"Yes, Delete Transcript</button>" not in resp.data
     assert b"No transcripts uploaded yet" not in resp.data
 
 

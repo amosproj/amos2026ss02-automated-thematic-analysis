@@ -37,6 +37,7 @@
               <th>Filename</th>
               <th>Title</th>
               <th>Uploaded</th>
+              <th class="text-end">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -53,35 +54,9 @@
                 <td>{{ d.title }}</td>
                 <td class="text-secondary">{{ d.created_at }}</td>
                 <td class="text-end">
-                  <a href="{{ url_for('ingestion.read_transcript', corpus_id=corpus_id, document_id=d.id) }}" class="btn btn-sm btn-outline-primary me-1">
+                  <a href="{{ url_for('ingestion.read_transcript', corpus_id=corpus_id, document_id=d.id) }}" class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-file-text"></i> Read
                   </a>
-                  <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteTranscriptModal-{{ d.id }}">
-                    <i class="bi bi-trash"></i> Delete
-                  </button>
-
-                  <div class="modal fade text-start" id="deleteTranscriptModal-{{ d.id }}" tabindex="-1" aria-labelledby="deleteTranscriptModalLabel-{{ d.id }}" aria-hidden="true">
-                    <div class="modal-dialog">
-                      <div class="modal-content">
-                        <form method="POST" action="{{ url_for('ingestion.delete_transcript', corpus_id=corpus_id, document_id=d.id) }}">
-                          <div class="modal-header text-danger">
-                            <h5 class="modal-title" id="deleteTranscriptModalLabel-{{ d.id }}">
-                              <i class="bi bi-exclamation-triangle-fill me-2"></i>Delete Transcript
-                            </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                          </div>
-                          <div class="modal-body">
-                            <p>Are you sure you want to permanently delete <strong>{{ d.title }}</strong>?</p>
-                            <p class="text-muted small mb-0">This action cannot be undone. Associated themes and linkings will also be affected.</p>
-                          </div>
-                          <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-danger">Yes, Delete Transcript</button>
-                          </div>
-                        </form>
-                      </div>
-                    </div>
-                  </div>
                 </td>
               </tr>
             {% endfor %}
