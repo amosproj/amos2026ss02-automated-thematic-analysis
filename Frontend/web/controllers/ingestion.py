@@ -251,3 +251,19 @@ def delete_selected_transcripts(corpus_id: str):
         flash(exc.user_message, "danger")
 
     return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+
+
+@bp.get("/<corpus_id>/<document_id>/read")
+def read_transcript(corpus_id: str, document_id: str) -> str:
+    set_active_corpus_id(corpus_id)
+    try:
+        document = _backend().get_document_content(corpus_id, document_id)
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+
+    return render_template(
+        "ingestion/read.html",
+        document=document,
+        corpus_id=corpus_id,
+    )
