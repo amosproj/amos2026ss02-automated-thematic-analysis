@@ -249,6 +249,51 @@ async def test_apply_codebook_job_creates_new_run_without_overwrite(client, db_e
     assert set(run_ids).issubset(returned_run_ids)
 
 
+async def test_apply_codebook_job_can_be_cancelled_while_running(client, db_engine, monkeypatch) -> None:
+    corpus_id, codebook_id, document_ids = await _seed_corpus_codebook(
+        db_engine,
+        texts=[
+            "Participant: The manual handoffs slow everyone down.",
+            "Participant: More manual handoffs slow the team down.",
+        ],
+    )
+    del corpus_id
+
+    async def _slow_apply(transcript: str, codebook_context: str, *_, **__):
+        del transcript, codebook_context
+        await asyncio.sleep(0.05)
+        return _application_result()
+
+    monkeypatch.setattr(
+        "app.services.codebook_application.apply_codebook_with_codes_to_transcript",
+        _slow_apply,
+    )
+    monkeypatch.setattr(
+        "app.services.codebook_application.build_codebook_application_with_codes_chain",
+        lambda: object(),
+    )
+    monkeypatch.setattr(
+        CodebookApplicationService,
+        "_compute_retry_delay",
+        staticmethod(lambda *, attempt: 0.0),
+    )
+
+    create_response = await client.post(
+        f"{API_CODEBOOKS}/{codebook_id}/apply-jobs",
+        json={"transcript_document_ids": document_ids},
+    )
+    assert create_response.status_code == 202
+    created_job = create_response.json()["data"]
+
+    cancel_response = await client.post(
+        f"{API_CODEBOOKS}/apply-jobs/{created_job['id']}/cancel",
+    )
+    assert cancel_response.status_code == 202
+    assert cancel_response.json()["data"]["cancel_requested"] is True
+    terminal_job = await _wait_for_terminal_job_status(client, created_job["id"])
+    assert terminal_job["status"] == "cancelled"
+
+
 async def test_apply_codebook_job_rejects_document_ids_outside_corpus(client, db_engine) -> None:
     _, codebook_id, _ = await _seed_corpus_codebook(
         db_engine,

@@ -114,8 +114,12 @@ class CodebookApplicationJob(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     status: Mapped[str] = mapped_column(String(32), index=True, default="queued")
     phase: Mapped[str] = mapped_column(String(64), default="queued")
-    corpus_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), index=True)
-    codebook_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), index=True)
+    corpus_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("corpora.id", ondelete="CASCADE"), index=True
+    )
+    codebook_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("codebooks.id", ondelete="CASCADE"), index=True
+    )
     transcript_document_ids_json: Mapped[str] = mapped_column(Text())
     cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
     application_run_id: Mapped[uuid.UUID | None] = mapped_column(
