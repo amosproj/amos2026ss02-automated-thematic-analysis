@@ -121,22 +121,23 @@ async def _validate_job_create_payload(
     codebook_id: UUID,
     payload: CodebookApplicationJobCreateRequest,
     session: DbSession,
-) -> None:
+) -> UUID:
     codebook = await session.get(Codebook, codebook_id)
     if codebook is None:
         raise NotFoundError(f"Codebook '{codebook_id}' not found")
-    if codebook.corpus_id != payload.corpus_id:
+    corpus_id = codebook.corpus_id
+    if payload.corpus_id is not None and codebook.corpus_id != payload.corpus_id:
         raise UnprocessableError(
             f"Codebook '{codebook_id}' does not belong to corpus '{payload.corpus_id}'"
         )
     if not payload.transcript_document_ids:
-        return
+        return corpus_id
 
     documents = list(
         (
             await session.scalars(
                 select(CorpusDocument.id).where(
-                    CorpusDocument.corpus_id == payload.corpus_id,
+                    CorpusDocument.corpus_id == corpus_id,
                     CorpusDocument.id.in_(payload.transcript_document_ids),
                 )
             )
@@ -150,6 +151,7 @@ async def _validate_job_create_payload(
             "Some transcript_document_ids were not found in the selected corpus: "
             f"{missing_str}"
         )
+    return corpus_id
 
 
 @router.post(
@@ -163,12 +165,12 @@ async def create_apply_codebook_job(
     payload: CodebookApplicationJobCreateRequest,
     session: DbSession,
 ) -> JSONResponse:
-    await _validate_job_create_payload(codebook_id=codebook_id, payload=payload, session=session)
+    corpus_id = await _validate_job_create_payload(codebook_id=codebook_id, payload=payload, session=session)
     job = CodebookApplicationJob(
         id=uuid4(),
         status="queued",
         phase="queued",
-        corpus_id=payload.corpus_id,
+        corpus_id=corpus_id,
         codebook_id=codebook_id,
         transcript_document_ids_json=_serialize_document_ids(payload.transcript_document_ids),
         cancel_requested=False,

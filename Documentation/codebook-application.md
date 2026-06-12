@@ -22,15 +22,15 @@ Request body:
 
 ```json
 {
-  "corpus_id": "uuid",
   "transcript_document_ids": ["uuid"]
 }
 ```
 
 Selection behavior:
 
-- `transcript_document_ids` present: apply to exactly those corpus documents.
-- `transcript_document_ids` omitted or empty: apply to all corpus documents.
+- The target corpus is resolved from the selected `codebook_id`; clients do not need to submit `corpus_id`.
+- `transcript_document_ids` present: apply to exactly those documents in the codebook's corpus.
+- `transcript_document_ids` omitted or empty: apply to all documents in the codebook's corpus.
 
 Success:
 

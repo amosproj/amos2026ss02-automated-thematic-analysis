@@ -158,11 +158,12 @@ async def test_apply_codebook_job_persists_coding_and_quote_spans(client, db_eng
 
     create_response = await client.post(
         f"{API_CODEBOOKS}/{codebook_id}/apply-jobs",
-        json={"corpus_id": corpus_id, "transcript_document_ids": document_ids},
+        json={"transcript_document_ids": document_ids},
     )
 
     assert create_response.status_code == 202
     created_job = create_response.json()["data"]
+    assert created_job["corpus_id"] == corpus_id
     terminal_job = await _wait_for_terminal_job_status(client, created_job["id"])
     assert terminal_job["status"] == "succeeded", terminal_job.get("error_message")
     assert terminal_job["application_run_id"] is not None
@@ -203,7 +204,7 @@ async def test_apply_codebook_job_retries_llm_and_fails_only_one_transcript(clie
 
     create_response = await client.post(
         f"{API_CODEBOOKS}/{codebook_id}/apply-jobs",
-        json={"corpus_id": corpus_id, "transcript_document_ids": document_ids},
+        json={"transcript_document_ids": document_ids},
     )
 
     assert create_response.status_code == 202
@@ -234,7 +235,7 @@ async def test_apply_codebook_job_creates_new_run_without_overwrite(client, db_e
     for _ in range(2):
         create_response = await client.post(
             f"{API_CODEBOOKS}/{codebook_id}/apply-jobs",
-            json={"corpus_id": corpus_id, "transcript_document_ids": document_ids},
+            json={"transcript_document_ids": document_ids},
         )
         assert create_response.status_code == 202
         terminal_job = await _wait_for_terminal_job_status(client, create_response.json()["data"]["id"])
@@ -249,14 +250,28 @@ async def test_apply_codebook_job_creates_new_run_without_overwrite(client, db_e
 
 
 async def test_apply_codebook_job_rejects_document_ids_outside_corpus(client, db_engine) -> None:
-    corpus_id, codebook_id, _ = await _seed_corpus_codebook(
+    _, codebook_id, _ = await _seed_corpus_codebook(
         db_engine,
         texts=["Participant: The manual handoffs slow everyone down."],
     )
 
     response = await client.post(
         f"{API_CODEBOOKS}/{codebook_id}/apply-jobs",
-        json={"corpus_id": corpus_id, "transcript_document_ids": [str(uuid4())]},
+        json={"transcript_document_ids": [str(uuid4())]},
+    )
+
+    assert response.status_code == 422
+
+
+async def test_apply_codebook_job_rejects_conflicting_deprecated_corpus_id(client, db_engine) -> None:
+    _, codebook_id, _ = await _seed_corpus_codebook(
+        db_engine,
+        texts=["Participant: The manual handoffs slow everyone down."],
+    )
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/{codebook_id}/apply-jobs",
+        json={"corpus_id": str(uuid4())},
     )
 
     assert response.status_code == 422

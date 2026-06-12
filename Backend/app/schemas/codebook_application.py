@@ -13,7 +13,10 @@ RunStatus = Literal["running", "succeeded", "failed", "cancelled"]
 
 
 class CodebookApplicationJobCreateRequest(BaseSchema):
-    corpus_id: UUID
+    corpus_id: UUID | None = Field(
+        default=None,
+        description="Deprecated. The application corpus is resolved from the selected codebook.",
+    )
     transcript_document_ids: list[UUID] | None = Field(
         default=None,
         description="Selected transcript IDs. Omit or pass an empty list to apply to all corpus transcripts.",
