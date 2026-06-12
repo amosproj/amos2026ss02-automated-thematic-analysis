@@ -12,10 +12,11 @@ from app.schemas.demographic import (
     DemographicRowSchema,
     ImportDemographicResponse,
     LinkingSummary,
+    LinkRequest,
     UploadDemographicConfirmResponse,
 )
 from app.services.demographic import DemographicService
-from app.services.linking import auto_link_demographics
+from app.services.linking import auto_link_demographics, set_document_link
 
 router = APIRouter(prefix="/demographic/{corpus_id}", tags=["demographic"])
 
@@ -240,5 +241,92 @@ async def get_link_summary(
         return ResponseEnvelope[LinkingSummary].fail(
             error="UnprocessableError",
             detail=str(exc),
+        )
+    return ResponseEnvelope[LinkingSummary].ok(data=summary)
+
+
+@router.put(
+    "/documents/{document_id}/link",
+    response_model=ResponseEnvelope[LinkingSummary],
+    summary="Manually link a transcript to a demographic row",
+    description=(
+        "Set or reassign the demographic row linked to one transcript. "
+        "A demographic row maps to at most one transcript, so linking a row that is "
+        "already linked elsewhere moves the link. Returns the refreshed linking summary."
+    ),
+)
+async def link_transcript(
+    corpus_id: uuid.UUID,
+    document_id: uuid.UUID,
+    payload: LinkRequest,
+    session: DbSession,
+    settings: AppSettings,
+) -> ResponseEnvelope[LinkingSummary] | JSONResponse:
+    """Manually link (or reassign) a transcript to a demographic row."""
+    service = DemographicService(session, settings)
+    try:
+        await set_document_link(
+            session,
+            corpus_id=corpus_id,
+            document_id=document_id,
+            demographic_row_id=payload.demographic_row_id,
+        )
+        summary = await service.get_link_summary(corpus_id)
+    except NotFoundError as exc:
+        return JSONResponse(
+            status_code=NotFoundError.status_code,
+            content=ResponseEnvelope[LinkingSummary].fail(
+                error="NotFoundError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
+        )
+    except UnprocessableError as exc:
+        return JSONResponse(
+            status_code=UnprocessableError.status_code,
+            content=ResponseEnvelope[LinkingSummary].fail(
+                error="UnprocessableError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
+        )
+    return ResponseEnvelope[LinkingSummary].ok(data=summary)
+
+
+@router.delete(
+    "/documents/{document_id}/link",
+    response_model=ResponseEnvelope[LinkingSummary],
+    summary="Remove the demographic link from a transcript",
+    description="Clear the demographic row linked to one transcript. Returns the refreshed summary.",
+)
+async def unlink_transcript(
+    corpus_id: uuid.UUID,
+    document_id: uuid.UUID,
+    session: DbSession,
+    settings: AppSettings,
+) -> ResponseEnvelope[LinkingSummary] | JSONResponse:
+    """Remove the demographic link from a transcript."""
+    service = DemographicService(session, settings)
+    try:
+        await set_document_link(
+            session,
+            corpus_id=corpus_id,
+            document_id=document_id,
+            demographic_row_id=None,
+        )
+        summary = await service.get_link_summary(corpus_id)
+    except NotFoundError as exc:
+        return JSONResponse(
+            status_code=NotFoundError.status_code,
+            content=ResponseEnvelope[LinkingSummary].fail(
+                error="NotFoundError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
+        )
+    except UnprocessableError as exc:
+        return JSONResponse(
+            status_code=UnprocessableError.status_code,
+            content=ResponseEnvelope[LinkingSummary].fail(
+                error="UnprocessableError",
+                detail=str(exc),
+            ).model_dump(mode="json"),
         )
     return ResponseEnvelope[LinkingSummary].ok(data=summary)

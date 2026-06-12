@@ -53,6 +53,8 @@ class FakeBackend:
         }
         self.demographic_upload_response: dict | None = None
         self.demographic_confirm_response: dict | None = None
+        self.last_link_request: dict | None = None
+        self.last_unlink_request: dict | None = None
         # Codebook generation jobs
         self.generation_jobs: dict[str, dict] = {}
         self.last_generation_job_request: dict | None = None
@@ -160,6 +162,23 @@ class FakeBackend:
 
     def get_demographic_link_summary(self, corpus_id) -> dict:
         self._maybe_raise("get_demographic_link_summary")
+        return self.demographic_link_summary
+
+    def link_transcript(self, corpus_id, document_id, demographic_row_id) -> dict:
+        self._maybe_raise("link_transcript")
+        self.last_link_request = {
+            "corpus_id": corpus_id,
+            "document_id": document_id,
+            "demographic_row_id": demographic_row_id,
+        }
+        return self.demographic_link_summary
+
+    def unlink_transcript(self, corpus_id, document_id) -> dict:
+        self._maybe_raise("unlink_transcript")
+        self.last_unlink_request = {
+            "corpus_id": corpus_id,
+            "document_id": document_id,
+        }
         return self.demographic_link_summary
 
     def delete_demographic_file(self, corpus_id, file_id) -> None:

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Link Transcripts & Demographics{% endblock %}
+{% block content %}
+  {% if corpus_id and corpus_options %}
+    {% set active_corpus_id = corpus_id %}
+    {% set switch_template_url = url_for('demographic.linking_board', corpus_id='__CORPUS_ID__') %}
+    {% set helper_text = 'Linking transcripts and demographic data for this corpus.' %}
+    {% set show_create_form = False %}
+    {% include "_corpus_select.html" %}
+  {% endif %}
+
+  <div class="mb-2">
+    <a class="text-decoration-none small"
+       href="{{ url_for('demographic.list_files', corpus_id=corpus_id) }}">&larr; Back to demographic data</a>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+      <h1 class="h3 mb-1">Link Transcripts &amp; Demographics</h1>
+      <p class="text-secondary mb-0">
+        Drag a transcript onto a demographic row to link them, or use the link buttons.
+        Unlinked transcripts are still included in analysis but flagged
+        <span class="badge text-bg-warning">No demographic data</span>.
+      </p>
+    </div>
+  </div>
+
+  {% if error %}
+    <p class="text-secondary">Couldn't load linking data right now.</p>
+  {% else %}
+    <div id="linking-flash" class="mb-3" aria-live="polite"></div>
+
+    <div class="row g-3 ata-linking-board"
+         data-linking-board
+         data-link-url="{{ url_for('demographic.link_transcript', corpus_id=corpus_id) }}"
+         data-unlink-url="{{ url_for('demographic.unlink_transcript', corpus_id=corpus_id) }}">
+      <div class="col-lg-6">
+        <div class="bg-white border rounded-2 h-100">
+          <div class="px-3 py-2 border-bottom bg-light fw-semibold d-flex justify-content-between">
+            <span>Transcripts</span>
+            <span class="text-secondary small" data-linking-matched-count></span>
+          </div>
+          <div class="p-2" id="transcripts-column" data-transcripts-column>
+            {# Rendered by linking_board.js from the embedded state below. #}
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="bg-white border rounded-2 h-100">
+          <div class="px-3 py-2 border-bottom bg-light fw-semibold">Demographic rows</div>
+          <div class="p-2" id="demographic-column" data-demographic-column>
+            {# Rendered by linking_board.js from the embedded state below. #}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script id="linking-data" type="application/json">
+      {{ {"transcripts": transcripts, "demographic_rows": demographic_rows} | tojson }}
+    </script>
+  {% endif %}
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='js/linking_board.js') }}"></script>
+{% endblock %}

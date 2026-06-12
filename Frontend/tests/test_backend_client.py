@@ -245,3 +245,55 @@ def test_user_message_does_not_leak_raw_exception_text():
         client.list_codebooks()
     assert "ConnectionRefusedError" not in exc_info.value.user_message
     assert "111" not in exc_info.value.user_message
+
+
+# Manual linking client methods (PUT/DELETE on the document link)
+
+
+def test_link_transcript_issues_put_with_row_id():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        captured["body"] = request.content.decode()
+        return httpx.Response(
+            200,
+            json={"success": True, "data": {"matched": 1, "details": [], "demographic_rows": []},
+                  "error": None, "meta": None},
+        )
+
+    client = _client_with_handler(handler)
+    summary = client.link_transcript("corpus-1", "doc-1", "row-9")
+    assert captured["method"] == "PUT"
+    assert captured["path"].endswith("/demographic/corpus-1/documents/doc-1/link")
+    assert "row-9" in captured["body"]
+    assert summary["matched"] == 1
+
+
+def test_unlink_transcript_issues_delete():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        return httpx.Response(
+            200,
+            json={"success": True, "data": {"matched": 0, "details": [], "demographic_rows": []},
+                  "error": None, "meta": None},
+        )
+
+    client = _client_with_handler(handler)
+    summary = client.unlink_transcript("corpus-1", "doc-1")
+    assert captured["method"] == "DELETE"
+    assert captured["path"].endswith("/demographic/corpus-1/documents/doc-1/link")
+    assert summary["matched"] == 0
+
+
+def test_link_transcript_422_maps_to_validation_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(422, json={"detail": "row not in corpus"})
+
+    client = _client_with_handler(handler)
+    with pytest.raises(BackendValidationError):
+        client.link_transcript("corpus-1", "doc-1", "bad-row")

@@ -243,6 +243,52 @@ def test_list_renders_documents_from_backend(client, fake_backend):
     assert b"No transcripts uploaded yet" not in resp.data
 
 
+def test_list_flags_demographic_link_status(client, fake_backend):
+    """The transcript list shows a linked badge for matched transcripts and a
+    'No demographic data' flag for unlinked ones, plus a Manage links button."""
+    fake_backend.documents = [
+        {"id": "1", "title": "Interview 1", "filename": "interview1.txt",
+         "created_at": "2026-05-12T10:00:00Z"},
+        {"id": "2", "title": "Interview 2", "filename": "interview2.txt",
+         "created_at": "2026-05-12T11:00:00Z"},
+    ]
+    fake_backend.demographic_link_summary = {
+        "total_transcripts": 2,
+        "matched": 1,
+        "details": [
+            {"document_id": "1", "document_title": "Interview 1", "demographic_row_id": "r1", "matched": True},
+            {"document_id": "2", "document_title": "Interview 2", "demographic_row_id": None, "matched": False},
+        ],
+        "demographic_rows": [
+            {"row_id": "r1", "interviewee_id": "alice", "data": {}, "linked_document_id": "1", "linked": True},
+        ],
+    }
+
+    resp = client.get("/transcripts/", follow_redirects=True)
+
+    assert resp.status_code == 200
+    assert b"<th>Demographic</th>" in resp.data
+    assert b"alice" in resp.data
+    assert b"No demographic data" in resp.data
+    assert b'id="manage-links-btn"' in resp.data
+
+
+def test_list_demographic_flag_survives_link_summary_failure(client, fake_backend):
+    """If the link summary can't be fetched the list still renders (best-effort)."""
+    fake_backend.documents = [
+        {"id": "1", "title": "Interview 1", "filename": "interview1.txt",
+         "created_at": "2026-05-12T10:00:00Z"},
+    ]
+    fake_backend.raise_on = "get_demographic_link_summary"
+
+    resp = client.get("/transcripts/", follow_redirects=True)
+
+    assert resp.status_code == 200
+    assert b"interview1.txt" in resp.data
+    # Falls back to the unlinked flag rather than erroring out.
+    assert b"No demographic data" in resp.data
+
+
 def test_list_renders_empty_state(client, fake_backend):
     fake_backend.documents = []
     resp = client.get("/transcripts/", follow_redirects=True)
