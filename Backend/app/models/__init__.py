@@ -1,4 +1,10 @@
-from app.models.analysis import DocumentAnalysis, ThemeOccurrence
+from app.models.analysis import (
+    CodeAssignment,
+    CodebookApplicationJob,
+    CodebookApplicationRun,
+    DocumentCoding,
+    ThemeAssignment,
+)
 from app.models.base import Base, IdMixin, TimestampMixin
 from app.models.code import Code, CodebookCodeRelationship, ThemeCodeRelationship
 from app.models.codebook import Codebook
@@ -21,6 +27,8 @@ __all__ = [
     "Code",
     "Codebook",
     "CodebookGenerationJob",
+    "CodebookApplicationJob",
+    "CodebookApplicationRun",
     "CodebookCodeRelationship",
     "ThemeCodeRelationship",
     "CodebookThemeRelationship",
@@ -28,8 +36,9 @@ __all__ = [
     "ThemeHierarchyRelationship",
     "Corpus",
     "CorpusDocument",
-    "DocumentAnalysis",
-    "ThemeOccurrence",
+    "DocumentCoding",
+    "ThemeAssignment",
+    "CodeAssignment",
     "DemographicFiles",
     "DemographicRow",
 ]
