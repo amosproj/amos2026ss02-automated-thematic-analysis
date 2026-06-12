@@ -113,7 +113,7 @@ def _locate_fuzzy_match(
     candidates = _candidate_starts(text_lower, quote_lower)
     if not candidates:
         step = max(1, quote_length // 4)
-        candidates = range(0, max(1, len(text_lower) - quote_length + 1), step)
+        candidates = list(range(0, max(1, len(text_lower) - quote_length + 1), step))
 
     best_ratio = 0.0
     best_span: tuple[int, int] | None = None

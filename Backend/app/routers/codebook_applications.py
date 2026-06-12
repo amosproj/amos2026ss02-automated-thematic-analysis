@@ -335,11 +335,11 @@ async def _load_document_coding_schemas(
         ).all()
     )
     themes_by_document_coding_id: dict[UUID, list[ThemeAssignment]] = {}
-    for assignment in theme_assignments:
-        themes_by_document_coding_id.setdefault(assignment.document_coding_id, []).append(assignment)
+    for theme_assignment in theme_assignments:
+        themes_by_document_coding_id.setdefault(theme_assignment.document_coding_id, []).append(theme_assignment)
     codes_by_document_coding_id: dict[UUID, list[CodeAssignment]] = {}
-    for assignment in code_assignments:
-        codes_by_document_coding_id.setdefault(assignment.document_coding_id, []).append(assignment)
+    for code_assignment in code_assignments:
+        codes_by_document_coding_id.setdefault(code_assignment.document_coding_id, []).append(code_assignment)
 
     return [
         _to_document_coding_schema(

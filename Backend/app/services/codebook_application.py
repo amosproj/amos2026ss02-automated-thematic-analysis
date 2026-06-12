@@ -6,8 +6,10 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
+from langchain_core.runnables import Runnable
 from loguru import logger
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -437,7 +439,7 @@ class CodebookApplicationService:
         *,
         transcript: str,
         codebook_context: str,
-        chain,
+        chain: Runnable[dict[str, str], dict[str, Any]],
     ) -> CodebookApplicationResult:
         last_error: Exception | None = None
         for attempt in range(1, _APPLICATION_MAX_ATTEMPTS + 1):
