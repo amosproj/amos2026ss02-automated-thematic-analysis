@@ -94,6 +94,9 @@ async def _seed_corpus_codebook(db_engine, texts: list[str]) -> tuple[str, str, 
 async def _wait_for_terminal_job_status(client, job_id: str, timeout_seconds: float = 10.0) -> dict:
     started = time.monotonic()
     last_payload: dict = {}
+    # Give the async worker a chance to complete its final write before the test
+    # starts opening repeated read transactions against shared-cache SQLite.
+    await asyncio.sleep(0.1)
     while time.monotonic() - started < timeout_seconds:
         response = await client.get(f"{API_CODEBOOKS}/apply-jobs/{job_id}")
         assert response.status_code == 200
@@ -101,7 +104,7 @@ async def _wait_for_terminal_job_status(client, job_id: str, timeout_seconds: fl
         last_payload = payload
         if payload["status"] in {"succeeded", "failed", "cancelled"}:
             return payload
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.1)
     raise AssertionError(f"Job {job_id} did not reach terminal status. Last payload: {last_payload}")
 
 
