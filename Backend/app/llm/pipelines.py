@@ -88,6 +88,50 @@ async def apply_codebook_with_codes_to_transcript(
     return CodebookApplicationResult(**raw_result)
 
 
+async def apply_codebook_with_codes_to_transcripts(
+    transcripts: list[str],
+    codebook_context: str,
+    *,
+    chain: Runnable[dict[str, str], dict[str, Any]] | None = None,
+    model: BaseChatModel | None = None,
+    max_concurrency: int | None = None,
+) -> list[CodebookApplicationResult | Exception]:
+    if not transcripts:
+        return []
+    for transcript in transcripts:
+        if not transcript.strip():
+            raise ValueError("Transcript is empty.")
+    if not codebook_context.strip():
+        raise ValueError("Codebook context is empty.")
+
+    runnable = chain or build_codebook_application_with_codes_chain(model=model)
+    config: RunnableConfig | None = (
+        {"max_concurrency": max_concurrency} if max_concurrency is not None else None
+    )
+    raw_results = await runnable.abatch(
+        [
+            {
+                "transcript": transcript,
+                "codebook": codebook_context,
+            }
+            for transcript in transcripts
+        ],
+        config=config,
+        return_exceptions=True,
+    )
+
+    parsed_results: list[CodebookApplicationResult | Exception] = []
+    for raw_result in raw_results:
+        if isinstance(raw_result, Exception):
+            parsed_results.append(raw_result)
+            continue
+        try:
+            parsed_results.append(CodebookApplicationResult(**raw_result))
+        except Exception as exc:
+            parsed_results.append(exc)
+    return parsed_results
+
+
 def build_codebook_generation_chain(
     *,
     model: BaseChatModel | None = None,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import NotFoundError, UnprocessableError
 from app.llm.pipelines import (
-    apply_codebook_with_codes_to_transcript,
+    apply_codebook_with_codes_to_transcripts,
     build_codebook_application_with_codes_chain,
 )
 from app.models import (
@@ -37,8 +38,10 @@ from app.schemas.llm import CodebookApplicationResult
 from app.services.quote_matching import locate_quote_span
 
 _APPLICATION_MAX_ATTEMPTS = 3
+_APPLICATION_MAX_CONCURRENCY = 8
+_APPLICATION_BATCH_SIZE = 16
 _APPLICATION_RETRY_BASE_DELAY_S = 0.5
-_APPLICATION_RETRY_MAX_DELAY_S = 4.0
+_APPLICATION_RETRY_MAX_DELAY_S = 5.0
 
 
 class CodebookApplicationCancelledError(Exception):
@@ -145,57 +148,61 @@ class CodebookApplicationService:
         documents_coded = 0
         failed_documents: list[dict[str, str]] = []
 
-        for document in documents:
+        for document_indexes in self._chunked(list(range(len(documents))), _APPLICATION_BATCH_SIZE):
             await self._raise_if_cancelled(should_cancel)
-            try:
-                if not document.content.strip():
-                    raise ValueError("Transcript is empty.")
-                result = await self._apply_document_with_retries(
-                    transcript=document.content,
-                    codebook_context=codebook_context,
-                    chain=chain,
-                )
-                await self._persist_successful_document_coding(
-                    application_run_id=application_run_id,
-                    codebook_id=codebook_id,
-                    document=document,
-                    result=result,
-                    themes_by_label=themes_by_label,
-                    codes_by_label=codes_by_label,
-                )
-                documents_coded += 1
-            except CodebookApplicationCancelledError:
-                raise
-            except Exception as exc:
-                await self._session.rollback()
-                logger.warning(
-                    "Codebook application failed for document {} after retries: {}",
-                    document.id,
-                    exc,
-                )
-                await self._persist_failed_document_coding(
-                    application_run_id=application_run_id,
-                    codebook_id=codebook_id,
-                    document=document,
-                    error_message=str(exc),
-                )
-                failed_documents.append(
-                    {
-                        "document_id": str(document.id),
-                        "title": document.title,
-                        "error": str(exc),
-                    }
-                )
-
-            documents_done += 1
-            await self._update_run_counts(
-                application_run_id=application_run_id,
-                documents_coded=documents_coded,
-                documents_failed=len(failed_documents),
-                status="running",
+            batch_results = await self._apply_document_batch_with_retries(
+                documents=[documents[index] for index in document_indexes],
+                codebook_context=codebook_context,
+                chain=chain,
+                should_cancel=should_cancel,
             )
-            if on_progress is not None:
-                await on_progress(documents_done, len(documents))
+            for local_index, result in enumerate(batch_results):
+                document = documents[document_indexes[local_index]]
+                await self._raise_if_cancelled(should_cancel)
+                try:
+                    if isinstance(result, Exception):
+                        raise result
+                    await self._persist_successful_document_coding(
+                        application_run_id=application_run_id,
+                        codebook_id=codebook_id,
+                        document=document,
+                        result=result,
+                        themes_by_label=themes_by_label,
+                        codes_by_label=codes_by_label,
+                    )
+                    documents_coded += 1
+                except CodebookApplicationCancelledError:
+                    raise
+                except Exception as exc:
+                    await self._session.rollback()
+                    logger.warning(
+                        "Codebook application failed for document {} after retries: {}",
+                        document.id,
+                        exc,
+                    )
+                    await self._persist_failed_document_coding(
+                        application_run_id=application_run_id,
+                        codebook_id=codebook_id,
+                        document=document,
+                        error_message=str(exc),
+                    )
+                    failed_documents.append(
+                        {
+                            "document_id": str(document.id),
+                            "title": document.title,
+                            "error": str(exc),
+                        }
+                    )
+
+                documents_done += 1
+                await self._update_run_counts(
+                    application_run_id=application_run_id,
+                    documents_coded=documents_coded,
+                    documents_failed=len(failed_documents),
+                    status="running",
+                )
+                if on_progress is not None:
+                    await on_progress(documents_done, len(documents))
 
         await self._raise_if_cancelled(should_cancel)
         if on_phase is not None:
@@ -434,38 +441,99 @@ class CodebookApplicationService:
                     lines.append(f"  Code definition: {code.description}")
         return "\n".join(lines).strip()
 
-    async def _apply_document_with_retries(
+    async def _apply_document_batch_with_retries(
         self,
         *,
-        transcript: str,
+        documents: list[_DocumentText],
         codebook_context: str,
         chain: Runnable[dict[str, str], dict[str, Any]],
-    ) -> CodebookApplicationResult:
-        last_error: Exception | None = None
-        for attempt in range(1, _APPLICATION_MAX_ATTEMPTS + 1):
-            try:
-                return await apply_codebook_with_codes_to_transcript(
-                    transcript,
-                    codebook_context,
-                    chain=chain,
+        should_cancel: Callable[[], Awaitable[bool]] | None = None,
+    ) -> list[CodebookApplicationResult | Exception]:
+        started_at = time.monotonic()
+
+        total = len(documents)
+        results_by_index: dict[int, CodebookApplicationResult] = {}
+        failures_by_index: dict[int, Exception] = {}
+        attempts_by_index: dict[int, int] = {index: 0 for index in range(total)}
+        pending_indexes: list[int] = []
+
+        for index, document in enumerate(documents):
+            if not document.content.strip():
+                failures_by_index[index] = ValueError("Transcript is empty.")
+            else:
+                pending_indexes.append(index)
+
+        while pending_indexes:
+            await self._raise_if_cancelled(should_cancel)
+            retryable_failure_detected = False
+            retry_indexes: list[int] = []
+
+            batch_results = await apply_codebook_with_codes_to_transcripts(
+                [documents[index].content for index in pending_indexes],
+                codebook_context,
+                chain=chain,
+                max_concurrency=_APPLICATION_MAX_CONCURRENCY,
+            )
+            for local_index, result in enumerate(batch_results):
+                document_index = pending_indexes[local_index]
+                attempts_by_index[document_index] += 1
+                attempt_count = attempts_by_index[document_index]
+
+                if isinstance(result, CodebookApplicationResult):
+                    results_by_index[document_index] = result
+                    continue
+
+                if attempt_count < _APPLICATION_MAX_ATTEMPTS:
+                    retryable_failure_detected = True
+                    retry_indexes.append(document_index)
+                    logger.warning(
+                        "Codebook application LLM call failed on attempt {}/{} for document {}: {}",
+                        attempt_count,
+                        _APPLICATION_MAX_ATTEMPTS,
+                        documents[document_index].id,
+                        result,
+                    )
+                    continue
+
+                failures_by_index[document_index] = UnprocessableError(
+                    f"LLM codebook application failed after {_APPLICATION_MAX_ATTEMPTS} attempts: {result}"
                 )
-            except Exception as exc:
-                last_error = exc
-                if attempt >= _APPLICATION_MAX_ATTEMPTS:
-                    break
-                delay = self._compute_retry_delay(attempt=attempt)
-                logger.warning(
-                    "Codebook application LLM call failed on attempt {}/{}: {}. Retrying in {:.2f}s",
-                    attempt,
-                    _APPLICATION_MAX_ATTEMPTS,
-                    exc,
-                    delay,
+
+            if not retry_indexes:
+                break
+            pending_indexes = retry_indexes
+            if retryable_failure_detected:
+                retry_attempt = max(attempts_by_index[index] for index in retry_indexes)
+                retry_delay = self._compute_retry_delay(attempt=retry_attempt)
+                if retry_delay > 0:
+                    await asyncio.sleep(retry_delay)
+
+        ordered_results: list[CodebookApplicationResult | Exception] = []
+        for index in range(total):
+            result = results_by_index.get(index)
+            if result is not None:
+                ordered_results.append(result)
+            else:
+                ordered_results.append(
+                    failures_by_index.get(index) or UnprocessableError("Codebook application produced no result.")
                 )
-                if delay > 0:
-                    await asyncio.sleep(delay)
-        raise UnprocessableError(
-            f"LLM codebook application failed after {_APPLICATION_MAX_ATTEMPTS} attempts: {last_error}"
+
+        logger.info(
+            "Codebook application batch complete: documents={}, succeeded={}, failed={}, total_attempts={}, "
+            "max_concurrency={}, batch_size={}, elapsed_s={:.2f}",
+            total,
+            len(results_by_index),
+            total - len(results_by_index),
+            sum(attempts_by_index.values()),
+            _APPLICATION_MAX_CONCURRENCY,
+            _APPLICATION_BATCH_SIZE,
+            time.monotonic() - started_at,
         )
+        return ordered_results
+
+    @staticmethod
+    def _chunked(items: list[int], chunk_size: int) -> list[list[int]]:
+        return [items[index:index + chunk_size] for index in range(0, len(items), chunk_size)]
 
     async def _persist_successful_document_coding(
         self,
