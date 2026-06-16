@@ -125,6 +125,19 @@ class BackendClient:
             return existing[0]["id"]
         return self.create_corpus(corpus_id, name)["id"]
 
+    def delete_corpus(self, corpus_id: str) -> None:
+        """Delete a corpus and all its associated data."""
+        path = f"/ingestion/corpora/{corpus_id}"
+        started_at = time.monotonic()
+        try:
+            r = self._client.delete(path)
+            r.raise_for_status()
+            return self._unwrap(r)
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+        except (json.JSONDecodeError, KeyError) as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+
     # ---- Documents ----------------------------------------------------------
 
     def upload_files(

@@ -53,6 +53,7 @@ All routes are under `/api/v1/ingestion`.
 | `POST` | `/corpora` | Create a corpus |
 | `GET` | `/corpora` | List corpora (filter by `project_id`) |
 | `GET` | `/corpora/{corpus_id}` | Get a single corpus |
+| `DELETE` | `/corpora/{corpus_id}` | Delete a corpus |
 | `POST` | `/corpora/{corpus_id}/documents/bulk` | Ingest documents from JSON body |
 | `POST` | `/corpora/{corpus_id}/upload` | Ingest from a `.txt`, `.docx`, `.pdf`, or `.jsonl` file upload |
 | `GET` | `/corpora/{corpus_id}/documents` | List documents (paginated) |

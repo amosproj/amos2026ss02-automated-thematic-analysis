@@ -109,6 +109,28 @@ async def test_get_corpus_not_found(client):
 
 
 # ---------------------------------------------------------------------------
+# DELETE /ingestion/corpora/{corpus_id}
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_corpus_success(client):
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "X"})
+    corpus_id = create.json()["data"]["id"]
+
+    del_resp = await client.delete(f"{API}/corpora/{corpus_id}")
+    assert del_resp.status_code == 200
+    assert del_resp.json()["success"] is True
+
+    get_resp = await client.get(f"{API}/corpora/{corpus_id}")
+    assert get_resp.status_code == 404
+
+
+async def test_delete_corpus_not_found(client):
+    del_resp = await client.delete(f"{API}/corpora/{MISSING_STR}")
+    assert del_resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
 # POST /ingestion/corpora/{corpus_id}/documents/bulk
 # ---------------------------------------------------------------------------
 
