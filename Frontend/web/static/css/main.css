@@ -507,6 +507,17 @@
 }
 .upload-card--teal:hover { border-color: #14b8a6; }
 
+.upload-card--cyan .upload-card-header {
+    background: linear-gradient(135deg, #0e7490, #06b6d4);
+}
+.upload-card--cyan:hover { border-color: #06b6d4; }
+
+.upload-card--dimmed {
+    opacity: 0.35;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
 .upload-card-icon {
     width: 26px;
     height: 26px;
@@ -612,6 +623,35 @@
     box-shadow: none;
 }
 
+/* Cyan variant: used for demographic upload card */
+.btn-cyan {
+    color: #fff;
+    border: 1px solid transparent;
+    font-weight: 500;
+    padding: 0.45rem 1.1rem;
+    transition: background 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+    background: #0e7490;
+}
+.btn-cyan:hover,
+.btn-cyan:focus {
+    background: #075985;
+    color: #fff;
+    box-shadow: 0 6px 14px -6px rgba(14, 116, 144, 0.45);
+}
+.btn-cyan:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+.btn-cyan:disabled,
+.btn-cyan.disabled {
+    background: #cffafe;
+    color: #ecfeff;
+    opacity: 0.85;
+    cursor: not-allowed;
+    pointer-events: auto;
+    box-shadow: none;
+}
+
 /* ── File list rows (denser layout, icon-based remove control) ──────────── */
 .file-list-item {
     border: none !important;
@@ -691,3 +731,18 @@
 }
 .ata-toast-title { font-weight: 600; margin-bottom: .2rem; }
 .ata-toast-body  { color: #495057; }
+
+/* ── Codebook "saved" confirmation ──────────────────────────────────────── */
+.success-check {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: #ecfdf5;
+    border: 2px solid #a7f3d0;
+    color: #10b981;
+    font-size: 2.25rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
