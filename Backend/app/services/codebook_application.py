@@ -148,6 +148,8 @@ class CodebookApplicationService:
         documents_coded = 0
         failed_documents: list[dict[str, str]] = []
 
+        # Process fixed-size index batches so result order can be mapped back to
+        # the original document list after LangChain returns the batched output.
         for document_indexes in self._chunked(list(range(len(documents))), _APPLICATION_BATCH_SIZE):
             await self._raise_if_cancelled(should_cancel)
             batch_results = await self._apply_document_batch_with_retries(
@@ -160,6 +162,8 @@ class CodebookApplicationService:
                 document = documents[document_indexes[local_index]]
                 await self._raise_if_cancelled(should_cancel)
                 try:
+                    # Batch calls return exceptions as values so one failed
+                    # document does not prevent successful documents persisting.
                     if isinstance(result, Exception):
                         raise result
                     await self._persist_successful_document_coding(
@@ -194,6 +198,8 @@ class CodebookApplicationService:
                         }
                     )
 
+                # Persist progress after each document, not after each batch, so
+                # the job endpoint remains accurate during long application runs.
                 documents_done += 1
                 await self._update_run_counts(
                     application_run_id=application_run_id,
@@ -457,6 +463,8 @@ class CodebookApplicationService:
         attempts_by_index: dict[int, int] = {index: 0 for index in range(total)}
         pending_indexes: list[int] = []
 
+        # Empty transcripts are deterministic input errors, so they are recorded
+        # immediately and skipped instead of being sent to the LLM.
         for index, document in enumerate(documents):
             if not document.content.strip():
                 failures_by_index[index] = ValueError("Transcript is empty.")
@@ -465,9 +473,10 @@ class CodebookApplicationService:
 
         while pending_indexes:
             await self._raise_if_cancelled(should_cancel)
-            retryable_failure_detected = False
             retry_indexes: list[int] = []
 
+            # Only unresolved documents are sent on each attempt. Successful
+            # documents stay in results_by_index and are never billed again.
             batch_results = await apply_codebook_with_codes_to_transcripts(
                 [documents[index].content for index in pending_indexes],
                 codebook_context,
@@ -484,7 +493,6 @@ class CodebookApplicationService:
                     continue
 
                 if attempt_count < _APPLICATION_MAX_ATTEMPTS:
-                    retryable_failure_detected = True
                     retry_indexes.append(document_index)
                     logger.warning(
                         "Codebook application LLM call failed on attempt {}/{} for document {}: {}",
@@ -502,11 +510,13 @@ class CodebookApplicationService:
             if not retry_indexes:
                 break
             pending_indexes = retry_indexes
-            if retryable_failure_detected:
-                retry_attempt = max(attempts_by_index[index] for index in retry_indexes)
-                retry_delay = self._compute_retry_delay(attempt=retry_attempt)
-                if retry_delay > 0:
-                    await asyncio.sleep(retry_delay)
+
+            # The retry set may contain documents with different attempt counts;
+            # use the highest count so the shared sleep never under-backs off.
+            retry_attempt = max(attempts_by_index[index] for index in retry_indexes)
+            retry_delay = self._compute_retry_delay(attempt=retry_attempt)
+            if retry_delay > 0:
+                await asyncio.sleep(retry_delay)
 
         ordered_results: list[CodebookApplicationResult | Exception] = []
         for index in range(total):
@@ -514,6 +524,8 @@ class CodebookApplicationService:
             if result is not None:
                 ordered_results.append(result)
             else:
+                # This fallback protects the caller from impossible states such
+                # as a shortened LangChain result list.
                 ordered_results.append(
                     failures_by_index.get(index) or UnprocessableError("Codebook application produced no result.")
                 )
