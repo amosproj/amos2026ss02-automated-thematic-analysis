@@ -684,7 +684,6 @@ class CodebookApplicationService:
         run.status = status
         run.finished_at = _utc_now_naive()
         await self._session.commit()
-        await self._session.refresh(run)
         return run
 
     @staticmethod
