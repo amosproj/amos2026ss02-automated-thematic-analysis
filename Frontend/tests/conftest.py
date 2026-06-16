@@ -84,6 +84,10 @@ class FakeBackend:
         self.last_created_corpus = created
         return created
 
+    def delete_corpus(self, corpus_id: str) -> None:
+        self._maybe_raise("delete_corpus")
+        self.corpora = [c for c in self.corpora if c.get("id") != corpus_id]
+
     def upload_files(self, corpus_id, files) -> list[dict]:
         self._maybe_raise("upload_files")
         for f in files:
@@ -245,6 +249,31 @@ class FakeBackend:
         job["status"] = "cancelled"
         return job
 
+    # ---- Analysis Jobs ------------------------------------------------------
+    
+    def trigger_analysis(self, corpus_id: str, codebook_id: str) -> dict:
+        self._maybe_raise("trigger_analysis")
+        import uuid
+        job_id = str(uuid.uuid4())
+        job = {
+            "id": job_id,
+            "status": "queued",
+            "corpus_id": corpus_id,
+            "codebook_id": codebook_id,
+            "passages_total": 5,
+            "passages_done": 0,
+        }
+        if not hasattr(self, "analysis_jobs"):
+            self.analysis_jobs = {}
+        self.analysis_jobs[job_id] = job
+        return job
+        
+    def get_analysis_job(self, job_id: str) -> dict:
+        self._maybe_raise("get_analysis_job")
+        if not hasattr(self, "analysis_jobs") or job_id not in self.analysis_jobs:
+            return {"id": job_id, "status": "succeeded", "passages_total": 5, "passages_done": 5}
+        return self.analysis_jobs[job_id]
+
     # ---- Internal -----------------------------------------------------------
 
     def _maybe_raise(self, method: str) -> None:
@@ -268,6 +297,7 @@ def fake_backend(monkeypatch) -> FakeBackend:
     monkeypatch.setattr("web.controllers.ingestion._backend", lambda: fake)
     monkeypatch.setattr("web.controllers.codebooks._backend", lambda: fake)
     monkeypatch.setattr("web.controllers.demographic._backend", lambda: fake)
+    monkeypatch.setattr("web.controllers.analysis._backend", lambda: fake)
     return fake
 
 

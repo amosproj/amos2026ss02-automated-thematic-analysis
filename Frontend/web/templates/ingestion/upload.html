@@ -17,7 +17,7 @@
   <div class="row g-4 upload-row">
 
     {# ─── Transcripts card (primary, indigo) ─────────────────────────── #}
-    <div class="col-12 col-lg-6">
+    <div class="col-12 col-lg-4" id="transcript-upload-col">
       <div class="upload-card upload-card--indigo h-100">
 
         <div class="upload-card-header">
@@ -79,8 +79,8 @@
     </div>
 
     {# ─── Demographics card (secondary, teal) ────────────────────────── #}
-    <div class="col-12 col-lg-6">
-      <div class="upload-card upload-card--teal h-100">
+    <div class="col-12 col-lg-4" id="demographic-upload-col">
+      <div class="upload-card upload-card--cyan h-100">
 
         <div class="upload-card-header">
           {# users / people icon #}
@@ -155,9 +155,82 @@
                      placeholder="Defaults to the uploaded filename">
             </div>
 
-            <button id="demographic-submit-btn" type="submit" class="btn btn-teal" disabled>
+            <button id="demographic-submit-btn" type="submit" class="btn btn-cyan" disabled>
               Upload &amp; preview
             </button>
+          </form>
+        </div>
+
+      </div>
+    </div>
+
+    {# ─── Codebook card (tertiary, teal) ───────────────────────────── #}
+    <div class="col-12 col-lg-4" id="codebook-upload-col">
+      <div class="upload-card upload-card--teal h-100">
+
+        <div class="upload-card-header">
+          {# book / code icon #}
+          <svg class="upload-card-icon" xmlns="http://www.w3.org/2000/svg"
+               viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true">
+            <path d="M3 7v11a2 2 0 0 0 2 2h13"/>
+            <path d="M21 7V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v2"/>
+            <path d="M7 9h10"/>
+          </svg>
+          <p class="upload-card-title">Upload Codebook
+            <span class="text-white-50 fw-normal fs-6">(optional)</span>
+          </p>
+          <p class="upload-card-subtitle">
+            Single CSV · Required columns <code class="text-white">node type</code>, <code class="text-white">name</code> and <code class="text-white">description</code> · Max {{ max_size_mb }} MB · Preview and rename before saving
+          </p>
+        </div>
+
+        <div class="upload-card-body">
+          <form id="codebook-form"
+                method="post"
+                action="{{ url_for('codebooks.upload_submit', corpus_id=corpus_id) }}"
+                enctype="multipart/form-data">
+            <div class="mb-3">
+              <label for="codebook_file" class="form-label fw-semibold">Codebook CSV</label>
+              <input class="form-control"
+                     type="file"
+                     id="codebook_file"
+                     name="file"
+                     accept=".csv,text/csv"
+                     required>
+
+              <div id="codebook-file-preview"
+                   class="d-none mt-2 list-group-item d-flex justify-content-between align-items-center file-list-item">
+                <div class="text-truncate me-3" style="min-width:0;">
+                  <span class="fw-semibold" id="codebook-file-name"></span>
+                  <span class="text-secondary small ms-2" id="codebook-file-size"></span>
+                </div>
+                <button type="button"
+                        id="codebook-file-remove"
+                        class="file-list-remove"
+                        aria-label="Remove selected file"
+                        title="Remove selected file">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"
+                       aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+              <div id="codebook-file-warning" class="small text-danger mt-2"></div>
+            </div>
+
+            <div>
+              <button id="codebook-submit-btn" type="submit" class="btn btn-teal" disabled>
+                Upload &amp; preview
+              </button>
+              <div class="mt-2">
+                <a href="{{ url_for('codebooks.manual_form', corpus_id=corpus_id) }}"
+                   class="small text-secondary">Or enter manually &rarr;</a>
+              </div>
+            </div>
           </form>
         </div>
 
@@ -323,6 +396,70 @@
         input.value = "";  // clear the native input so re-picking the same file fires "change"
         render();
       });
+    })();
+
+    // Codebook form — single-file picker that mirrors the demographics card's
+    // preview UI.
+    (() => {
+      const MAX_MB = {{ max_size_mb }};
+      const MAX_BYTES = MAX_MB * 1024 * 1024;
+
+      const input    = document.getElementById("codebook_file");
+      const preview  = document.getElementById("codebook-file-preview");
+      const nameEl   = document.getElementById("codebook-file-name");
+      const sizeEl   = document.getElementById("codebook-file-size");
+      const removeBtn = document.getElementById("codebook-file-remove");
+      const warning  = document.getElementById("codebook-file-warning");
+      const submitBtn = document.getElementById("codebook-submit-btn");
+
+      function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+        return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+      }
+
+      function render() {
+        const file = input.files && input.files[0];
+        if (!file) {
+          preview.classList.add("d-none");
+          preview.classList.remove("is-oversize");
+          warning.textContent = "";
+          submitBtn.disabled = true;
+          return;
+        }
+        preview.classList.remove("d-none");
+        nameEl.textContent = file.name;
+        sizeEl.textContent = formatBytes(file.size);
+
+        const isCsv = file.name.toLowerCase().endsWith(".csv");
+        const tooBig = file.size > MAX_BYTES;
+        const invalid = !isCsv || tooBig;
+        preview.classList.toggle("is-oversize", invalid);
+        if (!isCsv) {
+          warning.textContent = "Only CSV files (.csv extension) are supported. Remove or replace it.";
+        } else if (tooBig) {
+          warning.textContent = "File must be at most " + MAX_MB + " MB. Remove or replace it.";
+        } else {
+          warning.textContent = "";
+        }
+        submitBtn.disabled = invalid;
+      }
+
+      input.addEventListener("change", render);
+      removeBtn.addEventListener("click", () => {
+        input.value = "";
+        render();
+      });
+    })();
+
+    // If the page was opened with ?focus=codebook (e.g. from the mode-select
+    // wizard), dim the other cards and scroll the codebook card into view.
+    (() => {
+      const focus = new URLSearchParams(window.location.search).get("focus");
+      if (focus !== "codebook") return;
+      document.getElementById("transcript-upload-col").querySelector(".upload-card").classList.add("upload-card--dimmed");
+      document.getElementById("demographic-upload-col").querySelector(".upload-card").classList.add("upload-card--dimmed");
+      document.getElementById("codebook-upload-col").scrollIntoView({ behavior: "smooth", block: "nearest" });
     })();
   </script>
 {% endblock %}

@@ -45,7 +45,7 @@ def _codebook_to_csv(codebook: dict) -> str:
     codes = codebook.get("codes", [])
 
     flat_rows = []
-    exported_ids = set()
+    exported_ids: set = set()
 
     def traverse(node: dict, parent_name: str) -> None:
         exported_ids.add(node.get("id"))
@@ -113,7 +113,7 @@ def codebooks_upload_landing() -> str:
         flash(exc.user_message, "danger")
         return redirect(url_for("codebooks.list_codebooks"))
 
-    return redirect(url_for("codebooks.upload_form", corpus_id=active_corpus_id))
+    return redirect(url_for("ingestion.upload_form", corpus_id=active_corpus_id, focus="codebook"))
 
 
 @bp.get("/<corpus_id>/")
@@ -230,6 +230,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         if not version and active_codebook.get("version") is not None:
             version = str(active_codebook["version"])
         research_query = active_codebook.get("research_query") or ""
+        researcher_topics = active_codebook.get("researcher_topics") or ""
 
         frequencies = client.get_theme_frequencies(active_codebook_id)
         tree = client.get_theme_tree(active_codebook_id)
@@ -249,6 +250,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             tree=[],
             codes=[],
             research_query="",
+            researcher_topics="",
             error=True,
         )
     except BackendError as exc:
@@ -265,6 +267,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             tree=[],
             codes=[],
             research_query="",
+            researcher_topics="",
             error=True,
         )
     return render_template(
@@ -279,6 +282,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         tree=tree,
         codes=codes,
         research_query=research_query,
+        researcher_topics=researcher_topics,
     )
 
 @bp.get("/<corpus_id>/<codebook_id>/export")
@@ -343,45 +347,17 @@ def export_selected_codebooks(corpus_id: str) -> Response | str:
         return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
 
 
-@bp.get("/<corpus_id>/upload")
-def upload_form(corpus_id: str) -> str:
-    """Render the upload form (choose CSV or manual)."""
-    set_active_corpus_id(corpus_id)
-    try:
-        active_corpus_id, corpus_options, _ = resolve_active_corpus(
-            _backend(),
-            requested_corpus_id=corpus_id,
-        )
-    except BackendError as exc:
-        flash(exc.user_message, "danger")
-        active_corpus_id = corpus_id
-        corpus_options = []
-
-    return render_template("codebooks/upload.html", corpus_id=active_corpus_id, corpus_options=corpus_options, error=None)
-
 @bp.post("/<corpus_id>/upload")
 def upload_submit(corpus_id: str) -> str:
-    """Handle either CSV file upload or redirect to manual entry."""
-    action = request.form.get("action", "upload")
-
-    if action == "manual":
-        return redirect(url_for("codebooks.manual_form", corpus_id=corpus_id))
-
-    # CSV file upload path
+    """Handle a CSV codebook upload from the unified upload page."""
     file = request.files.get("file")
     if not file or not file.filename:
-        return render_template(
-            "codebooks/upload.html",
-            corpus_id=corpus_id,
-            error="Please select a CSV file to upload or choose manual entry.",
-        )
+        flash("Please select a CSV file to upload.", "danger")
+        return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
 
     if not file.filename.lower().endswith(".csv"):
-        return render_template(
-            "codebooks/upload.html",
-            corpus_id=corpus_id,
-            error="Only CSV files (.csv extension) are supported.",
-        )
+        flash("Only CSV files (.csv extension) are supported.", "danger")
+        return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
 
     try:
         client = _backend()
@@ -396,7 +372,8 @@ def upload_submit(corpus_id: str) -> str:
             error=None,
         )
     except BackendError as exc:
-        return render_template("codebooks/upload.html", corpus_id=corpus_id, error=str(exc))
+        flash(str(exc), "danger")
+        return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
 
 @bp.get("/<corpus_id>/manual")
 def manual_form(corpus_id: str) -> str:
@@ -489,7 +466,6 @@ def confirm_submit(corpus_id: str) -> str:
         client = _backend()
         res = client.create_codebook(corpus_id, codebook_name, themes)
         codebook_id = res["id"]
-        return redirect(url_for("codebooks.success", corpus_id=corpus_id, codebook_id=codebook_id))
     except BackendError as exc:
         return render_template(
             "codebooks/preview.html",
@@ -499,12 +475,22 @@ def confirm_submit(corpus_id: str) -> str:
             error=str(exc),
         )
 
+    # Semi-auto: the edited codebook is saved, so delete the original draft to leave just one. 
+    # Best-effort — the new codebook already exists.
+    if source_codebook_id and source_codebook_id != str(codebook_id):
+        try:
+            client.delete_codebook(source_codebook_id)
+        except BackendError:
+            pass
+
+    return redirect(url_for("codebooks.success", corpus_id=corpus_id, codebook_id=codebook_id))
+
 @bp.get("/<corpus_id>/success")
 def success(corpus_id: str) -> str:
     """Show details of the successfully saved codebook."""
     codebook_id = request.args.get("codebook_id")
     if not codebook_id:
-        return redirect(url_for("codebooks.upload_form", corpus_id=corpus_id))
+        return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id, focus="codebook"))
 
     try:
         client = _backend()
@@ -554,8 +540,8 @@ def new_codebook_mode_submit(corpus_id: str):
             url_for("codebooks.new_codebook_auto_form", corpus_id=corpus_id, mode=mode)
         )
 
-    # mode == "manual": branch 9's upload form is corpus-scoped.
-    return redirect(url_for("codebooks.upload_form", corpus_id=corpus_id))
+    # mode == "manual": send to the unified upload page with the codebook card focused.
+    return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id, focus="codebook"))
 
 
 def _resolve_mode(value: str) -> str:

@@ -24,6 +24,7 @@ class FakeCodebookBackend:
         self.last_parsed_file = None
         self.last_created_payload = None
         self.last_fetched_id = None
+        self.deleted_ids: list[str] = []
 
     def parse_csv_preview(self, file) -> list[dict]:
         self._maybe_raise("parse_csv_preview")
@@ -41,6 +42,10 @@ class FakeCodebookBackend:
         if codebook_id in self.get_codebook_results:
             return self.get_codebook_results[codebook_id]
         return self.get_codebook_result
+
+    def delete_codebook(self, codebook_id: str) -> None:
+        self._maybe_raise("delete_codebook")
+        self.deleted_ids.append(codebook_id)
 
     def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
         self._maybe_raise("list_codebooks")
@@ -106,15 +111,32 @@ def test_list_codebooks_surfaces_backend_error(client, fake_codebook_backend):
 
 
 # ---------------------------------------------------------------------------
-# GET /codebooks/upload
+# GET /codebooks/upload  — landing now redirects to the unified upload page
 # ---------------------------------------------------------------------------
 
 
-def test_upload_form_renders_correctly(client):
-    resp = client.get("/codebooks/test-corpus-id/upload")
+def test_codebooks_upload_landing_redirects_to_unified(client, fake_codebook_backend):
+    resp = client.get("/codebooks/upload")
+    assert resp.status_code == 302
+    assert _UNIFIED_UPLOAD_PATH in resp.headers["Location"]
+    assert "focus=codebook" in resp.headers["Location"]
+
+
+def test_codebooks_upload_landing_backend_error_redirects_to_list(client, fake_codebook_backend):
+    fake_codebook_backend.raise_on = "list_corpora"
+    resp = client.get("/codebooks/upload")
+    assert resp.status_code == 302
+    assert "/codebooks/" in resp.headers["Location"]
+    assert _UNIFIED_UPLOAD_PATH not in resp.headers["Location"]
+
+
+def test_unified_upload_page_shows_codebook_card(client, fake_backend):
+    resp = client.get(_UNIFIED_UPLOAD_PATH)
     assert resp.status_code == 200
-    assert b"Upload" in resp.data
+    assert b"Upload Codebook" in resp.data
     assert b"CSV" in resp.data
+    assert b"Or enter manually" in resp.data
+    assert b"/codebooks/test-corpus-id/manual" in resp.data
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +150,21 @@ def test_manual_form_renders_blank_row(client, fake_codebook_backend):
     assert b"Preview &amp; Confirm Themes" in resp.data
     assert b'name="theme_names[]"' in resp.data
     assert b'name="theme_descriptions[]"' in resp.data
+
+
+# ---------------------------------------------------------------------------
+# POST /codebooks/new/<corpus_id>  — mode selection submit
+# ---------------------------------------------------------------------------
+
+
+def test_mode_submit_manual_redirects_to_unified(client):
+    resp = client.post(
+        "/codebooks/new/test-corpus-id",
+        data={"mode": "manual"},
+    )
+    assert resp.status_code == 302
+    assert _UNIFIED_UPLOAD_PATH in resp.headers["Location"]
+    assert "focus=codebook" in resp.headers["Location"]
 
 
 # ---------------------------------------------------------------------------
@@ -157,27 +194,30 @@ def test_upload_submit_csv_success(client, fake_codebook_backend):
     assert fake_codebook_backend.last_parsed_file == "my_codebook.csv"
 
 
-def test_upload_submit_manual_redirects_to_manual_form(client, fake_codebook_backend):
-    """POST with action=manual should redirect to GET /codebooks/manual (not render inline)."""
-    resp = client.post(
-        "/codebooks/test-corpus-id/upload",
-        data={"action": "manual"},
-    )
-    assert resp.status_code == 302
-    assert "/codebooks/test-corpus-id/manual" in resp.headers["Location"]
+# On error the codebook upload now redirects back to the unified upload page
+# (ingestion.upload_form, mounted at /transcripts/<corpus_id>/upload) with a
+# flashed message, rather than rendering the standalone codebooks/upload.html.
+
+_UNIFIED_UPLOAD_PATH = "/transcripts/test-corpus-id/upload"
 
 
-def test_upload_submit_no_file_renders_warning(client):
+def _session_flashes(client) -> list[tuple[str, str]]:
+    with client.session_transaction() as sess:
+        return list(sess.get("_flashes", []))
+
+
+def test_upload_submit_no_file_redirects_to_unified_with_flash(client):
     resp = client.post(
         "/codebooks/test-corpus-id/upload",
         data={"action": "upload"},
         content_type="multipart/form-data",
     )
-    assert resp.status_code == 200
-    assert b"Please select a CSV file" in resp.data
+    assert resp.status_code == 302
+    assert _UNIFIED_UPLOAD_PATH in resp.headers["Location"]
+    assert any("Please select a CSV file" in msg for _, msg in _session_flashes(client))
 
 
-def test_upload_submit_invalid_extension(client):
+def test_upload_submit_invalid_extension_redirects_to_unified_with_flash(client):
     resp = client.post(
         "/codebooks/test-corpus-id/upload",
         data={
@@ -186,8 +226,9 @@ def test_upload_submit_invalid_extension(client):
         },
         content_type="multipart/form-data",
     )
-    assert resp.status_code == 200
-    assert b"Only CSV files" in resp.data
+    assert resp.status_code == 302
+    assert _UNIFIED_UPLOAD_PATH in resp.headers["Location"]
+    assert any("Only CSV files" in msg for _, msg in _session_flashes(client))
 
 
 def test_upload_submit_surfaces_backend_parse_error(client, fake_codebook_backend):
@@ -200,8 +241,9 @@ def test_upload_submit_surfaces_backend_parse_error(client, fake_codebook_backen
         },
         content_type="multipart/form-data",
     )
-    assert resp.status_code == 200
-    assert b"simulated parse_csv_preview failure" in resp.data
+    assert resp.status_code == 302
+    assert _UNIFIED_UPLOAD_PATH in resp.headers["Location"]
+    assert any("simulated parse_csv_preview failure" in msg for _, msg in _session_flashes(client))
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +274,52 @@ def test_confirm_submit_success(client, fake_codebook_backend):
     assert payload["name"] == "Verified Codebook"
     assert len(payload["themes"]) == 2
     assert payload["themes"][0]["name"] == "Theme 1"
+    # No source draft -> nothing deleted.
+    assert fake_codebook_backend.deleted_ids == []
+
+
+def test_confirm_submit_deletes_draft_after_edit(client, fake_codebook_backend):
+    # Edited draft (name differs) -> new codebook created and draft deleted.
+    fake_codebook_backend.get_codebook_result = {"name": "Original Draft", "themes": []}
+    fake_codebook_backend.create_codebook_result = {"id": "new-id", "name": "Edited Codebook"}
+
+    resp = client.post(
+        "/codebooks/test-corpus-id/confirm",
+        data={
+            "codebook_name": "Edited Codebook",
+            "node_types[]": ["THEME"],
+            "theme_names[]": ["Theme 1"],
+            "theme_descriptions[]": ["Desc 1"],
+            "parent_names[]": [""],
+            "source_codebook_id": "draft-id",
+        },
+    )
+
+    assert resp.status_code == 302
+    assert "codebook_id=new-id" in resp.headers["Location"]
+    assert fake_codebook_backend.deleted_ids == ["draft-id"]
+
+
+def test_confirm_submit_edit_survives_failed_draft_cleanup(client, fake_codebook_backend):
+    # A failed draft delete must not break the flow (best-effort cleanup).
+    fake_codebook_backend.get_codebook_result = {"name": "Original Draft", "themes": []}
+    fake_codebook_backend.create_codebook_result = {"id": "new-id", "name": "Edited"}
+    fake_codebook_backend.raise_on = "delete_codebook"
+
+    resp = client.post(
+        "/codebooks/test-corpus-id/confirm",
+        data={
+            "codebook_name": "Edited",
+            "node_types[]": ["THEME"],
+            "theme_names[]": ["Theme 1"],
+            "theme_descriptions[]": ["Desc 1"],
+            "parent_names[]": [""],
+            "source_codebook_id": "draft-id",
+        },
+    )
+
+    assert resp.status_code == 302
+    assert "codebook_id=new-id" in resp.headers["Location"]
 
 
 def test_confirm_submit_validation_missing_name(client):
@@ -346,6 +434,23 @@ def test_success_renders_saved_details(client, fake_codebook_backend):
     assert b"Success Codebook" in resp.data
     assert b"Theme A" in resp.data
     assert fake_codebook_backend.last_fetched_id == "e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002"
+
+
+def test_success_no_codebook_id_redirects_to_unified(client):
+    resp = client.get("/codebooks/test-corpus-id/success")
+    assert resp.status_code == 302
+    assert _UNIFIED_UPLOAD_PATH in resp.headers["Location"]
+    assert "focus=codebook" in resp.headers["Location"]
+
+
+def test_success_backend_error_shows_try_again_to_unified(client, fake_codebook_backend):
+    fake_codebook_backend.raise_on = "get_codebook"
+    resp = client.get("/codebooks/test-corpus-id/success?codebook_id=bad-id")
+    assert resp.status_code == 200
+    assert b"Try Again" in resp.data
+    assert _UNIFIED_UPLOAD_PATH.encode() in resp.data
+    assert b"codebooks/test-corpus-id/upload" not in resp.data
+
 
 # ---------------------------------------------------------------------------
 # GET /codebooks/<codebook_id>/export

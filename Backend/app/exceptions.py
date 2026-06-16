@@ -60,7 +60,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
             for e in exc.errors()
         )
-        return _error_response(status.HTTP_422_UNPROCESSABLE_ENTITY, "Validation failed", errors)
+        return _error_response(status.HTTP_422_UNPROCESSABLE_CONTENT, "Validation failed", errors)
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:

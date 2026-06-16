@@ -125,6 +125,21 @@ def create_corpus_submit():
     return redirect(url_for("ingestion.upload_form", corpus_id=new_corpus_id))
 
 
+@bp.post("/<corpus_id>/delete")
+def delete_corpus_submit(corpus_id: str):
+    """Delete a corpus and redirect to landing page."""
+    try:
+        _backend().delete_corpus(corpus_id)
+        flash("Corpus deleted successfully.", "success")
+        # Clear the active corpus ID from the session as it no longer exists
+        set_active_corpus_id(None)
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
+    
+    return redirect(url_for("ingestion.transcripts_landing"))
+
+
 @bp.post("/<corpus_id>/upload")
 def upload_submit(corpus_id: str) -> str:
     set_active_corpus_id(corpus_id)
@@ -255,7 +270,7 @@ def delete_transcript(corpus_id: str, document_id: str):
     return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
 
 
-@bp.post("/<corpus_id>/delete")
+@bp.post("/<corpus_id>/delete_transcripts")
 def delete_selected_transcripts(corpus_id: str):
     """Delete transcripts selected in the list view."""
     set_active_corpus_id(corpus_id)
