@@ -261,7 +261,9 @@ async def test_upload_txt_real_fixture(client):
         files={"files": (_TXT_FIXTURE.name, content, "text/plain")},
     )
     log.check(resp.status_code == 201, f"endpoint returned 201 (got {resp.status_code})")
-    result = resp.json()["data"]["results"][0]
+    body = resp.json()
+    log.check(body["success"] is True, "envelope success=True when every file succeeds")
+    result = body["data"]["results"][0]
     log.check(result["success"] is True, f"per-file success=True for {_TXT_FIXTURE.name}")
     log.check(result["documents_created"] == 1, "exactly one document created")
     log.report(f"Upload .txt real fixture [{_TXT_FIXTURE.name}, {len(content)} bytes]")
@@ -347,7 +349,9 @@ async def test_upload_multiple_files(client):
         ],
     )
     log.check(resp.status_code == 201, "endpoint returned 201")
-    results = resp.json()["data"]["results"]
+    body = resp.json()
+    log.check(body["success"] is True, "envelope success=True when every file succeeds")
+    results = body["data"]["results"]
     log.check(len(results) == 2, f"received per-file result for each input ({len(results)})")
     log.check(all(r["success"] for r in results), "every file reported success")
     log.report("Multi-file upload [2 files]")
@@ -366,7 +370,9 @@ async def test_upload_partial_failure_returns_per_file_results(client):
         ],
     )
     log.check(resp.status_code == 201, "endpoint still returned 201 despite one failure")
-    results = resp.json()["data"]["results"]
+    body = resp.json()
+    log.check(body["success"] is False, "envelope success=False when any file fails")
+    results = body["data"]["results"]
     log.check(results[0]["success"] is True, "good.txt succeeded")
     log.check(results[1]["success"] is False, "bad.csv failed")
     log.check("Unsupported" in results[1]["error"], f"error message mentions unsupported ({results[1]['error']!r})")
@@ -383,7 +389,9 @@ async def test_upload_unsupported_extension(client):
         files={"files": ("data.csv", b"text\nhello", "text/csv")},
     )
     log.check(resp.status_code == 201, "endpoint returned 201 (errors are per-file)")
-    result = resp.json()["data"]["results"][0]
+    body = resp.json()
+    log.check(body["success"] is False, "envelope success=False when the only file fails")
+    result = body["data"]["results"][0]
     log.check(result["success"] is False, "csv rejected")
     log.check("Unsupported" in result["error"], f"error mentions unsupported ({result['error']!r})")
     log.report("Unsupported extension [data.csv]")
@@ -401,7 +409,9 @@ async def test_upload_oversize_file_rejected(client):
         files={"files": ("big.txt", oversize, "text/plain")},
     )
     log.check(resp.status_code == 201, "endpoint returned 201")
-    result = resp.json()["data"]["results"][0]
+    body = resp.json()
+    log.check(body["success"] is False, "envelope success=False when the only file fails")
+    result = body["data"]["results"][0]
     log.check(result["success"] is False, f"{len(oversize)}-byte file rejected")
     log.check(
         "exceeds maximum size" in result["error"],
@@ -420,7 +430,9 @@ async def test_upload_empty_file_rejected(client):
         files={"files": ("empty.txt", b"", "text/plain")},
     )
     log.check(resp.status_code == 201, "endpoint returned 201")
-    result = resp.json()["data"]["results"][0]
+    body = resp.json()
+    log.check(body["success"] is False, "envelope success=False when the only file fails")
+    result = body["data"]["results"][0]
     log.check(result["success"] is False, "0-byte file rejected")
     log.check("empty" in result["error"], f"error mentions empty ({result['error']!r})")
     log.report("Empty-file rejection [empty.txt, 0 bytes]")

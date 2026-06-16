@@ -166,7 +166,9 @@ async def upload_documents(
 ) -> ResponseEnvelope[MultiUploadResultSchema]:
     """Accept one or more uploaded transcripts (.txt / .docx / .pdf / .jsonl) and
     ingest their contents. Each file produces an independent result, so a single
-    bad file does not block the others."""
+    bad file does not block the others. The envelope's top-level `success`
+    reflects the batch as a whole: it is only True if every file ingested
+    cleanly, even though the request itself always returns 201."""
     service = IngestionService(session)
     results = [
         await _process_one_upload(
@@ -177,7 +179,14 @@ async def upload_documents(
         )
         for f in files
     ]
-    return ResponseEnvelope.ok(MultiUploadResultSchema(results=results))
+    payload = MultiUploadResultSchema(results=results)
+    if all(r.success for r in results):
+        return ResponseEnvelope.ok(payload)
+    return ResponseEnvelope[MultiUploadResultSchema](
+        success=False,
+        data=payload,
+        error="One or more files failed to ingest; see results for details.",
+    )
 
 
 # ---------------------------------------------------------------------------
