@@ -179,16 +179,6 @@ def test_upload_submit_csv_success(client, fake_codebook_backend):
     assert fake_codebook_backend.last_parsed_file == "my_codebook.csv"
 
 
-def test_upload_submit_manual_redirects_to_manual_form(client, fake_codebook_backend):
-    """POST with action=manual should redirect to GET /codebooks/manual (not render inline)."""
-    resp = client.post(
-        "/codebooks/test-corpus-id/upload",
-        data={"action": "manual"},
-    )
-    assert resp.status_code == 302
-    assert "/codebooks/test-corpus-id/manual" in resp.headers["Location"]
-
-
 # On error the codebook upload now redirects back to the unified upload page
 # (ingestion.upload_form, mounted at /transcripts/<corpus_id>/upload) with a
 # flashed message, rather than rendering the standalone codebooks/upload.html.

@@ -271,31 +271,9 @@ def export_codebook(corpus_id: str, codebook_id: str) -> Response | str:
         return redirect(url_for("codebooks.list_codebooks", corpus_id=corpus_id))
 
 
-@bp.get("/<corpus_id>/upload")
-def upload_form(corpus_id: str) -> str:
-    """Render the upload form (choose CSV or manual)."""
-    set_active_corpus_id(corpus_id)
-    try:
-        active_corpus_id, corpus_options, _ = resolve_active_corpus(
-            _backend(),
-            requested_corpus_id=corpus_id,
-        )
-    except BackendError as exc:
-        flash(exc.user_message, "danger")
-        active_corpus_id = corpus_id
-        corpus_options = []
-
-    return render_template("codebooks/upload.html", corpus_id=active_corpus_id, corpus_options=corpus_options, error=None)
-
 @bp.post("/<corpus_id>/upload")
 def upload_submit(corpus_id: str) -> str:
-    """Handle either CSV file upload or redirect to manual entry."""
-    action = request.form.get("action", "upload")
-
-    if action == "manual":
-        return redirect(url_for("codebooks.manual_form", corpus_id=corpus_id))
-
-    # CSV file upload path
+    """Handle a CSV codebook upload from the unified upload page."""
     file = request.files.get("file")
     if not file or not file.filename:
         flash("Please select a CSV file to upload.", "danger")
