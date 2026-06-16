@@ -271,7 +271,7 @@ async def test_apply_codebook_job_uses_generation_parallelization_settings(clien
 
     assert create_response.status_code == 202
     terminal_job = await _wait_for_terminal_job_status(client, create_response.json()["data"]["id"])
-    assert terminal_job["status"] == "succeeded"
+    assert terminal_job["status"] == "succeeded", terminal_job.get("error_message")
     assert terminal_job["documents_coded"] == 17
     assert terminal_job["documents_failed"] == 0
     assert batch_sizes == [16, 1]
