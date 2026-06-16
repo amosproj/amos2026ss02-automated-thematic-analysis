@@ -430,7 +430,9 @@ async def test_upload_empty_file_rejected(client):
         files={"files": ("empty.txt", b"", "text/plain")},
     )
     log.check(resp.status_code == 201, "endpoint returned 201")
-    result = resp.json()["data"]["results"][0]
+    body = resp.json()
+    log.check(body["success"] is False, "envelope success=False when the only file fails")
+    result = body["data"]["results"][0]
     log.check(result["success"] is False, "0-byte file rejected")
     log.check("empty" in result["error"], f"error mentions empty ({result['error']!r})")
     log.report("Empty-file rejection [empty.txt, 0 bytes]")
