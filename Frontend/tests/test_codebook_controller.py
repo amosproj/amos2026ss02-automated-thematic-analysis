@@ -24,6 +24,7 @@ class FakeCodebookBackend:
         self.last_parsed_file = None
         self.last_created_payload = None
         self.last_fetched_id = None
+        self.deleted_ids: list[str] = []
 
     def parse_csv_preview(self, file) -> list[dict]:
         self._maybe_raise("parse_csv_preview")
@@ -41,6 +42,10 @@ class FakeCodebookBackend:
         if codebook_id in self.get_codebook_results:
             return self.get_codebook_results[codebook_id]
         return self.get_codebook_result
+
+    def delete_codebook(self, codebook_id: str) -> None:
+        self._maybe_raise("delete_codebook")
+        self.deleted_ids.append(codebook_id)
 
     def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
         self._maybe_raise("list_codebooks")
@@ -232,6 +237,56 @@ def test_confirm_submit_success(client, fake_codebook_backend):
     assert payload["name"] == "Verified Codebook"
     assert len(payload["themes"]) == 2
     assert payload["themes"][0]["name"] == "Theme 1"
+    # No source draft on the upload/manual path → nothing is deleted.
+    assert fake_codebook_backend.deleted_ids == []
+
+
+def test_confirm_submit_deletes_draft_after_edit(client, fake_codebook_backend):
+    # Semi-auto: the researcher edited the generated draft (name differs from the
+    # original), so confirm creates a new codebook AND deletes the draft, leaving
+    # exactly one codebook. (An *unchanged* codebook returns early and reuses the
+    # draft — covered separately.)
+    fake_codebook_backend.get_codebook_result = {"name": "Original Draft", "themes": []}
+    fake_codebook_backend.create_codebook_result = {"id": "new-id", "name": "Edited Codebook"}
+
+    resp = client.post(
+        "/codebooks/test-corpus-id/confirm",
+        data={
+            "codebook_name": "Edited Codebook",
+            "node_types[]": ["THEME"],
+            "theme_names[]": ["Theme 1"],
+            "theme_descriptions[]": ["Desc 1"],
+            "parent_names[]": [""],
+            "source_codebook_id": "draft-id",
+        },
+    )
+
+    assert resp.status_code == 302
+    assert "codebook_id=new-id" in resp.headers["Location"]
+    assert fake_codebook_backend.deleted_ids == ["draft-id"]
+
+
+def test_confirm_submit_edit_survives_failed_draft_cleanup(client, fake_codebook_backend):
+    # If deleting the draft fails, the user's edited codebook already exists, so
+    # the flow must still succeed (best-effort cleanup, never fatal).
+    fake_codebook_backend.get_codebook_result = {"name": "Original Draft", "themes": []}
+    fake_codebook_backend.create_codebook_result = {"id": "new-id", "name": "Edited"}
+    fake_codebook_backend.raise_on = "delete_codebook"
+
+    resp = client.post(
+        "/codebooks/test-corpus-id/confirm",
+        data={
+            "codebook_name": "Edited",
+            "node_types[]": ["THEME"],
+            "theme_names[]": ["Theme 1"],
+            "theme_descriptions[]": ["Desc 1"],
+            "parent_names[]": [""],
+            "source_codebook_id": "draft-id",
+        },
+    )
+
+    assert resp.status_code == 302
+    assert "codebook_id=new-id" in resp.headers["Location"]
 
 
 def test_confirm_submit_validation_missing_name(client):
