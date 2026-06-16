@@ -18,23 +18,25 @@
     _flattenTree(tree, flatTree);
     const existingNodeIds = new Set(flatTree.map(n => n.theme.id));
 
-    // Integrate flat Codes as top-level Tree Nodes
+    // Integrate flat Codes as Tree Nodes. The label stays the bare code name —
+    // codes are distinguished visually by a "CODE" pill badge (see buildNodeElement),
+    // not by a text prefix, so the name also stays clean in the details panel.
     for (const c of codes) {
         if (!existingNodeIds.has(c.id)) {
             tree.push({
                 theme: {
                     id: c.id,
-                    label: `[CODE] ${c.name}`,
+                    label: c.name,
                     description: c.description,
                     type: "CODE"
                 },
                 children: []
             });
         } else {
-            // It is nested in the tree. We modify the label to include [CODE]
+            // Already nested in the tree — just flag it as a CODE.
             const node = flatTree.find(n => n.theme.id === c.id);
             if (node) {
-                node.theme.label = `[CODE] ${c.name}`;
+                node.theme.label = c.name;
                 node.theme.type = "CODE";
             }
         }
@@ -273,6 +275,16 @@
             const gap = document.createElement("span");
             gap.className = "tree-toggle-gap";
             row.appendChild(gap);
+        }
+
+        // Codes get a small "CODE" pill before the name. Built via createElement +
+        // textContent (never innerHTML) so it stays consistent with the XSS-safe
+        // rendering of the label below.
+        if (theme.type === "CODE" || theme.node_type === "CODE") {
+            const badge = document.createElement("span");
+            badge.className = "tree-code-badge";
+            badge.textContent = "CODE";
+            row.appendChild(badge);
         }
 
         // Label rendered via textContent — auto-escapes any HTML in the label.

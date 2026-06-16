@@ -318,6 +318,25 @@
 .tree-child-row:hover   { background: #f3f4f6; color: #374151; }
 .tree-child-row.selected { background: #eff6ff; color: #1d4ed8; }
 
+/* "CODE" pill — marks code nodes in the tree. Purple matches the Codes metric card
+   so codes read as one consistent concept across the page. Sits inline before the
+   label in both root rows (flex) and child rows (block with inline children). */
+.tree-code-badge {
+    display: inline-block;
+    flex-shrink: 0;
+    margin-right: 6px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+    text-transform: uppercase;
+    color: var(--bs-purple, #6f42c1);
+    background: rgba(111, 66, 193, 0.12);
+    vertical-align: middle;
+}
+
 /* ── Theme Details panel ────────────────────────────────────────────────────── */
 .td-name {
     font-size: 1.35rem;
