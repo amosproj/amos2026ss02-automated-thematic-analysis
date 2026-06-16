@@ -49,7 +49,7 @@ class DemographicService:
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
         self._session = session
         self._settings = settings
-        self._ingestion_service = IngestionService(session, settings)
+        self._ingestion_service = IngestionService(session)
 
     @staticmethod
     def _coerce_uuid(value: uuid.UUID, field_name: str) -> uuid.UUID:
@@ -440,6 +440,28 @@ class DemographicService:
             status="Demographic data successfully uploaded",
             rows_created=len(parsed.parsed_rows),
         )
+
+    async def delete_file(self, corpus_id: uuid.UUID, demographic_file_id: uuid.UUID) -> None:
+        await self._validate_corpus(corpus_id)
+
+        file_obj = (
+            await self._session.execute(
+                select(DemographicFiles).where(
+                    DemographicFiles.id == demographic_file_id,
+                    DemographicFiles.corpus_id == corpus_id,
+                )
+            )
+        ).scalar_one_or_none()
+
+        if file_obj is None:
+            raise NotFoundError(f"Demographic file '{demographic_file_id}' not found in corpus '{corpus_id}'")
+
+        await self._session.delete(file_obj)
+        try:
+            await self._session.commit()
+        except Exception as exc:
+            await self._session.rollback()
+            raise UnprocessableError(f"Could not delete demographic data: {exc}") from exc
 
     async def get_link_summary(self, corpus_id: uuid.UUID) -> LinkingSummary:
         await self._validate_corpus(corpus_id)

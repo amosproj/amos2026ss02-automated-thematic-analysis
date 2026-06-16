@@ -1,33 +1,52 @@
 from __future__ import annotations
 
 import asyncio
+import random
+import re
+import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from uuid import UUID
 
 from langchain_core.exceptions import OutputParserException
+from loguru import logger
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import NotFoundError, UnprocessableError
-from app.llm.pipelines import generate_codebook_for_passage
+from app.llm.pipelines import (
+    build_codebook_generation_chain,
+    consolidate_generated_codes,
+    consolidate_generated_themes,
+    generate_codebook_for_passages,
+)
 from app.models import (
     Code,
     Codebook,
     CodebookCodeRelationship,
     CodebookThemeRelationship,
     Corpus,
-    CorpusChunk,
     CorpusDocument,
     Theme,
     ThemeCodeRelationship,
     ThemeHierarchyRelationship,
 )
 from app.schemas.codebook import CodebookSchema, GeneratedCodebookResponse
-from app.schemas.llm import PassageCodebookGeneration
+from app.schemas.llm import (
+    CodeConsolidationItem,
+    GeneratedThemeNode,
+    GeneratedThemePath,
+    PassageCodebookGeneration,
+)
 from app.services.theme_graph import ThemeGraphService
+
+_PASSAGE_GENERATION_MAX_CONCURRENCY = 8
+_PASSAGE_GENERATION_BATCH_SIZE = 16
+_PASSAGE_GENERATION_MAX_ATTEMPTS = 3
+_PASSAGE_GENERATION_RETRY_BASE_DELAY_S = 0.5
+_PASSAGE_GENERATION_RETRY_MAX_DELAY_S = 5.0
 
 
 @dataclass
@@ -60,7 +79,10 @@ class CodebookGenerationService:
         codebook_name: str,
         corpus_id: UUID,
         transcript_document_ids: list[UUID] | None,
+        research_query: str | None = None,
+        researcher_topics: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
+        on_phase: Callable[[str], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> GeneratedCodebookResponse:
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
@@ -71,33 +93,63 @@ class CodebookGenerationService:
             transcript_document_ids=normalized_document_ids,
         )
         if not documents:
-            raise UnprocessableError("No documents found in the selected corpus")
+            raise UnprocessableError(
+                "No transcripts found in the selected corpus. "
+                "Please upload transcripts before generating a codebook."
+            )
         passages = await self._load_passages(
             corpus_id=corpus_id,
             transcript_document_ids=[document.id for document in documents],
         )
         if not passages:
-            raise UnprocessableError("No transcript passages found for selected transcript_document_ids")
+            raise UnprocessableError(
+                "The transcripts in the selected corpus contain no processable text. "
+                "Please check that your uploads completed successfully and contain text content."
+            )
 
         # End the read transaction before long-running LLM calls so the session
         # does not keep a checked-out DB connection during inference.
         await self._session.rollback()
 
+        if on_phase is not None:
+            await on_phase("generating_passages")
         generation_results, failed_passages = await self._generate_per_passage(
             passages,
+            research_query=research_query,
+            researcher_topics=researcher_topics,
             on_progress=on_progress,
             should_cancel=should_cancel,
         )
+        if on_phase is not None:
+            await on_phase("consolidating")
+        await self._raise_if_cancelled(should_cancel)
         theme_nodes, code_nodes, hierarchy_edges = self._deduplicate_generation(generation_results)
+        code_nodes = await self._post_process_codes(
+            code_nodes,
+            theme_nodes=theme_nodes,
+            should_cancel=should_cancel,
+        )
+        await self._raise_if_cancelled(should_cancel)
+        theme_nodes, hierarchy_edges = await self._post_process_themes(
+            theme_nodes=theme_nodes,
+            hierarchy_edges=hierarchy_edges,
+            should_cancel=should_cancel,
+        )
+        code_nodes = self._remap_code_parent_keys(code_nodes, theme_nodes=theme_nodes)
+        await self._raise_if_cancelled(should_cancel)
         if not theme_nodes:
             raise UnprocessableError(
                 "Codebook generation produced no themes from selected passages "
                 f"(failed passages: {len(failed_passages)})"
             )
 
+        if on_phase is not None:
+            await on_phase("persisting")
         created_codebook, themes_created, codes_created = await self._persist_generated_codebook(
             codebook_name=codebook_name,
             corpus_id=corpus_id,
+            research_query=research_query,
+            researcher_topics=researcher_topics,
             theme_nodes=theme_nodes,
             code_nodes=code_nodes,
             hierarchy_edges=hierarchy_edges,
@@ -178,85 +230,697 @@ class CodebookGenerationService:
         corpus_id: UUID,
         transcript_document_ids: list[UUID],
     ) -> list[str]:
-        chunk_rows = list(
+        docs = list(
             (
-                await self._session.execute(
-                    select(CorpusChunk.document_id, CorpusChunk.text, CorpusChunk.chunk_index)
-                    .join(CorpusDocument, CorpusChunk.document_id == CorpusDocument.id)
-                    .where(
+                await self._session.scalars(
+                    select(CorpusDocument).where(
                         CorpusDocument.corpus_id == corpus_id,
-                        CorpusChunk.document_id.in_(transcript_document_ids),
+                        CorpusDocument.id.in_(transcript_document_ids),
                     )
-                    .order_by(CorpusChunk.document_id, CorpusChunk.chunk_index)
                 )
             ).all()
         )
-        if not chunk_rows:
+        if not docs:
             return []
 
-        chunks_by_document: dict[UUID, list[tuple[int, str]]] = {document_id: [] for document_id in transcript_document_ids}
-        for document_id, text, chunk_index in chunk_rows:
-            chunks_by_document[document_id].append((chunk_index, text))
+        docs_by_id = {doc.id: doc for doc in docs}
 
         passages: list[str] = []
         for document_id in transcript_document_ids:
-            ordered_chunks = sorted(chunks_by_document.get(document_id, []), key=lambda row: row[0])
-            passages.extend(text.strip() for _, text in ordered_chunks if text and text.strip())
+            doc = docs_by_id.get(document_id)
+            if doc and doc.content and doc.content.strip():
+                passages.append(doc.content.strip())
         return passages
 
-    @staticmethod
     async def _generate_per_passage(
+        self,
         passages: list[str],
         *,
+        research_query: str | None = None,
+        researcher_topics: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> tuple[list[PassageCodebookGeneration], list[GeneratedCodebookResponse.PassageFailure]]:
-        results: list[PassageCodebookGeneration] = []
-        failures: list[GeneratedCodebookResponse.PassageFailure] = []
+        started_at = time.monotonic()
+
         total = len(passages)
+        chain = build_codebook_generation_chain()
+        completed = 0
+        generation_by_index: dict[int, PassageCodebookGeneration] = {}
+        parse_failures_by_index: dict[int, Exception] = {}
+        attempts_by_index: dict[int, int] = {index: 0 for index in range(total)}
+        pending_indexes = list(range(total))
+
         if on_progress is not None:
             await on_progress(0, total)
 
-        for index, passage in enumerate(passages, start=1):
-            parse_error: OutputParserException | ValidationError | None = None
-            attempts = 3
-            for attempt in range(1, attempts + 1):
+        # Retry only the failed subset on each round to avoid reprocessing successful passages.
+        while pending_indexes:
+            if should_cancel is not None and await should_cancel():
+                raise CodebookGenerationCancelledError("Codebook generation was cancelled")
+            retryable_failure_detected = False
+            retry_indexes: list[int] = []
+
+            for chunk_indexes in self._chunked(pending_indexes, _PASSAGE_GENERATION_BATCH_SIZE):
                 if should_cancel is not None and await should_cancel():
                     raise CodebookGenerationCancelledError("Codebook generation was cancelled")
-                try:
-                    generation = await asyncio.to_thread(generate_codebook_for_passage, passage)
-                    results.append(generation)
-                    parse_error = None
-                    break
-                except OutputParserException as exc:
-                    parse_error = exc
-                    if attempt < attempts:
-                        continue
-                except ValidationError as exc:
-                    parse_error = exc
-                    if attempt < attempts:
-                        continue
-                except CodebookGenerationCancelledError:
-                    raise
-                except Exception as exc:
-                    raise UnprocessableError(f"Codebook generation failed: {exc}") from exc
-
-            if parse_error is not None:
-                failures.append(
-                    GeneratedCodebookResponse.PassageFailure(
-                        passage_index=index,
-                        passage_excerpt=passage[:240],
-                        error=str(parse_error),
-                        attempts=attempts,
-                    )
+                # Use LangChain default async batching and keep strict index mapping.
+                batch_results = await generate_codebook_for_passages(
+                    [passages[index] for index in chunk_indexes],
+                    chain=chain,
+                    max_concurrency=_PASSAGE_GENERATION_MAX_CONCURRENCY,
+                    research_query=research_query,
+                    researcher_topics=researcher_topics,
                 )
-            if on_progress is not None:
-                await on_progress(index, total)
+                for local_index, result in enumerate(batch_results):
+                    passage_index = chunk_indexes[local_index]
+                    attempts_by_index[passage_index] += 1
+                    attempt_count = attempts_by_index[passage_index]
+
+                    if isinstance(result, PassageCodebookGeneration):
+                        generation_by_index[passage_index] = result
+                        completed += 1
+                        continue
+
+                    if isinstance(result, (OutputParserException, ValidationError)):
+                        if attempt_count < _PASSAGE_GENERATION_MAX_ATTEMPTS:
+                            retry_indexes.append(passage_index)
+                        else:
+                            parse_failures_by_index[passage_index] = result
+                            completed += 1
+                        continue
+
+                    # Retry transient provider/network failures, but fail fast on hard errors.
+                    if self._is_retryable_llm_exception(result) and attempt_count < _PASSAGE_GENERATION_MAX_ATTEMPTS:
+                        retryable_failure_detected = True
+                        retry_indexes.append(passage_index)
+                        continue
+
+                    raise UnprocessableError(f"Codebook generation failed: {result}") from result
+
+                if on_progress is not None:
+                    await on_progress(completed, total)
+
+            if not retry_indexes:
+                break
+            pending_indexes = retry_indexes
+            if retryable_failure_detected:
+                retry_attempt = max(attempts_by_index[index] for index in retry_indexes)
+                retry_delay = self._compute_retry_delay(
+                    attempt=retry_attempt,
+                    base_delay_s=_PASSAGE_GENERATION_RETRY_BASE_DELAY_S,
+                    max_delay_s=_PASSAGE_GENERATION_RETRY_MAX_DELAY_S,
+                )
+                if retry_delay > 0:
+                    await asyncio.sleep(retry_delay)
+
+        results = [generation_by_index[index] for index in sorted(generation_by_index)]
+        failures = [
+            GeneratedCodebookResponse.PassageFailure(
+                passage_index=index + 1,
+                passage_excerpt=passages[index][:240],
+                error=str(parse_failures_by_index[index]),
+                attempts=attempts_by_index[index],
+            )
+            for index in sorted(parse_failures_by_index)
+        ]
+        logger.info(
+            "Passage generation complete: passages={}, succeeded={}, failed={}, total_attempts={}, "
+            "max_concurrency={}, batch_size={}, elapsed_s={:.2f}",
+            total,
+            len(results),
+            len(failures),
+            sum(attempts_by_index.values()),
+            _PASSAGE_GENERATION_MAX_CONCURRENCY,
+            _PASSAGE_GENERATION_BATCH_SIZE,
+            time.monotonic() - started_at,
+        )
         return results, failures
+
+    @staticmethod
+    def _chunked(items: list[int], chunk_size: int) -> list[list[int]]:
+        return [items[index:index + chunk_size] for index in range(0, len(items), chunk_size)]
+
+    @staticmethod
+    def _is_retryable_llm_exception(exc: Exception) -> bool:
+        if isinstance(exc, (TimeoutError, asyncio.TimeoutError, ConnectionError, OSError)):
+            return True
+        message = str(exc).lower()
+        retryable_markers = (
+            "429",
+            "502",
+            "503",
+            "504",
+            "rate limit",
+            "too many requests",
+            "timeout",
+            "timed out",
+            "temporarily unavailable",
+            "connection reset",
+            "connection aborted",
+            "service unavailable",
+        )
+        return any(marker in message for marker in retryable_markers)
+
+    @staticmethod
+    def _compute_retry_delay(
+        *,
+        attempt: int,
+        base_delay_s: float,
+        max_delay_s: float,
+    ) -> float:
+        if base_delay_s <= 0:
+            return 0.0
+        capped_attempt = max(1, attempt)
+        backoff = base_delay_s * (2 ** (capped_attempt - 1))
+        jitter: float = random.uniform(0.8, 1.2)
+        return float(min(max_delay_s, backoff * jitter))
 
     @staticmethod
     def _normalize_label(value: str) -> str:
         return " ".join(value.split()).strip()
+
+    @staticmethod
+    async def _raise_if_cancelled(
+        should_cancel: Callable[[], Awaitable[bool]] | None,
+    ) -> None:
+        if should_cancel is not None and await should_cancel():
+            raise CodebookGenerationCancelledError("Codebook generation was cancelled")
+
+    async def _post_process_codes(
+        self,
+        codes: list[_CodeDraft],
+        *,
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+        should_cancel: Callable[[], Awaitable[bool]] | None = None,
+    ) -> list[_CodeDraft]:
+        """Consolidate generated codes and keep a deterministic fallback."""
+        await self._raise_if_cancelled(should_cancel)
+        if not codes:
+            return []
+        if len(codes) == 1:
+            # No overlap resolution needed for a single code.
+            return codes
+
+        consolidation_payload = [
+            CodeConsolidationItem(
+                label=code.label,
+                description=code.description,
+                theme_path=self._theme_path_for_key(code.parent_theme_key, theme_nodes=theme_nodes),
+            )
+            for code in codes
+        ]
+        original_labels = [code.label for code in codes]
+        parent_theme_key_by_label = {
+            code.label.lower(): code.parent_theme_key
+            for code in codes
+            if code.parent_theme_key is not None
+        }
+        # Consolidation can rename or merge codes; this keeps merged codes
+        # attached to a reasonable theme even when the LLM omits the path.
+        fallback_parent_theme_key = next(
+            (code.parent_theme_key for code in codes if code.parent_theme_key is not None),
+            None,
+        )
+        try:
+            consolidated = await asyncio.to_thread(
+                consolidate_generated_codes,
+                consolidation_payload,
+            )
+            await self._raise_if_cancelled(should_cancel)
+        except CodebookGenerationCancelledError:
+            raise
+        except Exception:
+            # Keep raw deduplicated codes if consolidation fails for any reason.
+            logger.exception(
+                "Code consolidation failed; using pre-consolidation code list (count={count})",
+                count=len(codes),
+            )
+            return codes
+
+        consolidated_codes: list[_CodeDraft] = []
+        seen_labels: set[str] = set()
+        for code in consolidated.codes:
+            normalized_label = self._normalize_label(code.label)
+            if not normalized_label:
+                continue
+            code_key = normalized_label.lower()
+            if code_key in seen_labels:
+                continue
+            seen_labels.add(code_key)
+            description = code.description.strip() if code.description else None
+            returned_theme_key = self._theme_key_from_path(code.theme_path)
+            # Prefer the LLM-returned path, then the original code's path, then
+            # any known path so consolidated codes stay reachable.
+            consolidated_codes.append(
+                _CodeDraft(
+                    label=normalized_label,
+                    description=description or None,
+                    parent_theme_key=(
+                        returned_theme_key
+                        or parent_theme_key_by_label.get(code_key)
+                        or fallback_parent_theme_key
+                    ),
+                )
+            )
+
+        if not consolidated_codes:
+            logger.warning(
+                "Code consolidation returned no usable codes; using pre-consolidation list (count={count})",
+                count=len(codes),
+            )
+            return codes
+
+        consolidated_labels = [code.label for code in consolidated_codes]
+        kept_label_keys = {label.lower() for label in consolidated_labels}
+        removed_labels = sorted([label for label in original_labels if label.lower() not in kept_label_keys])
+        logger.info(
+            "Code consolidation finished: before={before}, after={after}, removed={removed}",
+            before=len(original_labels),
+            after=len(consolidated_labels),
+            removed=len(removed_labels),
+        )
+        logger.debug("Code consolidation kept labels: {}", consolidated_labels)
+        logger.debug("Code consolidation removed labels: {}", removed_labels)
+        return consolidated_codes
+
+    @staticmethod
+    def _theme_key_from_path(theme_path: list[str] | tuple[str, ...] | None) -> tuple[str, ...] | None:
+        if not theme_path:
+            return None
+        normalized = [
+            CodebookGenerationService._normalize_label(path_item).lower()
+            for path_item in theme_path
+            if CodebookGenerationService._normalize_label(path_item)
+        ]
+        return tuple(normalized) if normalized else None
+
+    @staticmethod
+    def _theme_path_for_key(
+        parent_theme_key: tuple[str, ...] | None,
+        *,
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+    ) -> list[str]:
+        if parent_theme_key is None:
+            return []
+        path: list[str] = []
+        for index in range(1, len(parent_theme_key) + 1):
+            path_key = parent_theme_key[:index]
+            node = theme_nodes.get(path_key)
+            path.append(node.label if node is not None else parent_theme_key[index - 1])
+        return path
+
+    @classmethod
+    def _remap_code_parent_keys(
+        cls,
+        codes: list[_CodeDraft],
+        *,
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+    ) -> list[_CodeDraft]:
+        """Ensure every code parent key points at a theme in the final tree."""
+        if not codes or not theme_nodes:
+            return codes
+
+        candidate_keys = cls._candidate_theme_keys(theme_nodes)
+        leaf_key_by_label = {
+            theme_nodes[key].label.lower(): key
+            for key in candidate_keys
+        }
+
+        remapped: list[_CodeDraft] = []
+        for code in codes:
+            parent_key = code.parent_theme_key
+            if parent_key in theme_nodes:
+                resolved_key: tuple[str, ...] | None = parent_key
+            elif parent_key and parent_key[-1] in leaf_key_by_label:
+                # Theme consolidation may move a leaf under a different parent.
+                resolved_key = leaf_key_by_label[parent_key[-1]]
+                logger.warning(
+                    "Remapped generated code to final theme by leaf label: code_label={code_label!r}, "
+                    "original_parent_key={original_parent_key}, resolved_parent_key={resolved_parent_key}",
+                    code_label=code.label,
+                    original_parent_key=parent_key,
+                    resolved_parent_key=resolved_key,
+                )
+            else:
+                # Last resort: use token overlap between the code and final
+                # theme labels to avoid dropping useful code-theme links.
+                resolved_key = cls._best_matching_theme_key(
+                    code=code,
+                    theme_nodes=theme_nodes,
+                    candidate_keys=candidate_keys,
+                )
+                if resolved_key is not None:
+                    logger.warning(
+                        "Remapped generated code to final theme by token fallback: code_label={code_label!r}, "
+                        "original_parent_key={original_parent_key}, resolved_parent_key={resolved_parent_key}",
+                        code_label=code.label,
+                        original_parent_key=parent_key,
+                        resolved_parent_key=resolved_key,
+                    )
+                else:
+                    logger.warning(
+                        "Generated code could not be mapped to a final theme and will remain unattached: "
+                        "code_label={code_label!r}, original_parent_key={original_parent_key}",
+                        code_label=code.label,
+                        original_parent_key=parent_key,
+                    )
+            remapped.append(
+                _CodeDraft(
+                    label=code.label,
+                    description=code.description,
+                    parent_theme_key=resolved_key,
+                )
+        )
+        return remapped
+
+    @classmethod
+    def _best_matching_theme_key(
+        cls,
+        *,
+        code: _CodeDraft,
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+        candidate_keys: list[tuple[str, ...]],
+    ) -> tuple[str, ...] | None:
+        if not candidate_keys:
+            return None
+
+        source_labels = [code.label]
+        if code.parent_theme_key:
+            source_labels.extend(code.parent_theme_key)
+        source_text = " ".join(source_labels)
+        source_tokens = cls._label_tokens(source_text)
+        if not source_tokens:
+            return None
+
+        best_key: tuple[str, ...] | None = None
+        best_score = 0
+        for candidate_key in candidate_keys:
+            candidate_path = [
+                theme_nodes[path_key].label
+                for index in range(1, len(candidate_key) + 1)
+                if (path_key := candidate_key[:index]) in theme_nodes
+            ]
+            candidate_tokens = cls._label_tokens(" ".join(candidate_path))
+            score = cls._token_overlap_score(source_tokens, candidate_tokens)
+            if score > best_score:
+                best_score = score
+                best_key = candidate_key
+
+        return best_key if best_score > 0 else None
+
+    @staticmethod
+    def _candidate_theme_keys(
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+    ) -> list[tuple[str, ...]]:
+        parent_keys = {key[:-1] for key in theme_nodes if len(key) > 1}
+        leaf_keys = [key for key in theme_nodes if key not in parent_keys]
+        root_keys = [key for key in theme_nodes if len(key) == 1]
+        # Prefer leaves because codes usually point to the most specific theme.
+        return sorted(
+            [*leaf_keys, *[key for key in root_keys if key not in leaf_keys]],
+            key=lambda key: (len(key), key),
+        )
+
+    @staticmethod
+    def _label_tokens(value: str) -> set[str]:
+        return {
+            token
+            for token in re.findall(r"[a-z0-9]+", value.lower())
+            if len(token) >= 3
+        }
+
+    @staticmethod
+    def _token_overlap_score(source_tokens: set[str], candidate_tokens: set[str]) -> int:
+        score = 0
+        for source in source_tokens:
+            for candidate in candidate_tokens:
+                if source == candidate:
+                    score += 3
+                elif len(source) >= 5 and len(candidate) >= 5 and (
+                    source in candidate or candidate in source
+                ):
+                    score += 1
+        return score
+
+    async def _post_process_themes(
+        self,
+        *,
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+        hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
+        should_cancel: Callable[[], Awaitable[bool]] | None = None,
+    ) -> tuple[dict[tuple[str, ...], _ThemeNodeDraft], list[tuple[tuple[str, ...], tuple[str, ...]]]]:
+        """Consolidate theme paths and rebuild the theme tree from consolidated paths."""
+        await self._raise_if_cancelled(should_cancel)
+        if not theme_nodes:
+            return theme_nodes, hierarchy_edges
+
+        theme_paths = self._theme_paths_from_graph(
+            theme_nodes=theme_nodes,
+            hierarchy_edges=hierarchy_edges,
+        )
+        if len(theme_paths) <= 1:
+            return theme_nodes, hierarchy_edges
+
+        # Compress noisy passage-level themes while keeping enough structure for
+        # a useful codebook.
+        target_total_themes = min(40, max(20, int(round(len(theme_nodes) * 0.35))))
+        first_pass_constraints = self._build_theme_consolidation_constraints(
+            max_root_themes=10,
+            target_total_themes=target_total_themes,
+            aggressive=False,
+        )
+        try:
+            consolidated = await asyncio.to_thread(
+                consolidate_generated_themes,
+                theme_paths,
+                constraints=first_pass_constraints,
+            )
+            await self._raise_if_cancelled(should_cancel)
+        except CodebookGenerationCancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "Theme consolidation failed; using pre-consolidation theme tree (themes={count}, paths={paths})",
+                count=len(theme_nodes),
+                paths=len(theme_paths),
+            )
+            return theme_nodes, hierarchy_edges
+
+        consolidated_theme_nodes, consolidated_edges = self._build_theme_graph_from_paths(consolidated.themes)
+        if not consolidated_theme_nodes:
+            logger.warning(
+                "Theme consolidation returned no usable themes; using pre-consolidation tree (themes={count})",
+                count=len(theme_nodes),
+            )
+            return theme_nodes, hierarchy_edges
+
+        # If first pass remains too broad, run a stricter compression pass.
+        consolidated_root_count = self._count_root_themes(consolidated_edges, consolidated_theme_nodes)
+        if consolidated_root_count > 10 or len(consolidated_theme_nodes) > target_total_themes:
+            strict_constraints = self._build_theme_consolidation_constraints(
+                max_root_themes=8,
+                target_total_themes=min(target_total_themes, 30),
+                aggressive=True,
+            )
+            try:
+                strict_consolidated = await asyncio.to_thread(
+                    consolidate_generated_themes,
+                    consolidated.themes,
+                    constraints=strict_constraints,
+                )
+                await self._raise_if_cancelled(should_cancel)
+                strict_nodes, strict_edges = self._build_theme_graph_from_paths(strict_consolidated.themes)
+                if strict_nodes:
+                    consolidated = strict_consolidated
+                    consolidated_theme_nodes = strict_nodes
+                    consolidated_edges = strict_edges
+            except CodebookGenerationCancelledError:
+                raise
+            except Exception:
+                logger.exception("Strict theme consolidation pass failed; using first-pass consolidated tree")
+
+        original_labels = sorted({node.label for node in theme_nodes.values()})
+        consolidated_labels = sorted({node.label for node in consolidated_theme_nodes.values()})
+        kept_label_keys = {label.lower() for label in consolidated_labels}
+        removed_labels = sorted([label for label in original_labels if label.lower() not in kept_label_keys])
+
+        logger.info(
+            "Theme consolidation finished: before_themes={before_themes}, after_themes={after_themes}, "
+            "before_paths={before_paths}, after_paths={after_paths}, removed_labels={removed}",
+            before_themes=len(theme_nodes),
+            after_themes=len(consolidated_theme_nodes),
+            before_paths=len(theme_paths),
+            after_paths=len(consolidated.themes),
+            removed=len(removed_labels),
+        )
+        logger.debug("Theme consolidation kept labels: {}", consolidated_labels)
+        logger.debug("Theme consolidation removed labels: {}", removed_labels)
+        logger.debug(
+            "Theme consolidation output paths: {}",
+            [
+                " > ".join(
+                    self._normalize_label(path_node.label)
+                    for path_node in theme_path.path
+                    if self._normalize_label(path_node.label)
+                )
+                for theme_path in consolidated.themes
+            ],
+        )
+        return consolidated_theme_nodes, consolidated_edges
+
+    @staticmethod
+    def _count_root_themes(
+        hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+    ) -> int:
+        children = {child for _, child in hierarchy_edges}
+        return len([key for key in theme_nodes if key not in children])
+
+    @staticmethod
+    def _build_theme_consolidation_constraints(
+        *,
+        max_root_themes: int,
+        target_total_themes: int,
+        aggressive: bool,
+    ) -> str:
+        extra = (
+            "- Be highly aggressive: collapse near-duplicates and subordinate variants unless analytically necessary.\n"
+            "- Do not keep narrow examples (specific jobs, incidents, or anecdotes) as Level-1 or Level-2 themes.\n"
+        ) if aggressive else ""
+        return (
+            "- Use 3 conceptual levels whenever possible:\n"
+            "  1) Domain-level themes (Level-1 roots).\n"
+            "  2) Analytical themes (Level-2).\n"
+            "  3) Granular subthemes (Level-3+) only for recurring dimensions.\n"
+            f"- Keep Level-1 roots at <= {max_root_themes} and prefer 6-10.\n"
+            f"- Keep total themes across all levels near {target_total_themes}.\n"
+            "- Parent-child compatibility rule: child must be a type, cause, consequence, example, or dimension "
+            "of parent.\n"
+            "- If a label is an anecdotal detail or one-off example, move it down or drop it.\n"
+            f"{extra}"
+        )
+
+    @classmethod
+    def _theme_paths_from_graph(
+        cls,
+        *,
+        theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
+        hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
+    ) -> list[GeneratedThemePath]:
+        child_to_parent: dict[tuple[str, ...], tuple[str, ...]] = {}
+        children_by_parent: dict[tuple[str, ...], list[tuple[str, ...]]] = {}
+        for parent, child in hierarchy_edges:
+            child_to_parent[child] = parent
+            children_by_parent.setdefault(parent, []).append(child)
+
+        for children in children_by_parent.values():
+            children.sort(key=lambda key: (len(key), key))
+
+        roots = sorted(
+            [key for key in theme_nodes if key not in child_to_parent],
+            key=lambda key: (len(key), key),
+        )
+        paths: list[GeneratedThemePath] = []
+
+        def walk(current: tuple[str, ...], stack: list[tuple[str, ...]]) -> None:
+            next_stack = [*stack, current]
+            children = children_by_parent.get(current, [])
+            if not children:
+                # The consolidation prompt expects full root-to-leaf paths.
+                paths.append(
+                    GeneratedThemePath(
+                        path=[
+                            GeneratedThemeNode(
+                                label=theme_nodes[node_key].label,
+                                description=theme_nodes[node_key].description,
+                            )
+                            for node_key in next_stack
+                        ]
+                    )
+                )
+                return
+            for child in children:
+                walk(child, next_stack)
+
+        for root in roots:
+            walk(root, [])
+
+        return paths
+
+    @classmethod
+    def _build_theme_graph_from_paths(
+        cls,
+        theme_paths: list[GeneratedThemePath],
+    ) -> tuple[dict[tuple[str, ...], _ThemeNodeDraft], list[tuple[tuple[str, ...], tuple[str, ...]]]]:
+        theme_nodes_by_key: dict[tuple[str, ...], _ThemeNodeDraft] = {}
+        raw_edges: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+
+        for theme_path in theme_paths:
+            normalized_labels = [cls._normalize_label(node.label) for node in theme_path.path]
+            normalized_labels = [label for label in normalized_labels if label]
+            if not normalized_labels:
+                continue
+
+            for index, label in enumerate(normalized_labels, start=1):
+                key = tuple(part.lower() for part in normalized_labels[:index])
+                description = theme_path.path[index - 1].description
+                existing = theme_nodes_by_key.get(key)
+                if existing is None:
+                    theme_nodes_by_key[key] = _ThemeNodeDraft(
+                        key=key,
+                        label=label,
+                        description=description.strip() if description else None,
+                    )
+                elif not existing.description and description and description.strip():
+                    existing.description = description.strip()
+                if index > 1:
+                    raw_edges.append((tuple(part.lower() for part in normalized_labels[: index - 1]), key))
+
+        # Merge identical labels across different paths; the resulting graph
+        # must have one canonical node per label to avoid duplicate themes.
+        canonical_key_by_label: dict[str, tuple[str, ...]] = {}
+        for key in sorted(theme_nodes_by_key.keys(), key=lambda item: (len(item), item)):
+            label_key = theme_nodes_by_key[key].label.lower()
+            canonical_key_by_label.setdefault(label_key, key)
+
+        canonical_theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft] = {}
+        canonical_key_by_original: dict[tuple[str, ...], tuple[str, ...]] = {}
+        for key, node in theme_nodes_by_key.items():
+            canonical_key = canonical_key_by_label[node.label.lower()]
+            canonical_key_by_original[key] = canonical_key
+            canonical_node = canonical_theme_nodes.get(canonical_key)
+            if canonical_node is None:
+                canonical_theme_nodes[canonical_key] = _ThemeNodeDraft(
+                    key=canonical_key,
+                    label=theme_nodes_by_key[canonical_key].label,
+                    description=node.description,
+                )
+            elif not canonical_node.description and node.description:
+                canonical_node.description = node.description
+
+        canonical_edges: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+        child_parent: dict[tuple[str, ...], tuple[str, ...]] = {}
+        seen_edges: set[tuple[tuple[str, ...], tuple[str, ...]]] = set()
+        for parent, child in sorted(raw_edges, key=lambda pair: (len(pair[0]), pair[0], len(pair[1]), pair[1])):
+            canonical_parent = canonical_key_by_original.get(parent)
+            canonical_child = canonical_key_by_original.get(child)
+            if canonical_parent is None or canonical_child is None:
+                continue
+            if canonical_parent == canonical_child:
+                continue
+            existing_parent = child_parent.get(canonical_child)
+            if existing_parent is not None and existing_parent != canonical_parent:
+                # Keep a tree shape after label merging by allowing one parent.
+                continue
+            edge = (canonical_parent, canonical_child)
+            if edge in seen_edges:
+                continue
+            seen_edges.add(edge)
+            child_parent[canonical_child] = canonical_parent
+            canonical_edges.append(edge)
+
+        return canonical_theme_nodes, canonical_edges
 
     @classmethod
     def _deduplicate_generation(
@@ -302,6 +966,8 @@ class CodebookGenerationService:
                 for index, label in enumerate(normalized_theme_path, start=1):
                     theme_key = tuple(part.lower() for part in normalized_theme_path[:index])
                     if theme_key not in theme_nodes_by_key:
+                        # Codes can reference a theme path that was missing from
+                        # the theme list; create that path so the link survives.
                         theme_nodes_by_key[theme_key] = _ThemeNodeDraft(
                             key=theme_key,
                             label=label,
@@ -325,6 +991,8 @@ class CodebookGenerationService:
             codes_by_key.values(),
             key=lambda code: code.label.lower(),
         )
+        # Canonicalize duplicate theme labels before persistence so hierarchy
+        # edges and code links point to stable theme keys.
         canonical_key_by_label: dict[str, tuple[str, ...]] = {}
         for key in sorted(theme_nodes_by_key.keys(), key=lambda item: (len(item), item)):
             label_key = theme_nodes_by_key[key].label.lower()
@@ -357,6 +1025,8 @@ class CodebookGenerationService:
                 continue
             existing_parent = child_parent.get(canonical_child)
             if existing_parent is not None and existing_parent != canonical_parent:
+                # Keep the earliest deterministic parent when merged labels
+                # create competing parent candidates.
                 continue
             edge = (canonical_parent, canonical_child)
             if edge in seen_edges:
@@ -372,6 +1042,8 @@ class CodebookGenerationService:
         *,
         codebook_name: str,
         corpus_id: UUID,
+        research_query: str | None = None,
+        researcher_topics: str | None = None,
         theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
         code_nodes: list[_CodeDraft],
         hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
@@ -385,6 +1057,8 @@ class CodebookGenerationService:
                 description="LLM-generated codebook",
                 version=version,
                 created_by="system-llm",
+                research_query=research_query,
+                researcher_topics=researcher_topics,
             )
             self._session.add(codebook)
             await self._session.flush()
@@ -396,6 +1070,8 @@ class CodebookGenerationService:
                 label_key = node.label.lower()
                 existing_theme_id = theme_id_by_label.get(label_key)
                 if existing_theme_id is not None:
+                    # Multiple canonical keys can still share a label after LLM
+                    # consolidation; persist only one Theme row per label.
                     theme_id_by_key[node.key] = existing_theme_id
                     continue
 
@@ -480,6 +1156,8 @@ class CodebookGenerationService:
                         )
                 codes_created += 1
 
+            # Validate before commit so an invalid generated hierarchy rolls
+            # back atomically with its codebook, themes, and codes.
             validation = await ThemeGraphService(self._session).validate_theme_dag(codebook_id=codebook.id)
             if not validation.is_valid:
                 violations = "; ".join(validation.violations)

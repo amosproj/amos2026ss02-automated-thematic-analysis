@@ -2,7 +2,7 @@ from pathlib import Path
 
 API = "/api/v1/ingestion"
 
-# Synthesized content — long enough to substantively exercise the chunker.
+# Synthesized content — substantive enough to exercise the ingestion pipeline.
 _LONG_TEXT = (
     b"The participant described their daily workflow in some detail. "
     b"They mentioned working with contracts, performing document review, "
@@ -109,6 +109,28 @@ async def test_get_corpus_not_found(client):
 
 
 # ---------------------------------------------------------------------------
+# DELETE /ingestion/corpora/{corpus_id}
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_corpus_success(client):
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "X"})
+    corpus_id = create.json()["data"]["id"]
+
+    del_resp = await client.delete(f"{API}/corpora/{corpus_id}")
+    assert del_resp.status_code == 200
+    assert del_resp.json()["success"] is True
+
+    get_resp = await client.get(f"{API}/corpora/{corpus_id}")
+    assert get_resp.status_code == 404
+
+
+async def test_delete_corpus_not_found(client):
+    del_resp = await client.delete(f"{API}/corpora/{MISSING_STR}")
+    assert del_resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
 # POST /ingestion/corpora/{corpus_id}/documents/bulk
 # ---------------------------------------------------------------------------
 
@@ -128,7 +150,6 @@ async def test_bulk_ingest_documents(client):
 
     data = resp.json()["data"]
     assert data["documents_created"] == 2
-    assert data["chunks_created"] > 0
 
 
 async def test_bulk_ingest_skips_empty_documents(client):
@@ -161,31 +182,93 @@ async def test_get_documents_paginated(client):
 
 
 # ---------------------------------------------------------------------------
-# GET /ingestion/corpora/{corpus_id}/chunks
+# GET /ingestion/corpora/{corpus_id}/documents/{document_id}
 # ---------------------------------------------------------------------------
 
 
-async def test_get_chunks(client):
+async def test_get_document_content(client):
     create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
 
-    await client.post(
+    ingest = await client.post(
         f"{API}/corpora/{corpus_id}/documents/bulk",
-        json={"documents": [{"title": "T", "text": "word " * 15}]},
+        json={"documents": [{"title": "Interview A", "text": "the full interview text goes here"}]},
     )
+    assert ingest.status_code == 201
 
-    resp = await client.get(f"{API}/corpora/{corpus_id}/chunks")
+    docs_resp = await client.get(f"{API}/corpora/{corpus_id}/documents")
+    document_id = docs_resp.json()["data"]["items"][0]["id"]
+
+    resp = await client.get(f"{API}/corpora/{corpus_id}/documents/{document_id}")
     assert resp.status_code == 200
     data = resp.json()["data"]
-    assert data["meta"]["total"] > 0
-    chunk = data["items"][0]
-    assert "chunk_index" in chunk
-    assert "text" in chunk
+    assert data["id"] == document_id
+    assert data["content"] == "the full interview text goes here"
+    assert "title" in data
+
+async def test_get_document_content_with_demographic_data(client, db_session):
+    import uuid
+
+    from app.models.demographic import DemographicFiles, DemographicRow
+
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
+    corpus_id = create.json()["data"]["id"]
+
+    ingest = await client.post(
+        f"{API}/corpora/{corpus_id}/documents/bulk",
+        json={"documents": [{"title": "Interview B", "text": "the full interview text goes here"}]},
+    )
+    assert ingest.status_code == 201
+
+    docs_resp = await client.get(f"{API}/corpora/{corpus_id}/documents")
+    document_id = docs_resp.json()["data"]["items"][0]["id"]
+
+    # Directly inject demographic row into DB for this document to verify eager loading and schema mapping
+    demo_file = DemographicFiles(corpus_id=uuid.UUID(corpus_id), name="demo.csv", original_columns=["age", "role"])
+    db_session.add(demo_file)
+    await db_session.commit()
+    await db_session.refresh(demo_file)
+
+    demo_row = DemographicRow(
+        demographic_file_id=demo_file.id,
+        corpus_id=uuid.UUID(corpus_id),
+        row_number=1,
+        interviewee_id="Interview B",
+        data={"age": 30, "role": "Manager"}
+    )
+    db_session.add(demo_row)
+    await db_session.commit()
+    await db_session.refresh(demo_row)
+
+    # Link row to document
+    from sqlalchemy import update
+
+    from app.models.ingestion import CorpusDocument
+    await db_session.execute(
+        update(CorpusDocument)
+        .where(CorpusDocument.id == uuid.UUID(document_id))
+        .values(demographic_row_id=demo_row.id)
+    )
+    await db_session.commit()
+
+    resp = await client.get(f"{API}/corpora/{corpus_id}/documents/{document_id}")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["id"] == document_id
+    assert "demographic_data" in data
+    assert data["demographic_data"] == {"age": 30, "role": "Manager"}
+
+
+async def test_get_document_content_not_found(client):
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
+    corpus_id = create.json()["data"]["id"]
+
+    resp = await client.get(f"{API}/corpora/{corpus_id}/documents/{MISSING_STR}")
+    assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
-# POST /ingestion/corpora/{corpus_id}/upload — one test per format, using the
-# bundled real-transcript fixtures.
+# POST /ingestion/corpora/{corpus_id}/upload — one test per format
 # ---------------------------------------------------------------------------
 
 
@@ -200,10 +283,11 @@ async def test_upload_txt_real_fixture(client):
         files={"files": (_TXT_FIXTURE.name, content, "text/plain")},
     )
     log.check(resp.status_code == 201, f"endpoint returned 201 (got {resp.status_code})")
-    result = resp.json()["data"]["results"][0]
+    body = resp.json()
+    log.check(body["success"] is True, "envelope success=True when every file succeeds")
+    result = body["data"]["results"][0]
     log.check(result["success"] is True, f"per-file success=True for {_TXT_FIXTURE.name}")
     log.check(result["documents_created"] == 1, "exactly one document created")
-    log.check(result["chunks_created"] >= 1, f"at least one chunk created ({result['chunks_created']})")
     log.report(f"Upload .txt real fixture [{_TXT_FIXTURE.name}, {len(content)} bytes]")
 
 
@@ -224,13 +308,11 @@ async def test_upload_docx_real_fixture(client):
     result = resp.json()["data"]["results"][0]
     log.check(result["success"] is True, f"per-file success=True for {_DOCX_FIXTURE.name}")
     log.check(result["documents_created"] == 1, "exactly one document created")
-    log.check(result["chunks_created"] >= 1, f"at least one chunk created ({result['chunks_created']})")
     log.report(f"Upload .docx real fixture [{_DOCX_FIXTURE.name}, {len(content)} bytes]")
 
 
 async def test_upload_pdf_real_fixture(client):
-    """Also verifies the full upload → chunks pipeline preserves text content.
-    PDF is chosen because its extraction is the most prone to silent failure."""
+    """Also verifies the full upload pipeline preserves text content."""
     log = _AssertionLog()
     create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
     corpus_id = create.json()["data"]["id"]
@@ -244,16 +326,14 @@ async def test_upload_pdf_real_fixture(client):
     result = resp.json()["data"]["results"][0]
     log.check(result["success"] is True, f"per-file success=True for {_PDF_FIXTURE.name}")
     log.check(result["documents_created"] == 1, "exactly one document created")
-    log.check(result["chunks_created"] >= 1, f"at least one chunk created ({result['chunks_created']})")
 
-    # Fetch chunks back and confirm uploaded text reassembled into substantive content.
-    chunks_resp = await client.get(
-        f"{API}/corpora/{corpus_id}/chunks", params={"page_size": 1000}
-    )
-    reassembled = " ".join(c["text"] for c in chunks_resp.json()["data"]["items"])
+    docs_resp = await client.get(f"{API}/corpora/{corpus_id}/documents")
+    document_id = docs_resp.json()["data"]["items"][0]["id"]
+    content_resp = await client.get(f"{API}/corpora/{corpus_id}/documents/{document_id}")
+    text = content_resp.json()["data"]["content"]
     log.check(
-        len(reassembled.strip()) > 200,
-        f"chunks reassembled into {len(reassembled)} chars of readable text",
+        len(text.strip()) > 200,
+        f"document content is {len(text)} chars of readable text",
     )
     log.report(f"Upload .pdf real fixture [{_PDF_FIXTURE.name}, {len(content)} bytes]")
 
@@ -275,7 +355,6 @@ async def test_upload_jsonl_real_fixture(client):
         result["documents_created"] >= 1,
         f"at least one document created (got {result['documents_created']})",
     )
-    log.check(result["chunks_created"] >= 1, f"at least one chunk created ({result['chunks_created']})")
     log.report(f"Upload .jsonl real fixture [{_JSONL_FIXTURE.name}, {len(content)} bytes]")
 
 
@@ -292,7 +371,9 @@ async def test_upload_multiple_files(client):
         ],
     )
     log.check(resp.status_code == 201, "endpoint returned 201")
-    results = resp.json()["data"]["results"]
+    body = resp.json()
+    log.check(body["success"] is True, "envelope success=True when every file succeeds")
+    results = body["data"]["results"]
     log.check(len(results) == 2, f"received per-file result for each input ({len(results)})")
     log.check(all(r["success"] for r in results), "every file reported success")
     log.report("Multi-file upload [2 files]")
@@ -311,7 +392,9 @@ async def test_upload_partial_failure_returns_per_file_results(client):
         ],
     )
     log.check(resp.status_code == 201, "endpoint still returned 201 despite one failure")
-    results = resp.json()["data"]["results"]
+    body = resp.json()
+    log.check(body["success"] is False, "envelope success=False when any file fails")
+    results = body["data"]["results"]
     log.check(results[0]["success"] is True, "good.txt succeeded")
     log.check(results[1]["success"] is False, "bad.csv failed")
     log.check("Unsupported" in results[1]["error"], f"error message mentions unsupported ({results[1]['error']!r})")
@@ -328,7 +411,9 @@ async def test_upload_unsupported_extension(client):
         files={"files": ("data.csv", b"text\nhello", "text/csv")},
     )
     log.check(resp.status_code == 201, "endpoint returned 201 (errors are per-file)")
-    result = resp.json()["data"]["results"][0]
+    body = resp.json()
+    log.check(body["success"] is False, "envelope success=False when the only file fails")
+    result = body["data"]["results"][0]
     log.check(result["success"] is False, "csv rejected")
     log.check("Unsupported" in result["error"], f"error mentions unsupported ({result['error']!r})")
     log.report("Unsupported extension [data.csv]")
@@ -346,7 +431,9 @@ async def test_upload_oversize_file_rejected(client):
         files={"files": ("big.txt", oversize, "text/plain")},
     )
     log.check(resp.status_code == 201, "endpoint returned 201")
-    result = resp.json()["data"]["results"][0]
+    body = resp.json()
+    log.check(body["success"] is False, "envelope success=False when the only file fails")
+    result = body["data"]["results"][0]
     log.check(result["success"] is False, f"{len(oversize)}-byte file rejected")
     log.check(
         "exceeds maximum size" in result["error"],
@@ -365,7 +452,9 @@ async def test_upload_empty_file_rejected(client):
         files={"files": ("empty.txt", b"", "text/plain")},
     )
     log.check(resp.status_code == 201, "endpoint returned 201")
-    result = resp.json()["data"]["results"][0]
+    body = resp.json()
+    log.check(body["success"] is False, "envelope success=False when the only file fails")
+    result = body["data"]["results"][0]
     log.check(result["success"] is False, "0-byte file rejected")
     log.check("empty" in result["error"], f"error mentions empty ({result['error']!r})")
     log.report("Empty-file rejection [empty.txt, 0 bytes]")
@@ -463,3 +552,36 @@ async def test_upload_duplicate_filename_is_renamed(client):
         f"both stored, second renamed ({filenames})",
     )
     log.report("Duplicate rename [dup.txt uploaded twice]")
+
+
+# ---------------------------------------------------------------------------
+# DELETE /ingestion/corpora/{corpus_id}/documents/{document_id}
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_document_success(client):
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
+    corpus_id = create.json()["data"]["id"]
+
+    await client.post(
+        f"{API}/corpora/{corpus_id}/documents/bulk",
+        json={"documents": [{"title": "Doc to delete", "text": "content"}]},
+    )
+
+    docs_resp = await client.get(f"{API}/corpora/{corpus_id}/documents")
+    document_id = docs_resp.json()["data"]["items"][0]["id"]
+
+    del_resp = await client.delete(f"{API}/corpora/{corpus_id}/documents/{document_id}")
+    assert del_resp.status_code == 200
+    assert del_resp.json()["success"] is True
+
+    get_resp = await client.get(f"{API}/corpora/{corpus_id}/documents/{document_id}")
+    assert get_resp.status_code == 404
+
+
+async def test_delete_document_not_found(client):
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
+    corpus_id = create.json()["data"]["id"]
+
+    del_resp = await client.delete(f"{API}/corpora/{corpus_id}/documents/{MISSING_STR}")
+    assert del_resp.status_code == 404

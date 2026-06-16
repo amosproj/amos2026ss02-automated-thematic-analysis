@@ -252,6 +252,26 @@ class CodebookService:
         return codebook, themes, edges, codes, theme_code_edges
 
     # ------------------------------------------------------------------
+    # Delete
+    # ------------------------------------------------------------------
+
+    async def delete_codebook(self, codebook_id: uuid.UUID) -> None:
+        """Delete a codebook and all associated themes/codes via cascade.
+
+        Raises:
+            NotFoundError: If no codebook with ``codebook_id`` exists.
+        """
+        codebook_result = await self._session.execute(
+            select(Codebook).where(Codebook.id == codebook_id)
+        )
+        codebook = codebook_result.scalar_one_or_none()
+        if codebook is None:
+            raise NotFoundError(f"Codebook '{codebook_id}' not found.")
+
+        await self._session.delete(codebook)
+        await self._session.commit()
+
+    # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 

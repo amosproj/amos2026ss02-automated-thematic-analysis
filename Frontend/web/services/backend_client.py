@@ -125,6 +125,19 @@ class BackendClient:
             return existing[0]["id"]
         return self.create_corpus(corpus_id, name)["id"]
 
+    def delete_corpus(self, corpus_id: str) -> None:
+        """Delete a corpus and all its associated data."""
+        path = f"/ingestion/corpora/{corpus_id}"
+        started_at = time.monotonic()
+        try:
+            r = self._client.delete(path)
+            r.raise_for_status()
+            return self._unwrap(r)
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+        except (json.JSONDecodeError, KeyError) as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+
     # ---- Documents ----------------------------------------------------------
 
     def upload_files(
@@ -153,6 +166,23 @@ class BackendClient:
             sub_key="items",
         )
 
+    def get_document_content(self, corpus_id: str, document_id: str) -> dict:
+        """Fetch a single document including its full text content."""
+        return self._get(f"/ingestion/corpora/{corpus_id}/documents/{document_id}")
+
+    def delete_document(self, corpus_id: str, document_id: str) -> None:
+        """Delete a document from a corpus."""
+        path = f"/ingestion/corpora/{corpus_id}/documents/{document_id}"
+        started_at = time.monotonic()
+        try:
+            r = self._client.delete(path)
+            r.raise_for_status()
+            return self._unwrap(r)
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+        except (json.JSONDecodeError, KeyError) as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+
     # ---- Codebooks ----------------------------------------------------------
 
 
@@ -161,17 +191,6 @@ class BackendClient:
 
     def get_theme_tree(self, codebook_id: str) -> list[dict]:
         return self._get(f"/codebooks/{codebook_id}/themes/tree")
-
-    def create_codebook(self, *, project_id: str, name: str, themes: list[dict]) -> dict:
-        """Persist a new codebook with its themes via POST /codebooks/.
-
-        `themes` is a flat list of `{name, description, parent_name|None}`
-        dicts. Hierarchy is encoded by `parent_name` referencing another
-        theme's `name` within the same payload."""
-        return self._post(
-            "/codebooks/",
-            json={"project_id": project_id, "name": name, "themes": themes},
-        )
 
     # ---- Demographic --------------------------------------------------------
 
@@ -237,6 +256,48 @@ class BackendClient:
         """Get transcript ↔ demographic linking status."""
         return self._get(f"/demographic/{corpus_id}/link-summary")
 
+    def delete_demographic_file(self, corpus_id: str, file_id: str) -> None:
+        """Delete a demographic file from the backend."""
+        path = f"/demographic/{corpus_id}/files/{file_id}"
+        started_at = time.monotonic()
+        try:
+            r = self._client.delete(path)
+            r.raise_for_status()
+            return self._unwrap(r)
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+        except (json.JSONDecodeError, KeyError) as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+
+    # ---- Analysis Jobs (Mocked for Issue #10) -------------------------------
+
+    def trigger_analysis(self, corpus_id: str, codebook_id: str) -> dict:
+        import uuid
+        job_id = str(uuid.uuid4())
+        # Store a fake start time on the class to simulate progress across requests
+        if not hasattr(self.__class__, "_mock_analysis_jobs"):
+            self.__class__._mock_analysis_jobs = {}
+        self.__class__._mock_analysis_jobs[job_id] = {"start_time": time.time(), "total": 10}
+        return {"id": job_id, "status": "queued"}
+
+    def get_analysis_job(self, job_id: str) -> dict:
+        if not hasattr(self.__class__, "_mock_analysis_jobs") or job_id not in self.__class__._mock_analysis_jobs:
+            return {"id": job_id, "status": "succeeded", "passages_done": 10, "passages_total": 10}
+        
+        job_data = self.__class__._mock_analysis_jobs[job_id]
+        elapsed = time.time() - job_data["start_time"]
+        
+        # Simulate 1 passage done per second
+        done = min(int(elapsed * 2), job_data["total"])
+        status = "succeeded" if done >= job_data["total"] else "running"
+        
+        return {
+            "id": job_id,
+            "status": status,
+            "passages_done": done,
+            "passages_total": job_data["total"]
+        }
+
     # ---- Codebook Upload & Parsing ------------------------------------------
 
     def parse_csv_preview(self, file: FileStorage) -> list[dict]:
@@ -274,18 +335,47 @@ class BackendClient:
             return result
         return result.get("items", result) if isinstance(result, dict) else []
 
+    def delete_codebook(self, codebook_id: str) -> None:
+        """Delete a codebook and all its associated themes/codes via cascade."""
+        self._delete(f"/codebooks/{codebook_id}")
+
     # ---- Codebook generation jobs -------------------------------------------
 
     def create_generation_job(
         self,
         codebook_name: str,
         corpus_id: str,
+        research_query: str | None = None,
+        researcher_topics: str | None = None,
         transcript_document_ids: list[str] | None = None,
     ) -> dict:
         payload: dict = {"codebook_name": codebook_name, "corpus_id": corpus_id}
+        if research_query:
+            payload["research_query"] = research_query
+        if researcher_topics:
+            payload["researcher_topics"] = researcher_topics
         if transcript_document_ids:
             payload["transcript_document_ids"] = transcript_document_ids
         return self._post("/codebooks/generate-jobs", json=payload)
+
+    def list_generation_jobs(
+        self,
+        corpus_id: str,
+        statuses: list[str] | None = None,
+    ) -> list[dict]:
+        """Return generation jobs for a corpus, optionally filtered by status.
+
+        Used to render in-progress runs in the codebook list as a server-side
+        source of truth (visible in any browser/session), independent of the
+        client-side localStorage tracker.
+        """
+        params: dict = {"corpus_id": corpus_id}
+        if statuses:
+            params["status"] = ",".join(statuses)
+        result = self._get("/codebooks/generate-jobs", params=params)
+        if isinstance(result, list):
+            return result
+        return result.get("items", result) if isinstance(result, dict) else []
 
     def get_generation_job(self, job_id: str) -> dict:
         return self._get(f"/codebooks/generate-jobs/{job_id}")
@@ -328,6 +418,17 @@ class BackendClient:
             self._handle_exc(exc, path, "POST", started_at)
         except (json.JSONDecodeError, KeyError) as exc:
             self._handle_exc(exc, path, "POST", started_at)
+
+    def _delete(self, path: str, *, sub_key: str | None = None, **kwargs):
+        started_at = time.monotonic()
+        try:
+            r = self._client.delete(path, **kwargs)
+            r.raise_for_status()
+            return self._unwrap(r, sub_key=sub_key)
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
+        except (json.JSONDecodeError, KeyError) as exc:
+            self._handle_exc(exc, path, "DELETE", started_at)
 
     def _handle_exc(
         self,

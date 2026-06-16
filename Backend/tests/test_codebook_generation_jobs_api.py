@@ -57,6 +57,26 @@ async def _wait_for_terminal_job_status(client, job_id: str, timeout_seconds: fl
     raise AssertionError(f"Job {job_id} did not reach terminal status. Last payload: {last_payload}")
 
 
+def _patch_batched_generation(monkeypatch, single_passage_fn) -> None:
+    async def _fake_generate_codebook_for_passages(passages, *_, **__):
+        results = []
+        for passage in passages:
+            try:
+                results.append(single_passage_fn(passage))
+            except Exception as exc:
+                results.append(exc)
+        return results
+
+    monkeypatch.setattr(
+        "app.services.codebook_generation.generate_codebook_for_passages",
+        _fake_generate_codebook_for_passages,
+    )
+    monkeypatch.setattr(
+        "app.services.codebook_generation.build_codebook_generation_chain",
+        lambda *_, **__: object(),
+    )
+
+
 async def test_generate_codebook_job_completes_successfully(client, monkeypatch) -> None:
     corpus_id, document_ids = await _create_corpus_with_docs(
         client,
@@ -66,7 +86,7 @@ async def test_generate_codebook_job_completes_successfully(client, monkeypatch)
         ],
     )
 
-    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+    def _fake_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
         return PassageCodebookGeneration(
             themes=[
                 GeneratedThemePath(
@@ -85,10 +105,7 @@ async def test_generate_codebook_job_completes_successfully(client, monkeypatch)
             ],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _fake_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _fake_generate_codebook_for_passage)
 
     create_response = await client.post(
         f"{API_CODEBOOKS}/generate-jobs",
@@ -96,14 +113,19 @@ async def test_generate_codebook_job_completes_successfully(client, monkeypatch)
             "codebook_name": "Generated Async",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert create_response.status_code == 202
     created_job = create_response.json()["data"]
     assert created_job["status"] in {"queued", "running"}
+    assert "progress_percent" in created_job
+    assert "phase" in created_job
 
     terminal_job = await _wait_for_terminal_job_status(client, created_job["id"])
     assert terminal_job["status"] == "succeeded", terminal_job.get("error_message")
+    assert terminal_job["progress_percent"] == 100
+    assert terminal_job["phase"] == "succeeded"
     assert terminal_job["codebook_id"] is not None
     assert terminal_job["themes_created"] >= 1
     assert terminal_job["codes_created"] >= 1
@@ -115,16 +137,13 @@ async def test_generate_codebook_job_accepts_payload_without_confirmation_field(
         texts=["Short transcript about operations and delays."],
     )
 
-    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+    def _fake_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
         return PassageCodebookGeneration(
             themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Operations")])],
             codes=[GeneratedCodeSuggestion(label="Delay", description=None, theme_path=["Operations"])],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _fake_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _fake_generate_codebook_for_passage)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate-jobs",
@@ -132,6 +151,7 @@ async def test_generate_codebook_job_accepts_payload_without_confirmation_field(
             "codebook_name": "Generated Async",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 202
@@ -142,7 +162,7 @@ async def test_generate_codebook_job_can_be_cancelled_while_running(client, monk
     long_text = " ".join(f"token{i}" for i in range(0, 260))
     corpus_id, document_ids = await _create_corpus_with_docs(client, texts=[long_text])
 
-    def _slow_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+    def _slow_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
         time.sleep(0.03)
         return PassageCodebookGeneration(
             themes=[
@@ -161,10 +181,7 @@ async def test_generate_codebook_job_can_be_cancelled_while_running(client, monk
             ],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _slow_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _slow_generate_codebook_for_passage)
 
     create_response = await client.post(
         f"{API_CODEBOOKS}/generate-jobs",
@@ -172,6 +189,7 @@ async def test_generate_codebook_job_can_be_cancelled_while_running(client, monk
             "codebook_name": "Generated Async Cancel",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert create_response.status_code == 202
@@ -196,22 +214,20 @@ async def test_generate_codebook_job_uses_all_corpus_documents_when_ids_omitted(
         ],
     )
 
-    def _fake_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
+    def _fake_generate_codebook_for_passage(_: str, **_kwargs) -> PassageCodebookGeneration:
         return PassageCodebookGeneration(
             themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Collaboration")])],
             codes=[GeneratedCodeSuggestion(label="Team Alignment", description=None, theme_path=["Collaboration"])],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _fake_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _fake_generate_codebook_for_passage)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate-jobs",
         json={
             "codebook_name": "Generated Async All Docs",
             "corpus_id": corpus_id,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 202
@@ -230,21 +246,18 @@ async def test_generate_codebook_job_records_partial_parse_failures_and_succeeds
             "Beta transcript about planning and process.",
         ],
     )
-    calls = {"count": 0}
+    calls_by_passage: dict[str, int] = {}
 
-    def _sometimes_fails_generate_codebook_for_passage(_: str) -> PassageCodebookGeneration:
-        calls["count"] += 1
-        if calls["count"] <= 3:
+    def _sometimes_fails_generate_codebook_for_passage(passage: str) -> PassageCodebookGeneration:
+        calls_by_passage[passage] = calls_by_passage.get(passage, 0) + 1
+        if "Alpha" in passage and calls_by_passage[passage] <= 3:
             raise OutputParserException("Invalid json output: malformed")
         return PassageCodebookGeneration(
             themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Collaboration")])],
             codes=[GeneratedCodeSuggestion(label="Team Alignment", description=None, theme_path=["Collaboration"])],
         )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passage",
-        _sometimes_fails_generate_codebook_for_passage,
-    )
+    _patch_batched_generation(monkeypatch, _sometimes_fails_generate_codebook_for_passage)
 
     response = await client.post(
         f"{API_CODEBOOKS}/generate-jobs",
@@ -252,6 +265,7 @@ async def test_generate_codebook_job_records_partial_parse_failures_and_succeeds
             "codebook_name": "Generated Async Partial Parse Failure",
             "corpus_id": corpus_id,
             "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
         },
     )
     assert response.status_code == 202
@@ -264,3 +278,43 @@ async def test_generate_codebook_job_records_partial_parse_failures_and_succeeds
     assert warning["type"] == "passage_generation_partial_failures"
     assert warning["passages_failed"] == 1
     assert len(warning["failed_passages"]) == 1
+
+
+async def test_list_generation_jobs_filters_by_corpus_and_status(client, db_session) -> None:
+    # Insert jobs directly (no runner/LLM) and assert the list endpoint scopes
+    # by corpus and honours the comma-separated status filter. This backs the
+    # server-rendered "running" rows on the codebook list page.
+    from uuid import UUID
+
+    from app.models import CodebookGenerationJob
+
+    corpus = UUID(CORPUS_ID)
+    other_corpus = UUID("00000000-0000-0000-0000-0000000009ff")
+    db_session.add_all([
+        CodebookGenerationJob(status="running", codebook_name="Running One",
+                              corpus_id=corpus, transcript_document_ids_json="[]"),
+        CodebookGenerationJob(status="queued", codebook_name="Queued One",
+                              corpus_id=corpus, transcript_document_ids_json="[]"),
+        CodebookGenerationJob(status="succeeded", codebook_name="Done One",
+                              corpus_id=corpus, transcript_document_ids_json="[]"),
+        CodebookGenerationJob(status="running", codebook_name="Other Corpus",
+                              corpus_id=other_corpus, transcript_document_ids_json="[]"),
+    ])
+    await db_session.commit()
+
+    # No status filter → every job for the corpus, and only that corpus.
+    response = await client.get(
+        f"{API_CODEBOOKS}/generate-jobs", params={"corpus_id": CORPUS_ID}
+    )
+    assert response.status_code == 200
+    names = {job["codebook_name"] for job in response.json()["data"]}
+    assert names == {"Running One", "Queued One", "Done One"}
+
+    # Status filter → only the active jobs.
+    response = await client.get(
+        f"{API_CODEBOOKS}/generate-jobs",
+        params={"corpus_id": CORPUS_ID, "status": "queued,running"},
+    )
+    assert response.status_code == 200
+    active = {job["codebook_name"] for job in response.json()["data"]}
+    assert active == {"Running One", "Queued One"}

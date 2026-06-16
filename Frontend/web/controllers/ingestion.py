@@ -2,7 +2,6 @@ import uuid
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 
 from web.services.backend_client import (
-    BackendClient,
     BackendError,
     BackendValidationError,
     get_backend_client as _backend,
@@ -94,7 +93,6 @@ def create_corpus_submit():
     On success, redirect to the upload page scoped to the new corpus so both
     transcript and demographic forms target it immediately.
     """
-    cfg = current_app.config
     name = (request.form.get("name") or "").strip()
     current_corpus_id = (request.form.get("current_corpus_id") or "").strip()
 
@@ -125,6 +123,21 @@ def create_corpus_submit():
     set_active_corpus_id(new_corpus_id)
     flash(f"Created corpus '{created.get('name', name)}'.", "success")
     return redirect(url_for("ingestion.upload_form", corpus_id=new_corpus_id))
+
+
+@bp.post("/<corpus_id>/delete")
+def delete_corpus_submit(corpus_id: str):
+    """Delete a corpus and redirect to landing page."""
+    try:
+        _backend().delete_corpus(corpus_id)
+        flash("Corpus deleted successfully.", "success")
+        # Clear the active corpus ID from the session as it no longer exists
+        set_active_corpus_id(None)
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
+    
+    return redirect(url_for("ingestion.transcripts_landing"))
 
 
 @bp.post("/<corpus_id>/upload")
@@ -216,4 +229,56 @@ def list_transcripts(corpus_id: str) -> str:
         corpus_id=active_corpus_id,
         corpus_options=corpus_options,
         active_corpus_name=active_corpus_name,
+    )
+
+
+@bp.post("/<corpus_id>/<document_id>/delete")
+def delete_transcript(corpus_id: str, document_id: str):
+    """Delete a single transcript from the active corpus."""
+    set_active_corpus_id(corpus_id)
+    try:
+        _backend().delete_document(corpus_id, document_id)
+        flash("Transcript deleted successfully.", "success")
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+    return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+
+
+@bp.post("/<corpus_id>/delete_transcripts")
+def delete_selected_transcripts(corpus_id: str):
+    """Delete transcripts selected in the list view."""
+    set_active_corpus_id(corpus_id)
+    document_ids = [item_id for item_id in request.form.getlist("item_ids") if item_id]
+    if not document_ids:
+        flash("Select at least one transcript to delete.", "warning")
+        return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+
+    deleted = 0
+    try:
+        client = _backend()
+        for document_id in document_ids:
+            client.delete_document(corpus_id, document_id)
+            deleted += 1
+        flash(f"Deleted {deleted} transcript{'s' if deleted != 1 else ''}.", "success")
+    except BackendError as exc:
+        if deleted:
+            flash(f"Deleted {deleted} transcript{'s' if deleted != 1 else ''} before an error occurred.", "warning")
+        flash(exc.user_message, "danger")
+
+    return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+
+
+@bp.get("/<corpus_id>/<document_id>/read")
+def read_transcript(corpus_id: str, document_id: str) -> str:
+    set_active_corpus_id(corpus_id)
+    try:
+        document = _backend().get_document_content(corpus_id, document_id)
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+
+    return render_template(
+        "ingestion/read.html",
+        document=document,
+        corpus_id=corpus_id,
     )

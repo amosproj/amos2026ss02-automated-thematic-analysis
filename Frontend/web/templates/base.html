@@ -116,11 +116,12 @@
     document.querySelectorAll('.site-flash').forEach((el) => {
       const cat = el.dataset.flashCategory;
       if (cat === 'success' || cat === 'info') {
-        setTimeout(() => bootstrap.Alert.getOrCreateInstance(el).close(), 5000);
+        setTimeout(() => bootstrap.Alert.getOrCreateInstance(el).close(), 10000);
       }
     });
   </script>
   <script src="{{ url_for('static', filename='js/job_tracker.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/selectable_list.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

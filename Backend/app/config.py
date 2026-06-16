@@ -24,8 +24,6 @@ class Settings(BaseSettings):
     CORS_ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"] # Default allowed origin for development
     API_V1_PREFIX: str = "/api/v1"  # Default API prefix
 
-    INGESTION_CHUNK_SIZE_WORDS: int = 2048
-    INGESTION_CHUNK_OVERLAP_WORDS: int = 200
     MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024 # 10 MB limit for uploaded interview files
     UPLOADS_DIR: str = "uploads"
     DEMOGRAPHIC_UPLOAD_TTL_SECONDS: int = 60 * 60
@@ -46,7 +44,7 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "academic_cloud"  # "academic_cloud" | "litellm"
     LLM_BASE_URL: str = "https://chat-ai.academiccloud.de/v1"
     LLM_API_KEY: str | None = None
-    LLM_MODEL: str = "gemma-3-27b-it"  # "mistral-large-3-675b-instruct-2512" or qwen variants
+    LLM_MODEL: str = "gemma-4-31b-it"  # "mistral-large-3-675b-instruct-2512" or qwen variants
     LLM_TEMPERATURE: float = 0.2
     LLM_REQUEST_TIMEOUT_S: float = 120.0  # too generous for the current test with a single interview file
 
@@ -57,6 +55,7 @@ class Settings(BaseSettings):
 
     # Select which provider is active: "FAU" | "ACADEMIC"
     SELECTED_API: str = "FAU"
+
 
 @lru_cache
 def get_settings() -> Settings:

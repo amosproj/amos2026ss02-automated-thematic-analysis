@@ -6,7 +6,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.llm import InterviewAnalysisResult, ThemePresence
+from app.schemas.llm import CodeConsolidationItem, InterviewAnalysisResult, ThemePresence
 
 # ---------------------------------------------------------------------------
 # ThemePresence
@@ -131,3 +131,17 @@ class TestInterviewAnalysisResult:
         data = json.loads(result.model_dump_json())
         restored = InterviewAnalysisResult(**data)
         assert restored == result
+
+
+class TestCodeConsolidationItem:
+    def test_theme_path_is_preserved(self) -> None:
+        item = CodeConsolidationItem(
+            label="Manual Bottleneck",
+            description="Manual steps slow progress.",
+            theme_path=["Workflow Friction", "Manual Work"],
+        )
+        assert item.theme_path == ["Workflow Friction", "Manual Work"]
+
+    def test_theme_path_defaults_to_empty_list_for_legacy_payloads(self) -> None:
+        item = CodeConsolidationItem(label="Manual Bottleneck", description=None)
+        assert item.theme_path == []

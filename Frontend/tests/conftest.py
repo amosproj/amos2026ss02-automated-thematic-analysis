@@ -82,16 +82,29 @@ class FakeBackend:
         self.last_created_corpus = created
         return created
 
+    def delete_corpus(self, corpus_id: str) -> None:
+        self._maybe_raise("delete_corpus")
+        self.corpora = [c for c in self.corpora if c.get("id") != corpus_id]
+
     def upload_files(self, corpus_id, files) -> list[dict]:
         self._maybe_raise("upload_files")
-        self.uploaded_files = [f.filename for f in files]
+        for f in files:
+            self.uploaded_files.append(f.filename)
         return self.upload_results
 
     def list_documents(self, corpus_id, page_size: int = 50) -> list[dict]:
         self._maybe_raise("list_documents")
         return self.documents
 
+    def delete_document(self, corpus_id, document_id) -> None:
+        self._maybe_raise("delete_document")
+        self.documents = [d for d in self.documents if d["id"] != document_id]
+
     # ---- Codebooks / themes -------------------------------------------------
+
+    def delete_codebook(self, codebook_id: str) -> None:
+        self._maybe_raise("delete_codebook")
+        self.codebooks = [cb for cb in self.codebooks if cb.get("id") != codebook_id]
 
     def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
         self._maybe_raise("list_codebooks")
@@ -153,6 +166,12 @@ class FakeBackend:
         self._maybe_raise("get_demographic_link_summary")
         return self.demographic_link_summary
 
+    def delete_demographic_file(self, corpus_id, file_id) -> None:
+        self._maybe_raise("delete_demographic_file")
+        self.demographic_files = [
+            f for f in self.demographic_files if f.get("id") != file_id
+        ]
+
     # ---- Codebook generation jobs -------------------------------------------
 
     def create_generation_job(
@@ -160,12 +179,16 @@ class FakeBackend:
         codebook_name: str,
         corpus_id: str,
         transcript_document_ids: list[str] | None = None,
+        research_query: str | None = None,
+        researcher_topics: str | None = None,
     ) -> dict:
         self._maybe_raise("create_generation_job")
         self.last_generation_job_request = {
             "codebook_name": codebook_name,
             "corpus_id": corpus_id,
             "transcript_document_ids": transcript_document_ids,
+            "research_query": research_query,
+            "researcher_topics": researcher_topics,
         }
         job_id = f"job-{len(self.generation_jobs) + 1}"
         job = {
@@ -182,6 +205,20 @@ class FakeBackend:
         self.generation_jobs[job_id] = job
         return job
 
+    def list_generation_jobs(
+        self, corpus_id: str, statuses: list[str] | None = None
+    ) -> list[dict]:
+        self._maybe_raise("list_generation_jobs")
+        result = []
+        for job in self.generation_jobs.values():
+            job_corpus = job.get("corpus_id")
+            if job_corpus is not None and job_corpus != corpus_id:
+                continue
+            if statuses and job.get("status") not in statuses:
+                continue
+            result.append(job)
+        return result
+
     def get_generation_job(self, job_id: str) -> dict:
         self._maybe_raise("get_generation_job")
         return self.generation_jobs[job_id]
@@ -192,6 +229,31 @@ class FakeBackend:
         job["cancel_requested"] = True
         job["status"] = "cancelled"
         return job
+
+    # ---- Analysis Jobs ------------------------------------------------------
+    
+    def trigger_analysis(self, corpus_id: str, codebook_id: str) -> dict:
+        self._maybe_raise("trigger_analysis")
+        import uuid
+        job_id = str(uuid.uuid4())
+        job = {
+            "id": job_id,
+            "status": "queued",
+            "corpus_id": corpus_id,
+            "codebook_id": codebook_id,
+            "passages_total": 5,
+            "passages_done": 0,
+        }
+        if not hasattr(self, "analysis_jobs"):
+            self.analysis_jobs = {}
+        self.analysis_jobs[job_id] = job
+        return job
+        
+    def get_analysis_job(self, job_id: str) -> dict:
+        self._maybe_raise("get_analysis_job")
+        if not hasattr(self, "analysis_jobs") or job_id not in self.analysis_jobs:
+            return {"id": job_id, "status": "succeeded", "passages_total": 5, "passages_done": 5}
+        return self.analysis_jobs[job_id]
 
     # ---- Internal -----------------------------------------------------------
 
@@ -216,6 +278,7 @@ def fake_backend(monkeypatch) -> FakeBackend:
     monkeypatch.setattr("web.controllers.ingestion._backend", lambda: fake)
     monkeypatch.setattr("web.controllers.codebooks._backend", lambda: fake)
     monkeypatch.setattr("web.controllers.demographic._backend", lambda: fake)
+    monkeypatch.setattr("web.controllers.analysis._backend", lambda: fake)
     return fake
 
 

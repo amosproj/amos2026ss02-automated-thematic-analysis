@@ -37,13 +37,13 @@ def test_jsonl_one_document_per_participant():
     assert len(docs) == 2
 
 
-def test_jsonl_text_contains_only_human_responses():
+def test_jsonl_text_contains_chatbot_and_human_responses():
     docs = parse_jsonl_upload("interview.jsonl", _make_jsonl(*_SAMPLE))
     p001 = next(d for d in docs if d.title == "p001")
-    assert "I am fine." in p001.text
-    assert "Not much else." in p001.text
-    assert "How are you?" not in p001.text
-    assert "Tell me more." not in p001.text
+    assert "Interviewee: I am fine." in p001.text
+    assert "Interviewee: Not much else." in p001.text
+    assert "Interviewer: How are you?" in p001.text
+    assert "Interviewer: Tell me more." in p001.text
 
 
 def test_jsonl_messages_sorted_by_index():

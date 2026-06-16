@@ -9,20 +9,23 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import _get_session_factory, init_db
-from app.llm.pipelines import apply_codebook_to_interview
 from app.models import (
+    Code,
+    CodeAssignment,
     Codebook,
+    CodebookCodeRelationship,
     CodebookThemeRelationship,
     Corpus,
-    CorpusChunk,
     CorpusDocument,
-    DocumentAnalysis,
+    DocumentCoding,
     Theme,
-    ThemeOccurrence,
+    ThemeAssignment,
+    ThemeCodeRelationship,
 )
-from app.schemas.llm import InterviewAnalysisResult
+from app.services.codebook_application import CodebookApplicationService
 
 INTERVIEWS = {
     "UserA": """
@@ -39,7 +42,47 @@ Participant: The rollout was a disaster. No training, just a sudden switch. It's
     """
 }
 
-async def seed_db():
+CODEBOOK_ITEMS = [
+    (
+        "Poor Change Management",
+        "Mentions of poor communication, lack of training, or feeling rushed during the rollout.",
+        "Rollout Communication Gap",
+        "Comments about missing communication, preparation, or rollout guidance.",
+    ),
+    (
+        "Steep Learning Curve",
+        "Comments indicating the system is difficult to learn, confusing, or non-intuitive initially.",
+        "Difficult Onboarding",
+        "Mentions that the software was hard to learn or use at first.",
+    ),
+    (
+        "Performance & Efficiency",
+        "Positive remarks about the speed, data processing capabilities, or time saved.",
+        "Improved Speed",
+        "Positive comments about faster processing or saved time.",
+    ),
+    (
+        "Collaboration Benefits",
+        "Positive remarks about working with others, shared dashboards, or reduced siloing.",
+        "Shared Visibility",
+        "Comments about dashboards, collaboration, or easier cross-team work.",
+    ),
+    (
+        "System Instability",
+        "Mentions of crashes, bugs, freezing, or data loss.",
+        "Crashes And Freezes",
+        "Mentions of crashes, bugs, freezes, or lost work.",
+    ),
+    (
+        "Cost Concerns",
+        "Comments questioning the financial value, price, or ROI of the system.",
+        "Questionable Value",
+        "Concerns about cost, waste, ROI, or financial value.",
+    ),
+]
+
+
+async def seed_db() -> None:
     print("Seeding database with sample interviews and codebook...")
 
     # Initialize DB (creates tables if missing)
@@ -54,36 +97,48 @@ async def seed_db():
         await session.flush()
 
         # Create Codebook
-        codebook = Codebook(project_id=str(project_id), name="Software Deployment Evaluation", version=1, created_by="admin")
+        codebook = Codebook(
+            corpus_id=corpus.id,
+            name="Software Deployment Evaluation",
+            description="Sample codebook for deployment feedback interviews.",
+            version=1,
+            created_by="admin",
+        )
         session.add(codebook)
         await session.flush()
 
-        # Create Themes
-        themes_data = [
-            ("Poor Change Management", "Mentions of poor communication, lack of training, or feeling rushed during the rollout."),
-            ("Steep Learning Curve", "Comments indicating the system is difficult to learn, confusing, or non-intuitive initially."),
-            ("Performance & Efficiency", "Positive remarks about the speed, data processing capabilities, or time saved."),
-            ("Collaboration Benefits", "Positive remarks about working with others, shared dashboards, or reduced siloing."),
-            ("System Instability", "Mentions of crashes, bugs, freezing, or data loss."),
-            ("Cost Concerns", "Comments questioning the financial value, price, or ROI of the system.")
-        ]
-
-        for label, desc in themes_data:
-            theme = Theme(label=label, description=desc)
+        # Create Themes and Codes
+        for theme_label, theme_desc, code_label, code_desc in CODEBOOK_ITEMS:
+            theme = Theme(
+                codebook_id=codebook.id,
+                label=theme_label,
+                description=theme_desc,
+                is_active=True,
+            )
+            code = Code(
+                codebook_id=codebook.id,
+                label=code_label,
+                description=code_desc,
+                is_active=True,
+            )
             session.add(theme)
+            session.add(code)
             await session.flush()
 
-            rel = CodebookThemeRelationship(codebook_id=codebook.id, theme_id=theme.id)
-            session.add(rel)
+            session.add_all([
+                CodebookThemeRelationship(codebook_id=codebook.id, theme_id=theme.id),
+                CodebookCodeRelationship(codebook_id=codebook.id, code_id=code.id),
+                ThemeCodeRelationship(
+                    codebook_id=codebook.id,
+                    theme_id=theme.id,
+                    code_id=code.id,
+                ),
+            ])
 
-        # Create Documents and Chunks for multiple users
+        # Create Documents for multiple users
         for user, text in INTERVIEWS.items():
-            doc = CorpusDocument(corpus_id=corpus.id, title=f"Participant {user}")
+            doc = CorpusDocument(corpus_id=corpus.id, title=f"Participant {user}", content=text.strip())
             session.add(doc)
-            await session.flush()
-
-            chunk = CorpusChunk(document_id=doc.id, text=text.strip(), chunk_index=0)
-            session.add(chunk)
 
         await session.commit()
 
@@ -92,114 +147,68 @@ async def seed_db():
         print(f"Codebook ID: {codebook.id}")
         print("Use these IDs with --corpus-id and --codebook-id for the batch analysis step.")
 
-async def _analyze_single_document(session, doc_id: uuid.UUID, codebook_id: uuid.UUID):
-    # 1. Check if already analyzed
-    existing_analysis_result = await session.execute(
-        select(DocumentAnalysis).where(
-            DocumentAnalysis.document_id == doc_id,
-            DocumentAnalysis.codebook_id == codebook_id
+
+async def _load_document(session: AsyncSession, doc_id: uuid.UUID) -> CorpusDocument | None:
+    result = await session.execute(select(CorpusDocument).where(CorpusDocument.id == doc_id))
+    return result.scalar_one_or_none()
+
+
+async def _has_existing_document_coding(
+    session: AsyncSession,
+    *,
+    document_id: uuid.UUID,
+    codebook_id: uuid.UUID,
+) -> bool:
+    existing_result = await session.execute(
+        select(DocumentCoding.id).where(
+            DocumentCoding.document_id == document_id,
+            DocumentCoding.codebook_id == codebook_id,
         )
     )
-    existing_analysis = existing_analysis_result.scalar_one_or_none()
+    return existing_result.first() is not None
 
-    if existing_analysis:
-        print(f"\n[HINT] Document '{doc_id}' has already been analyzed with this codebook!")
-        user_input = input("Do you want to rerun the analysis and overwrite existing results? [y/N]: ")
-        if user_input.lower() != 'y':
-            print("Skipping document.")
-            return False
-        # Delete old analysis
-        await session.delete(existing_analysis)
-        await session.flush()
-        print("Old analysis deleted. Proceeding...\n")
 
-    # 2. Load Document Text
-    chunks_result = await session.execute(
-        select(CorpusChunk).where(CorpusChunk.document_id == doc_id).order_by(CorpusChunk.chunk_index)
-    )
-    chunks = chunks_result.scalars().all()
-
-    if not chunks:
-        print(f"Error: Document '{doc_id}' has no text chunks.")
+async def _analyze_single_document(
+    session: AsyncSession,
+    doc_id: uuid.UUID,
+    codebook_id: uuid.UUID,
+) -> bool:
+    doc = await _load_document(session, doc_id)
+    if not doc or not doc.content:
+        print(f"Error: Document '{doc_id}' has no content.")
         return False
 
-    transcript = "\n".join([c.text for c in chunks])
-
-    # 3. Load Codebook Themes
-    theme_rels_result = await session.execute(
-        select(CodebookThemeRelationship).where(CodebookThemeRelationship.codebook_id == codebook_id)
-    )
-    theme_rels = theme_rels_result.scalars().all()
-
-    theme_ids = [rel.theme_id for rel in theme_rels]
-    if not theme_ids:
-        print("Error: Codebook has no themes.")
-        return False
-
-    themes_result = await session.execute(
-        select(Theme).where(Theme.id.in_(theme_ids))
-    )
-    themes = themes_result.scalars().all()
-
-    if not themes:
-        print("Error: Codebook has no themes.")
-        return False
-
-    # Format codebook context
-    codebook_lines = []
-    theme_map = {} # label -> theme_id for saving later
-    for t in themes:
-        codebook_lines.append(f"Theme: {t.label}\nDefinition: {t.description}\n")
-        theme_map[t.label.lower()] = t.id
-
-    codebook_context = "\n".join(codebook_lines)
-
-    print(f"Applying codebook '{codebook_id}' ({len(themes)} themes) to document '{doc_id}' ({len(transcript)} chars)...", flush=True)
-
-    try:
-        result: InterviewAnalysisResult = apply_codebook_to_interview(transcript, codebook_context)
-    except Exception as e:
-        print(f"Error during LLM invocation: {e}", flush=True)
-        return False
-
-    # 4. Save to Database
-    analysis = DocumentAnalysis(
+    if await _has_existing_document_coding(
+        session,
         document_id=doc_id,
         codebook_id=codebook_id,
-        summary=result.summary,
-        researcher_notes=result.researcher_notes
+    ):
+        print(f"\n[HINT] Document '{doc_id}' already has coding results for this codebook.")
+        user_input = input("Do you want to run the current codebook again and create a new run? [y/N]: ")
+        if user_input.lower() != "y":
+            print("Skipping document.")
+            return False
+
+        print("Proceeding with a new codebook application run...\n")
+
+    print(
+        f"Applying codebook '{codebook_id}' to document '{doc_id}' ({len(doc.content)} chars)...",
+        flush=True,
     )
-    session.add(analysis)
-    await session.flush()
-
-    for t_res in result.themes:
-        # Find matching theme ID by label (case-insensitive approximation)
-        matched_theme_id = theme_map.get(t_res.theme_label.lower())
-        if not matched_theme_id:
-            # Fallback if LLM slightly altered the label
-            for db_label, db_id in theme_map.items():
-                if t_res.theme_label.lower() in db_label or db_label in t_res.theme_label.lower():
-                    matched_theme_id = db_id
-                    break
-
-        if matched_theme_id:
-            occ = ThemeOccurrence(
-                analysis_id=analysis.id,
-                theme_id=matched_theme_id,
-                is_present=t_res.present,
-                confidence=t_res.confidence,
-                quote=t_res.quote if t_res.present else None
-            )
-            session.add(occ)
-
-    await session.commit()
-
-    print(f"\n--- ANALYSIS COMPLETE & SAVED TO DB FOR DOC {doc_id} ---")
-    if result.summary:
-        print(f"Summary: {result.summary}")
+    service = CodebookApplicationService(session)
+    summary = await service.apply_codebook(
+        corpus_id=doc.corpus_id,
+        codebook_id=codebook_id,
+        transcript_document_ids=[doc_id],
+    )
+    print(f"\n--- ANALYSIS COMPLETE & SAVED TO RUN {summary.application_run.id} ---")
+    print(f"Documents coded: {summary.documents_coded}/{summary.documents_total}")
+    if summary.failed_documents:
+        print(f"Failed documents: {summary.failed_documents}")
     return True
 
-async def analyze_document(doc_id_str: str, codebook_id_str: str):
+
+async def analyze_document(doc_id_str: str, codebook_id_str: str) -> None:
     doc_id = uuid.UUID(doc_id_str)
     codebook_id = uuid.UUID(codebook_id_str)
 
@@ -208,7 +217,8 @@ async def analyze_document(doc_id_str: str, codebook_id_str: str):
     async with factory() as session:
         await _analyze_single_document(session, doc_id, codebook_id)
 
-async def analyze_corpus(corpus_id_str: str, codebook_id_str: str):
+
+async def analyze_corpus(corpus_id_str: str, codebook_id_str: str) -> None:
     corpus_id = uuid.UUID(corpus_id_str)
     codebook_id = uuid.UUID(codebook_id_str)
 
@@ -228,10 +238,12 @@ async def analyze_corpus(corpus_id_str: str, codebook_id_str: str):
 
         print(f"Found {len(documents)} documents in corpus '{corpus_id}'. Starting batch analysis...")
 
-        # Analyze each document
-        for doc in documents:
-            print(f"\n[{doc.title}]")
-            await _analyze_single_document(session, doc.id, codebook_id)
+        service = CodebookApplicationService(session)
+        summary = await service.apply_codebook(
+            corpus_id=corpus_id,
+            codebook_id=codebook_id,
+            transcript_document_ids=[doc.id for doc in documents],
+        )
 
         # Aggregate results
         print("\n" + "="*50)
@@ -239,13 +251,13 @@ async def analyze_corpus(corpus_id_str: str, codebook_id_str: str):
         print("="*50)
 
         stmt = (
-            select(ThemeOccurrence, Theme, CorpusDocument)
-            .join(Theme, ThemeOccurrence.theme_id == Theme.id)
-            .join(DocumentAnalysis, ThemeOccurrence.analysis_id == DocumentAnalysis.id)
-            .join(CorpusDocument, DocumentAnalysis.document_id == CorpusDocument.id)
-            .where(DocumentAnalysis.codebook_id == codebook_id)
+            select(ThemeAssignment, Theme, CorpusDocument)
+            .join(Theme, ThemeAssignment.theme_id == Theme.id)
+            .join(DocumentCoding, ThemeAssignment.document_coding_id == DocumentCoding.id)
+            .join(CorpusDocument, DocumentCoding.document_id == CorpusDocument.id)
+            .where(DocumentCoding.application_run_id == summary.application_run.id)
             .where(CorpusDocument.corpus_id == corpus_id)
-            .where(ThemeOccurrence.is_present)
+            .where(ThemeAssignment.is_present)
         )
 
         results = await session.execute(stmt)
@@ -272,9 +284,35 @@ async def analyze_corpus(corpus_id_str: str, codebook_id_str: str):
             print(f"Theme: {label:<25} | Present in {count}/{len(documents)} interviews")
             if count > 0:
                 print(f"       -> Found in: {', '.join(docs)}")
+
+        code_stmt = (
+            select(CodeAssignment, Code, CorpusDocument)
+            .join(Code, CodeAssignment.code_id == Code.id)
+            .join(DocumentCoding, CodeAssignment.document_coding_id == DocumentCoding.id)
+            .join(CorpusDocument, DocumentCoding.document_id == CorpusDocument.id)
+            .where(DocumentCoding.application_run_id == summary.application_run.id)
+            .where(CorpusDocument.corpus_id == corpus_id)
+        )
+        code_results = await session.execute(code_stmt)
+        code_to_docs = defaultdict(list)
+        for _assignment, code, doc in code_results.all():
+            code_to_docs[code.label].append(doc.title)
+
+        if code_to_docs:
+            print("\nCODE ASSIGNMENTS")
+            for label in sorted(code_to_docs):
+                docs = code_to_docs[label]
+                print(f"Code: {label:<25} | Assigned in {len(docs)}/{len(documents)} interviews")
+                print(f"      -> Found in: {', '.join(docs)}")
+
+        print(
+            f"\nRun {summary.application_run.id}: "
+            f"{summary.documents_coded} coded, {summary.documents_failed} failed"
+        )
         print("\nFinished!")
 
-def main():
+
+def main() -> None:
     parser = argparse.ArgumentParser(description="DB-integrated Codebook Analysis")
     parser.add_argument("--seed", action="store_true", help="Seed the database with multiple sample interviews and a codebook.")
     parser.add_argument("--document-id", type=str, help="UUID of a single CorpusDocument to analyze.")

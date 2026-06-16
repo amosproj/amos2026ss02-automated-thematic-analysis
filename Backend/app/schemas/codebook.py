@@ -6,6 +6,10 @@ from uuid import UUID
 from pydantic import Field, ValidationInfo, field_validator
 
 from app.schemas.common import BaseSchema
+from app.utils.sanitize import sanitize_research_query
+
+_QUERY_MIN = 10
+_QUERY_MAX = 500
 
 
 class NodeType(enum.StrEnum):
@@ -91,12 +95,24 @@ class CodebookSchema(BaseSchema):
     description: str | None = None
     version: int
     created_by: str
+    research_query: str | None = None
+    researcher_topics: str | None = None
 
 
 class CodebookGenerateRequest(BaseSchema):
     codebook_name: str = Field(min_length=1, max_length=255)
     corpus_id: UUID
     transcript_document_ids: list[UUID] | None = None
+    research_query: str | None = Field(
+        default=None,
+        max_length=_QUERY_MAX,
+        description="Optional free-text research question guiding thematic analysis (up to 500 characters).",
+    )
+    researcher_topics: str | None = Field(
+        default=None,
+        max_length=_QUERY_MAX,
+        description="Optional comma-separated topics the researcher wants the analysis to cover.",
+    )
 
     @field_validator("codebook_name")
     @classmethod
@@ -114,6 +130,44 @@ class CodebookGenerateRequest(BaseSchema):
         if not values:
             return None
         return values
+
+    @field_validator("research_query", mode="before")
+    @classmethod
+    def sanitize_and_validate_query(cls, value: object) -> str | None:
+        # Run before Pydantic's own str processing (including str_strip_whitespace)
+        # so we can distinguish "user typed only spaces" from "field was empty/omitted".
+        # Optional: None and "" are accepted as "no research question".
+        # But once the researcher types something it must be a real query.
+        if value is None or value == "":
+            return None
+        if not isinstance(value, str):
+            return value  # type: ignore[return-value]  # let Pydantic raise a type error
+        if not value.strip():
+            raise ValueError("research_query must not be empty or whitespace only.")
+        cleaned = sanitize_research_query(value)
+        if len(cleaned) < _QUERY_MIN:
+            raise ValueError(
+                f"research_query must be at least {_QUERY_MIN} characters (got {len(cleaned)})."
+            )
+        if len(cleaned) > _QUERY_MAX:
+            raise ValueError(
+                f"research_query must be at most {_QUERY_MAX} characters (got {len(cleaned)})."
+            )
+        return cleaned
+
+    @field_validator("researcher_topics")
+    @classmethod
+    def sanitize_and_validate_topics(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = sanitize_research_query(value)
+        if not cleaned:
+            return None
+        if len(cleaned) > _QUERY_MAX:
+            raise ValueError(
+                f"researcher_topics must be at most {_QUERY_MAX} characters (got {len(cleaned)})."
+            )
+        return cleaned
 
 
 class GeneratedCodebookResponse(BaseSchema):
@@ -142,10 +196,14 @@ class CodebookGenerationJobCreateRequest(CodebookGenerateRequest):
 class CodebookGenerationJobSchema(BaseSchema):
     id: UUID
     status: JobStatus
+    phase: str
+    progress_percent: int
     codebook_name: str
     corpus_id: UUID
     transcript_document_ids: list[UUID]
     cancel_requested: bool
+    research_query: str | None = None
+    researcher_topics: str | None = None
 
     codebook_id: UUID | None = None
     passages_total: int

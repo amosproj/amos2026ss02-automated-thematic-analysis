@@ -7,7 +7,6 @@ from urllib.parse import quote_plus
 from flask import (
     Blueprint,
     Response,
-    current_app,
     flash,
     jsonify,
     redirect,
@@ -17,7 +16,6 @@ from flask import (
 )
 
 from web.services.backend_client import (
-    BackendClient,
     BackendError,
     BackendNotFoundError,
     get_backend_client as _backend,
@@ -27,6 +25,56 @@ from web.services.corpus_context import resolve_active_corpus, set_active_corpus
 bp = Blueprint("codebooks", __name__)
 
 CODING_MODES = ("auto", "semi", "manual")
+
+_QUERY_MIN = 10
+_QUERY_MAX = 500
+
+
+def _safe_export_filename(name: str, version: int | str | None) -> str:
+    safe_name = "".join(
+        ch if ch.isalnum() or ch in ("-", "_") else "_"
+        for ch in (name or "codebook").strip()
+    ).strip("_")
+    if not safe_name:
+        safe_name = "codebook"
+    return f"{safe_name}_v{version or 1}.csv"
+
+
+def _codebook_to_csv(codebook: dict) -> str:
+    themes = codebook.get("themes", [])
+    codes = codebook.get("codes", [])
+
+    flat_rows = []
+    exported_ids = set()
+
+    def traverse(node: dict, parent_name: str) -> None:
+        exported_ids.add(node.get("id"))
+        flat_rows.append({
+            "Node Type": node.get("node_type", "THEME"),
+            "Name": node.get("name", ""),
+            "Description": node.get("description", ""),
+            "Parent Name": parent_name,
+        })
+        for child in node.get("children", []):
+            traverse(child, node.get("name", ""))
+
+    for theme in themes:
+        traverse(theme, "")
+
+    for code in codes:
+        if code.get("id") not in exported_ids:
+            flat_rows.append({
+                "Node Type": "CODE",
+                "Name": code.get("name", ""),
+                "Description": code.get("description", ""),
+                "Parent Name": "",
+            })
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["Node Type", "Name", "Description", "Parent Name"])
+    writer.writeheader()
+    writer.writerows(flat_rows)
+    return output.getvalue()
 
 
 def _safe_export_filename(name: str, version: int | str | None) -> str:
@@ -137,14 +185,27 @@ def list_codebooks_for_corpus(corpus_id: str) -> str:
             corpus_id=corpus_id,
             corpus_options=corpus_options,
             active_corpus_name=corpus_name,
+            running_jobs=[],
             error=True,
         )
+
+    # Fetch in-progress runs so they show in any session, not just the one
+    # that started them. Failures are non-fatal; the client-side tracker covers.
+    running_jobs: list[dict] = []
+    try:
+        running_jobs = client.list_generation_jobs(
+            corpus_id=active_corpus_id, statuses=["queued", "running"]
+        )
+    except BackendError:
+        running_jobs = []
+
     return render_template(
         "codebooks/list.html",
         codebooks=codebooks,
         corpus_id=active_corpus_id,
         corpus_options=corpus_options,
         active_corpus_name=corpus_name,
+        running_jobs=running_jobs,
     )
 
 
@@ -215,6 +276,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             name = active_codebook.get("name", "")
         if not version and active_codebook.get("version") is not None:
             version = str(active_codebook["version"])
+        research_query = active_codebook.get("research_query") or ""
 
         frequencies = client.get_theme_frequencies(active_codebook_id)
         tree = client.get_theme_tree(active_codebook_id)
@@ -233,6 +295,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             frequencies=[],
             tree=[],
             codes=[],
+            research_query="",
             error=True,
         )
     except BackendError as exc:
@@ -248,6 +311,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             frequencies=[],
             tree=[],
             codes=[],
+            research_query="",
             error=True,
         )
     return render_template(
@@ -261,6 +325,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         frequencies=frequencies,
         tree=tree,
         codes=codes,
+        research_query=research_query,
     )
 
 @bp.get("/<corpus_id>/<codebook_id>/export")
@@ -369,6 +434,7 @@ def manual_form(corpus_id: str) -> str:
 def confirm_submit(corpus_id: str) -> str:
     """Validate, customise, and confirm a codebook and its themes."""
     codebook_name = (request.form.get("codebook_name") or "").strip()
+    source_codebook_id = request.form.get("source_codebook_id", "").strip()
     node_types = request.form.getlist("node_types[]")
     theme_names = request.form.getlist("theme_names[]")
     theme_descriptions = request.form.getlist("theme_descriptions[]")
@@ -383,6 +449,30 @@ def confirm_submit(corpus_id: str) -> str:
             "description": desc.strip(),
             "parent_name": parent.strip() if parent.strip() else None
         })
+
+    # If this is an edit of an existing codebook, check whether anything actually
+    # changed. If not, skip the create and go straight to the success page.
+    if source_codebook_id:
+        try:
+            original = _backend().get_codebook(source_codebook_id)
+            original_name = (original.get("name") or "").strip()
+            original_themes = _flatten_codebook_for_preview(original)
+            # Normalise parent_name to "" on both sides before comparing —
+            # the form assembles None for empty parents, the flatten helper uses "".
+            def _normalise(rows: list[dict]) -> list[dict]:
+                return [
+                    {**r, "parent_name": r.get("parent_name") or ""}
+                    for r in rows
+                ]
+            if codebook_name == original_name and _normalise(themes) == _normalise(original_themes):
+                flash("No changes were made to the codebook.", "info")
+                return redirect(url_for(
+                    "codebooks.success",
+                    corpus_id=corpus_id,
+                    codebook_id=source_codebook_id,
+                ))
+        except BackendError:
+            pass  # original no longer accessible; fall through to create
 
     # Frontend validation
     error = None
@@ -500,6 +590,8 @@ def new_codebook_auto_form(corpus_id: str) -> str:
         corpus_id=corpus_id,
         mode=mode,
         codebook_name=request.args.get("name", ""),
+        research_query=request.args.get("rq", ""),
+        researcher_topics=request.args.get("rt", ""),
     )
 
 
@@ -507,46 +599,82 @@ def new_codebook_auto_form(corpus_id: str) -> str:
 def new_codebook_auto_submit(corpus_id: str):
     mode = _resolve_mode(request.form.get("mode", ""))
     name = (request.form.get("codebook_name") or "").strip()
-    if not name:
-        flash("Please give your codebook a name.", "danger")
+    raw_research_query = request.form.get("research_query") or ""
+    research_query = raw_research_query.strip()
+    researcher_topics = (request.form.get("researcher_topics") or "").strip()
+
+    def _render_form(rq_error: str | None = None, rt_error: str | None = None):
         return render_template(
             "codebooks/new/auto_form.html",
             corpus_id=corpus_id,
             mode=mode,
-            codebook_name="",
+            codebook_name=name,
+            research_query=research_query,
+            researcher_topics=researcher_topics,
+            rq_error=rq_error,
+            rt_error=rt_error,
         )
+
+    if not name:
+        flash("Please give your codebook a name.", "danger")
+        return _render_form()
+
+    # The research question is optional: leaving it blank is fine. But if the
+    # researcher actually types something it must be a real question — not just
+    # whitespace, and within the length bounds.
+    if raw_research_query and not research_query:
+        return _render_form(rq_error="Research question cannot be only whitespace.")
+    if research_query and len(research_query) < _QUERY_MIN:
+        return _render_form(
+            rq_error=f"Research question must be at least {_QUERY_MIN} characters."
+        )
+    if len(research_query) > _QUERY_MAX:
+        return _render_form(rq_error=f"Research question must be at most {_QUERY_MAX} characters.")
+
+    # Topics are optional, free-form keywords; only cap their length.
+    if len(researcher_topics) > _QUERY_MAX:
+        return _render_form(rt_error=f"Topics must be at most {_QUERY_MAX} characters.")
 
     try:
         job = _backend().create_generation_job(
             codebook_name=name,
             corpus_id=corpus_id,
+            research_query=research_query or None,
+            researcher_topics=researcher_topics or None,
         )
     except BackendError as exc:
         flash(exc.user_message, "danger")
-        return render_template(
-            "codebooks/new/auto_form.html",
-            corpus_id=corpus_id,
-            mode=mode,
-            codebook_name=name,
+        return _render_form()
+
+    encoded_job = quote_plus(str(job["id"]))
+    encoded_name = quote_plus(name)
+
+    if mode == "semi":
+        # Go straight to the progress page; it opens the review editor on
+        # success. Name (not new_job) is passed so the pagehide handler can
+        # register a background-tracker fallback if the user navigates away.
+        return redirect(
+            url_for("codebooks.new_codebook_job_progress", job_id=job["id"])
+            + f"?mode=semi&name={encoded_name}"
         )
 
-    # Hand off to the codebook list with new-job query params; job_tracker.js
-    # picks them up, persists the job in localStorage, and starts polling in
-    # the background so the user can navigate freely until generation finishes.
+    # auto: hand off to the codebook list; job_tracker.js picks up new_job
+    # and polls in the background while the user navigates freely.
     return redirect(
         url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id)
-        + f"?new_job={quote_plus(str(job['id']))}"
-        + f"&mode={mode}&name={quote_plus(name)}"
+        + f"?new_job={encoded_job}&mode={mode}&name={encoded_name}"
     )
 
 
 @bp.get("/new/jobs/<job_id>")
 def new_codebook_job_progress(job_id: str) -> str:
     mode = _resolve_mode(request.args.get("mode", ""))
+    name = request.args.get("name", "")
     return render_template(
         "codebooks/new/progress.html",
         job_id=job_id,
         mode=mode,
+        codebook_name=name,
     )
 
 
@@ -676,50 +804,26 @@ def new_codebook_job_cancel(job_id: str):
     return jsonify(job)
 
 
-def _flatten_codebook_for_editor(codebook: dict) -> list[dict]:
-    """Walk CodebookDetailSchema into a flat ordered list of editor rows.
-
-    Each row is `{name, description, indent, is_code}`. Hierarchy is captured
-    as depth: indent 0 = root theme, deeper = subtheme. Code nodes (leaves
-    attached to themes via ThemeCodeRelationship) carry is_code=True so the
-    editor can render and round-trip them with the right type badge."""
+def _flatten_codebook_for_preview(codebook: dict) -> list[dict]:
+    """Convert CodebookDetailSchema tree to flat rows for preview.html."""
     rows: list[dict] = []
 
-    def walk(node: dict, depth: int) -> None:
-        is_code = (node.get("node_type") or "").upper() == "CODE"
+    def walk(node: dict, parent_name: str | None) -> None:
+        raw_type = (node.get("node_type") or "THEME").upper()
         rows.append({
+            "node_type": raw_type,
             "name": node.get("name") or node.get("label") or "",
             "description": node.get("description") or "",
-            "indent": depth,
-            "is_code": is_code,
+            "parent_name": parent_name or "",
         })
-        # Codes are leaves; only walk children of non-code nodes.
-        if is_code:
+        if raw_type == "CODE":
             return
         for child in node.get("children") or []:
-            walk(child, depth + 1)
+            walk(child, node.get("name") or node.get("label") or "")
 
     for theme in codebook.get("themes") or []:
-        walk(theme, 0)
+        walk(theme, None)
     return rows
-
-
-def _render_review(codebook_id: str, codebook_name: str, corpus_id: str,
-                   nodes: list[dict], error: str | None = None) -> str:
-    return render_template(
-        "codebooks/new/review.html",
-        codebook_id=codebook_id,
-        codebook_name=codebook_name,
-        corpus_id=corpus_id,
-        nodes=nodes,
-        error=error,
-    )
-
-
-# Branch 9's NodeInput requires description min_length=1; the LLM occasionally
-# produces nodes with null description and the editor allows blank rows. Fill
-# with a placeholder rather than reject so the save succeeds end-to-end.
-_DESCRIPTION_PLACEHOLDER = "(no description)"
 
 
 @bp.get("/<codebook_id>/review")
@@ -728,103 +832,64 @@ def codebook_review(codebook_id: str) -> str:
         codebook = _backend().get_codebook(codebook_id)
     except BackendNotFoundError:
         flash("That codebook couldn't be found. It may have been deleted.", "danger")
-        return _render_review(codebook_id, "", "", [], error="Codebook not found.")
+        return render_template(
+            "codebooks/preview.html",
+            corpus_id="",
+            codebook_name="",
+            themes=[],
+            error="Codebook not found.",
+        )
     except BackendError as exc:
         flash(exc.user_message, "danger")
-        return _render_review(codebook_id, "", "", [], error=exc.user_message)
+        return render_template(
+            "codebooks/preview.html",
+            corpus_id="",
+            codebook_name="",
+            themes=[],
+            error=exc.user_message,
+        )
 
     corpus_id = str(codebook.get("corpus_id", ""))
     name = codebook.get("name") or "Generated Codebook"
-    return _render_review(
-        codebook_id, name, corpus_id, _flatten_codebook_for_editor(codebook),
+    return render_template(
+        "codebooks/preview.html",
+        corpus_id=corpus_id,
+        codebook_name=name,
+        themes=_flatten_codebook_for_preview(codebook),
+        source_codebook_id=codebook_id,
+        error=None,
     )
 
 
-@bp.post("/<codebook_id>/review")
-def codebook_review_submit(codebook_id: str):
-    codebook_name = (request.form.get("codebook_name") or "").strip()
-    corpus_id = (request.form.get("corpus_id") or "").strip()
-    names = request.form.getlist("row_names[]")
-    descs = request.form.getlist("row_descriptions[]")
-    parents = request.form.getlist("row_parents[]")
-    is_codes = request.form.getlist("row_is_codes[]")
-
-    # Mirror the preview/confirm_submit pattern: assemble all rows first,
-    # then validate. Don't silently skip blank-named rows — preview errors
-    # on them so they get the same treatment here.
-    def at(seq: list[str], i: int) -> str:
-        return seq[i] if i < len(seq) else ""
-
-    rows: list[dict] = []
-    for i, name in enumerate(names):
-        rows.append({
-            "name": name.strip(),
-            "description": at(descs, i).strip(),
-            "parent_name": at(parents, i).strip() or None,
-            "is_code": at(is_codes, i) == "1",
-        })
-
-    # Editor-shaped rows for the redisplay path so a re-render preserves
-    # what the user typed, including the Code toggle.
-    redisplay_rows = [
-        {
-            "name": r["name"],
-            "description": r["description"],
-            "indent": 0 if not r["parent_name"] else 1,
-            "is_code": r["is_code"],
-        }
-        for r in rows
-    ]
-
-    error: str | None = None
-    if not codebook_name:
-        error = "Codebook Name must not be blank."
-    elif not corpus_id:
-        error = "Missing corpus context — refresh the page and try again."
-    elif not rows:
-        error = "A codebook must contain at least one theme."
-    elif any(not r["name"] for r in rows):
-        error = "All themes must have a name."
-    else:
-        # Parent lookups span themes and subthemes only — a code can't be a
-        # parent.
-        valid_parents = {r["name"] for r in rows if not r["is_code"]}
-        for r in rows:
-            if r["is_code"] and not r["parent_name"]:
-                error = (
-                    f"Code '{r['name']}' must sit under a theme or subtheme. "
-                    "Either indent it under one, or untoggle 'Code'."
-                )
-                break
-            if r["parent_name"] and r["parent_name"] not in valid_parents:
-                error = (
-                    f"Parent '{r['parent_name']}' for '{r['name']}' "
-                    "does not exist in this codebook."
-                )
-                break
-
-    if error:
-        return _render_review(codebook_id, codebook_name, corpus_id, redisplay_rows, error=error)
-
-    # Build the backend payload: descriptions default to a placeholder so the
-    # backend's NodeInput.description (min_length=1) doesn't reject the row.
-    payload_nodes: list[dict] = []
-    for r in rows:
-        entry: dict = {
-            "name": r["name"],
-            "description": r["description"] or _DESCRIPTION_PLACEHOLDER,
-            "parent_name": r["parent_name"],
-        }
-        if r["is_code"]:
-            entry["node_type"] = "CODE"
-        payload_nodes.append(entry)
-
+@bp.post("/<corpus_id>/<codebook_id>/delete")
+def delete_codebook(corpus_id: str, codebook_id: str):
+    """Delete a codebook and its themes."""
     try:
-        _backend().create_codebook(
-            corpus_id=corpus_id, name=codebook_name, themes=payload_nodes,
-        )
+        _backend().delete_codebook(codebook_id)
+        flash("Codebook successfully deleted.", "success")
     except BackendError as exc:
-        return _render_review(codebook_id, codebook_name, corpus_id, redisplay_rows, error=exc.user_message)
+        flash(exc.user_message, "danger")
+    return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
 
-    flash(f"Saved '{codebook_name}' as a new codebook version.", "success")
-    return redirect(url_for("codebooks.list_codebooks"))
+
+@bp.post("/<corpus_id>/delete")
+def delete_selected_codebooks(corpus_id: str):
+    """Delete codebooks selected in the list view."""
+    codebook_ids = [item_id for item_id in request.form.getlist("item_ids") if item_id]
+    if not codebook_ids:
+        flash("Select at least one codebook to delete.", "warning")
+        return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
+
+    deleted = 0
+    try:
+        client = _backend()
+        for codebook_id in codebook_ids:
+            client.delete_codebook(codebook_id)
+            deleted += 1
+        flash(f"Deleted {deleted} codebook{'s' if deleted != 1 else ''}.", "success")
+    except BackendError as exc:
+        if deleted:
+            flash(f"Deleted {deleted} codebook{'s' if deleted != 1 else ''} before an error occurred.", "warning")
+        flash(exc.user_message, "danger")
+
+    return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))

@@ -1,5 +1,68 @@
 /* Project-specific overrides — Bootstrap handles the foundation. */
 
+/* ── Shared selectable lists ─────────────────────────────────────────────── */
+.ata-selectable-list {
+    overflow: hidden;
+}
+
+.ata-selectable-list__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f8fafc;
+}
+
+.ata-selectable-list__selection,
+.ata-selectable-list__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.ata-selectable-list__select-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: #111827;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.ata-selectable-list__selected-count {
+    color: #4b5563;
+    font-size: 0.88rem;
+    font-weight: 500;
+}
+
+.ata-selectable-list__checkbox-cell {
+    width: 2.75rem;
+    text-align: center;
+}
+
+.ata-selectable-list__row {
+    transition: background-color 0.12s ease;
+}
+
+.ata-selectable-list__row--selected > * {
+    background-color: #eef2ff !important;
+}
+
+@media (max-width: 575.98px) {
+    .ata-selectable-list__toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .ata-selectable-list__actions {
+        width: 100%;
+    }
+}
+
 /* ── Theme browser page header ─────────────────────────────────────────────── */
 .theme-page-header {
     background: linear-gradient(135deg, #3730a3 0%, #4f46e5 55%, #6366f1 100%);
@@ -635,14 +698,14 @@
     height: 13px;
 }
 
-/* Background-job toasts (bottom-right pinned) */
+/* Background-job toasts (top-right pinned) */
 #ata-toasts {
   position: fixed;
-  bottom: 1rem;
+  top: 1rem;
   right: 1rem;
   z-index: 1080;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   gap: .5rem;
   max-width: 360px;
 }

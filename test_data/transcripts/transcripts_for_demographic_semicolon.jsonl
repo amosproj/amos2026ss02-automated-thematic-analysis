@@ -1,6 +1,12 @@
-{"username":"user_alpha","event_type":"human_response","message_index":1,"message_content":"I am user alpha and I work in engineering. I collaborate closely with design and research."}
-{"username":"user_alpha","event_type":"human_response","message_index":2,"message_content":"My current focus is improving onboarding and reducing operational overhead."}
-{"username":"user_beta","event_type":"human_response","message_index":1,"message_content":"I am user beta from the design team. I lead interface prototyping."}
-{"username":"user_beta","event_type":"human_response","message_index":2,"message_content":"Our biggest challenge is aligning design handoff with engineering timelines."}
-{"username":"user_gamma","event_type":"human_response","message_index":1,"message_content":"I am user gamma and part of research. I run interview studies with participants."}
-{"username":"user_gamma","event_type":"human_response","message_index":2,"message_content":"We synthesize findings and share them with product and engineering weekly."}
+{"username":"user_alpha","event_type":"chatbot_response","message_index":1,"message_content":"Can you tell me about your role and what you do?"}
+{"username":"user_alpha","event_type":"human_response","message_index":2,"message_content":"I am user alpha and I work in engineering. I collaborate closely with design and research."}
+{"username":"user_alpha","event_type":"chatbot_response","message_index":3,"message_content":"What are you currently working on?"}
+{"username":"user_alpha","event_type":"human_response","message_index":4,"message_content":"My current focus is improving onboarding and reducing operational overhead."}
+{"username":"user_beta","event_type":"chatbot_response","message_index":1,"message_content":"Can you tell me about your role and what you do?"}
+{"username":"user_beta","event_type":"human_response","message_index":2,"message_content":"I am user beta from the design team. I lead interface prototyping."}
+{"username":"user_beta","event_type":"chatbot_response","message_index":3,"message_content":"What are you currently working on?"}
+{"username":"user_beta","event_type":"human_response","message_index":4,"message_content":"Our biggest challenge is aligning design handoff with engineering timelines."}
+{"username":"user_gamma","event_type":"chatbot_response","message_index":1,"message_content":"Can you tell me about your role and what you do?"}
+{"username":"user_gamma","event_type":"human_response","message_index":2,"message_content":"I am user gamma and part of research. I run interview studies with participants."}
+{"username":"user_gamma","event_type":"chatbot_response","message_index":3,"message_content":"What are you currently working on?"}
+{"username":"user_gamma","event_type":"human_response","message_index":4,"message_content":"We synthesize findings and share them with product and engineering weekly."}
