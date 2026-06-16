@@ -2,6 +2,7 @@ from flask import (
     Blueprint,
     current_app,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -227,6 +228,103 @@ def delete_selected_files(corpus_id: str):
 
     return redirect(url_for("demographic.list_files", corpus_id=corpus_id))
 
+
+
+# ---- Linking board (corpus-scoped) -----------------------------------------
+#
+# The linking board is the manual override UI: a two-column view of transcripts
+# and demographic rows. Researchers drag a transcript onto a demographic row to
+# link them, or unlink an existing pair. Linking calls are AJAX (JSON) so the
+# board updates in place without a full page reload.
+
+
+@bp.get("/<corpus_id>/linking")
+def linking_board(corpus_id: str) -> str:
+    set_active_corpus_id(corpus_id)
+    corpus_name = current_app.config["DEFAULT_CORPUS_NAME"]
+    corpus_options: list[dict] = [{"id": corpus_id, "name": corpus_name}]
+    error_kwargs = dict(
+        transcripts=[],
+        demographic_rows=[],
+        summary={},
+        corpus_id=corpus_id,
+        corpus_options=corpus_options,
+        corpus_name=corpus_name,
+        error=True,
+    )
+    try:
+        client = _backend()
+        active_corpus_id, corpus_options, active_corpus = resolve_active_corpus(
+            client,
+            requested_corpus_id=corpus_id,
+        )
+        corpus_name = active_corpus.get("name", corpus_name)
+        summary = client.get_demographic_link_summary(active_corpus_id)
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return render_template("demographic/linking.html", **error_kwargs)
+
+    return render_template(
+        "demographic/linking.html",
+        transcripts=summary.get("details", []),
+        demographic_rows=summary.get("demographic_rows", []),
+        summary=summary,
+        corpus_id=active_corpus_id,
+        corpus_options=corpus_options,
+        corpus_name=corpus_name,
+    )
+
+
+def _link_summary_json(corpus_id: str, payload: dict):
+    """Shape a backend link summary into the JSON the board's JS expects."""
+    return jsonify(
+        {
+            "ok": True,
+            "total_transcripts": payload.get("total_transcripts", 0),
+            "matched": payload.get("matched", 0),
+            "transcripts": payload.get("details", []),
+            "demographic_rows": payload.get("demographic_rows", []),
+        }
+    )
+
+
+@bp.post("/<corpus_id>/linking/link")
+def link_transcript(corpus_id: str):
+    set_active_corpus_id(corpus_id)
+    body = request.get_json(silent=True) or {}
+    document_id = (body.get("document_id") or "").strip()
+    demographic_row_id = (body.get("demographic_row_id") or "").strip()
+    if not document_id or not demographic_row_id:
+        return jsonify({"ok": False, "error": "document_id and demographic_row_id are required."}), 400
+
+    try:
+        summary = _backend().link_transcript(corpus_id, document_id, demographic_row_id)
+    except BackendNotFoundError as exc:
+        return jsonify({"ok": False, "error": exc.user_message}), 404
+    except BackendValidationError as exc:
+        return jsonify({"ok": False, "error": exc.user_message}), 422
+    except BackendError as exc:
+        return jsonify({"ok": False, "error": exc.user_message}), 502
+
+    return _link_summary_json(corpus_id, summary)
+
+
+@bp.post("/<corpus_id>/linking/unlink")
+def unlink_transcript(corpus_id: str):
+    set_active_corpus_id(corpus_id)
+    body = request.get_json(silent=True) or {}
+    document_id = (body.get("document_id") or "").strip()
+    if not document_id:
+        return jsonify({"ok": False, "error": "document_id is required."}), 400
+
+    try:
+        summary = _backend().unlink_transcript(corpus_id, document_id)
+    except BackendNotFoundError as exc:
+        return jsonify({"ok": False, "error": exc.user_message}), 404
+    except BackendError as exc:
+        return jsonify({"ok": False, "error": exc.user_message}), 502
+
+    return _link_summary_json(corpus_id, summary)
 
 
 # ---- View (corpus-scoped) --------------------------------------------------

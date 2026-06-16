@@ -199,6 +199,30 @@ def upload_submit(corpus_id: str) -> str:
 # List (corpus-scoped)
 
 
+def _build_link_status(client, corpus_id: str) -> dict:
+    """Map document_id -> {linked, interviewee_id} from the demographic link summary.
+
+    Best-effort: any backend failure yields an empty map so the transcript list
+    still renders. Linking is an optional, separately-uploaded concern.
+    """
+    try:
+        summary = client.get_demographic_link_summary(corpus_id)
+    except BackendError:
+        return {}
+
+    rows_by_id = {
+        r["row_id"]: r.get("interviewee_id")
+        for r in summary.get("demographic_rows", [])
+    }
+    status: dict[str, dict] = {}
+    for detail in summary.get("details", []):
+        row_id = detail.get("demographic_row_id")
+        status[detail["document_id"]] = {
+            "linked": bool(detail.get("matched")),
+            "interviewee_id": rows_by_id.get(row_id) if row_id else None,
+        }
+    return status
+
 
 @bp.get("/<corpus_id>/")
 def list_transcripts(corpus_id: str) -> str:
@@ -223,12 +247,14 @@ def list_transcripts(corpus_id: str) -> str:
             active_corpus_name=active_corpus_name,
             error=True,
         )
+    link_status = _build_link_status(client, active_corpus_id)
     return render_template(
         "ingestion/list.html",
         documents=documents,
         corpus_id=active_corpus_id,
         corpus_options=corpus_options,
         active_corpus_name=active_corpus_name,
+        link_status=link_status,
     )
 
 

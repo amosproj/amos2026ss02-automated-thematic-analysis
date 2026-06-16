@@ -18,6 +18,7 @@ from app.models.demographic import DemographicFiles, DemographicRow
 from app.models.ingestion import CorpusDocument
 from app.schemas.demographic import (
     DemographicFileSummary,
+    DemographicRowLinkStatus,
     DemographicRowSchema,
     ImportDemographicPreview,
     ImportDemographicResponse,
@@ -485,8 +486,39 @@ class DemographicService:
         ]
 
         matched_count = sum(1 for d in details if d.matched)
+
+        # Which demographic rows are currently linked, and to which document.
+        linked_doc_by_row: dict[uuid.UUID, uuid.UUID] = {
+            doc.demographic_row_id: doc.id
+            for doc in documents
+            if doc.demographic_row_id is not None
+        }
+
+        demographic_rows = list(
+            (
+                await self._session.execute(
+                    select(DemographicRow)
+                    .join(DemographicFiles, DemographicRow.demographic_file_id == DemographicFiles.id)
+                    .where(DemographicFiles.corpus_id == corpus_id)
+                    .order_by(DemographicRow.demographic_file_id, DemographicRow.row_number)
+                )
+            ).scalars()
+        )
+
+        row_statuses = [
+            DemographicRowLinkStatus(
+                row_id=row.id,
+                interviewee_id=row.interviewee_id,
+                data=row.data,
+                linked_document_id=linked_doc_by_row.get(row.id),
+                linked=row.id in linked_doc_by_row,
+            )
+            for row in demographic_rows
+        ]
+
         return LinkingSummary(
             total_transcripts=len(details),
             matched=matched_count,
             details=details,
+            demographic_rows=row_statuses,
         )

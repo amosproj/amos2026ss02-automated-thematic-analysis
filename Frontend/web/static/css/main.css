@@ -776,3 +776,29 @@
     align-items: center;
     justify-content: center;
 }
+
+/* ---- Linking board (manual transcript ↔ demographic linking) ------------- */
+.ata-link-card {
+  background: #fff;
+  transition: border-color .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.ata-link-card[data-transcript-card] { cursor: grab; }
+.ata-link-card[data-transcript-card]:focus-visible {
+  outline: 2px solid var(--bs-primary, #0d6efd);
+  outline-offset: 2px;
+}
+.ata-link-card--dragging { opacity: .5; cursor: grabbing; }
+.ata-link-card--selected {
+  border-color: var(--bs-primary, #0d6efd);
+  box-shadow: 0 0 0 .15rem rgba(13, 110, 253, .25);
+}
+.ata-link-card--linked { border-color: var(--bs-success, #198754); }
+.ata-link-dropzone--over {
+  border-color: var(--bs-primary, #0d6efd);
+  background: rgba(13, 110, 253, .08);
+}
+.ata-linking-board [data-transcripts-column],
+.ata-linking-board [data-demographic-column] {
+  max-height: 70vh;
+  overflow-y: auto;
+}

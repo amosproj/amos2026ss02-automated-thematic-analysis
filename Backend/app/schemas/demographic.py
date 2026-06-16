@@ -54,7 +54,22 @@ class TranscriptLinkStatus(BaseSchema):
     matched: bool
 
 
+class DemographicRowLinkStatus(BaseSchema):
+    """One demographic row plus its current link state, for the linking board."""
+    row_id: uuid.UUID
+    interviewee_id: str
+    data: dict[str, Any] = Field(default_factory=dict)
+    linked_document_id: uuid.UUID | None = None
+    linked: bool = False
+
+
 class LinkingSummary(BaseSchema):
     total_transcripts: int
     matched: int
     details: list[TranscriptLinkStatus]
+    demographic_rows: list[DemographicRowLinkStatus] = Field(default_factory=list)
+
+
+class LinkRequest(BaseSchema):
+    """Body for a manual transcript ↔ demographic-row link. `null` row clears the link."""
+    demographic_row_id: uuid.UUID | None = None

@@ -50,6 +50,7 @@ uv.lock
 
 # Python virtual environments
 venv/
+.venv/
 
 # pytest coverage
 .coverage

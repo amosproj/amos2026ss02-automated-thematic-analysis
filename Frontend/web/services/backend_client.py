@@ -256,6 +256,21 @@ class BackendClient:
         """Get transcript ↔ demographic linking status."""
         return self._get(f"/demographic/{corpus_id}/link-summary")
 
+    def link_transcript(
+        self, corpus_id: str, document_id: str, demographic_row_id: str,
+    ) -> dict:
+        """Manually link (or reassign) a transcript to a demographic row."""
+        return self._put(
+            f"/demographic/{corpus_id}/documents/{document_id}/link",
+            json={"demographic_row_id": demographic_row_id},
+        )
+
+    def unlink_transcript(self, corpus_id: str, document_id: str) -> dict:
+        """Remove the demographic link from a transcript."""
+        return self._delete(
+            f"/demographic/{corpus_id}/documents/{document_id}/link"
+        )
+
     def delete_demographic_file(self, corpus_id: str, file_id: str) -> None:
         """Delete a demographic file from the backend."""
         path = f"/demographic/{corpus_id}/files/{file_id}"
@@ -429,6 +444,17 @@ class BackendClient:
             self._handle_exc(exc, path, "DELETE", started_at)
         except (json.JSONDecodeError, KeyError) as exc:
             self._handle_exc(exc, path, "DELETE", started_at)
+
+    def _put(self, path: str, *, sub_key: str | None = None, **kwargs):
+        started_at = time.monotonic()
+        try:
+            r = self._client.put(path, **kwargs)
+            r.raise_for_status()
+            return self._unwrap(r, sub_key=sub_key)
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "PUT", started_at)
+        except (json.JSONDecodeError, KeyError) as exc:
+            self._handle_exc(exc, path, "PUT", started_at)
 
     def _handle_exc(
         self,
