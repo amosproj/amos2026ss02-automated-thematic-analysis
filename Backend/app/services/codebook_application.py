@@ -520,9 +520,9 @@ class CodebookApplicationService:
 
         ordered_results: list[CodebookApplicationResult | Exception] = []
         for index in range(total):
-            result = results_by_index.get(index)
-            if result is not None:
-                ordered_results.append(result)
+            successful_result = results_by_index.get(index)
+            if successful_result is not None:
+                ordered_results.append(successful_result)
             else:
                 # This fallback protects the caller from impossible states such
                 # as a shortened LangChain result list.
