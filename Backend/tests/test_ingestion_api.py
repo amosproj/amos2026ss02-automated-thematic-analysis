@@ -206,6 +206,58 @@ async def test_get_document_content(client):
     assert data["content"] == "the full interview text goes here"
     assert "title" in data
 
+async def test_get_document_content_with_demographic_data(client, db_session):
+    import uuid
+
+    from app.models.demographic import DemographicFiles, DemographicRow
+
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
+    corpus_id = create.json()["data"]["id"]
+
+    ingest = await client.post(
+        f"{API}/corpora/{corpus_id}/documents/bulk",
+        json={"documents": [{"title": "Interview B", "text": "the full interview text goes here"}]},
+    )
+    assert ingest.status_code == 201
+
+    docs_resp = await client.get(f"{API}/corpora/{corpus_id}/documents")
+    document_id = docs_resp.json()["data"]["items"][0]["id"]
+
+    # Directly inject demographic row into DB for this document to verify eager loading and schema mapping
+    demo_file = DemographicFiles(corpus_id=uuid.UUID(corpus_id), name="demo.csv", original_columns=["age", "role"])
+    db_session.add(demo_file)
+    await db_session.commit()
+    await db_session.refresh(demo_file)
+
+    demo_row = DemographicRow(
+        demographic_file_id=demo_file.id,
+        corpus_id=uuid.UUID(corpus_id),
+        row_number=1,
+        interviewee_id="Interview B",
+        data={"age": 30, "role": "Manager"}
+    )
+    db_session.add(demo_row)
+    await db_session.commit()
+    await db_session.refresh(demo_row)
+
+    # Link row to document
+    from sqlalchemy import update
+
+    from app.models.ingestion import CorpusDocument
+    await db_session.execute(
+        update(CorpusDocument)
+        .where(CorpusDocument.id == uuid.UUID(document_id))
+        .values(demographic_row_id=demo_row.id)
+    )
+    await db_session.commit()
+
+    resp = await client.get(f"{API}/corpora/{corpus_id}/documents/{document_id}")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["id"] == document_id
+    assert "demographic_data" in data
+    assert data["demographic_data"] == {"age": 30, "role": "Manager"}
+
 
 async def test_get_document_content_not_found(client):
     create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})

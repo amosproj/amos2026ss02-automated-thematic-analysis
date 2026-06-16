@@ -11,11 +11,13 @@ from app.llm.prompts import (
     _build_researcher_topics_block,
     build_code_consolidation_prompt,
     build_codebook_application_prompt,
+    build_codebook_application_with_codes_prompt,
     build_codebook_generation_prompt,
     build_thematic_analysis_prompt,
     build_theme_consolidation_prompt,
 )
 from app.schemas.llm import (
+    CodebookApplicationResult,
     CodeConsolidationItem,
     CodeConsolidationResult,
     GeneratedThemePath,
@@ -58,6 +60,32 @@ def apply_codebook_to_interview(
     chain = build_codebook_application_prompt() | chat_model | parser
     raw_result = chain.invoke({"transcript": transcript, "codebook": codebook_context})
     return InterviewAnalysisResult(**raw_result)
+
+
+def build_codebook_application_with_codes_chain(
+    *,
+    model: BaseChatModel | None = None,
+) -> Runnable[dict[str, str], dict[str, Any]]:
+    chat_model = model or build_chat_model()
+    parser = JsonOutputParser(pydantic_object=CodebookApplicationResult)
+    return build_codebook_application_with_codes_prompt() | chat_model | parser
+
+
+async def apply_codebook_with_codes_to_transcript(
+    transcript: str,
+    codebook_context: str,
+    *,
+    chain: Runnable[dict[str, str], dict[str, Any]] | None = None,
+    model: BaseChatModel | None = None,
+) -> CodebookApplicationResult:
+    if not transcript.strip():
+        raise ValueError("Transcript is empty.")
+    if not codebook_context.strip():
+        raise ValueError("Codebook context is empty.")
+
+    runnable = chain or build_codebook_application_with_codes_chain(model=model)
+    raw_result = await runnable.ainvoke({"transcript": transcript, "codebook": codebook_context})
+    return CodebookApplicationResult(**raw_result)
 
 
 def build_codebook_generation_chain(

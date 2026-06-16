@@ -5,6 +5,7 @@ Mocks the BackendClient to isolate Flask template rendering and controller behav
 from __future__ import annotations
 
 import io
+import zipfile
 import pytest
 from web.services.backend_client import BackendError
 
@@ -16,6 +17,7 @@ class FakeCodebookBackend:
         self.parse_csv_results = []
         self.create_codebook_result = {}
         self.get_codebook_result = {}
+        self.get_codebook_results: dict[str, dict] = {}
         self.list_codebooks_result = []
         self.raise_on = None
 
@@ -36,6 +38,8 @@ class FakeCodebookBackend:
     def get_codebook(self, codebook_id: str) -> dict:
         self._maybe_raise("get_codebook")
         self.last_fetched_id = codebook_id
+        if codebook_id in self.get_codebook_results:
+            return self.get_codebook_results[codebook_id]
         return self.get_codebook_result
 
     def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
@@ -386,3 +390,62 @@ def test_export_codebook_not_found(client, fake_codebook_backend):
     resp = client.get("/codebooks/test-corpus-id/unknown-id/export")
     assert resp.status_code == 302
     assert "/codebooks/" in resp.headers["Location"]
+
+
+def test_export_selected_codebooks_returns_zip(client, fake_codebook_backend):
+    fake_codebook_backend.get_codebook_results = {
+        "cb-1": {
+            "id": "cb-1",
+            "name": "First Codebook",
+            "version": 1,
+            "themes": [
+                {
+                    "node_type": "THEME",
+                    "name": "Theme A",
+                    "description": "Desc A",
+                    "children": [],
+                }
+            ],
+        },
+        "cb-2": {
+            "id": "cb-2",
+            "name": "Second Codebook",
+            "version": 2,
+            "themes": [
+                {
+                    "node_type": "THEME",
+                    "name": "Theme B",
+                    "description": "Desc B",
+                    "children": [],
+                }
+            ],
+        },
+    }
+
+    resp = client.post(
+        "/codebooks/test-corpus-id/export",
+        data={"item_ids": ["cb-1", "cb-2"]},
+    )
+
+    assert resp.status_code == 200
+    assert resp.mimetype == "application/zip"
+    assert "attachment; filename=selected_codebooks.zip" in resp.headers["Content-Disposition"]
+
+    with zipfile.ZipFile(io.BytesIO(resp.data)) as archive:
+        assert set(archive.namelist()) == {
+            "First_Codebook_v1.csv",
+            "Second_Codebook_v2.csv",
+        }
+        assert "THEME,Theme A,Desc A," in archive.read("First_Codebook_v1.csv").decode("utf-8")
+        assert "THEME,Theme B,Desc B," in archive.read("Second_Codebook_v2.csv").decode("utf-8")
+
+
+def test_export_selected_codebooks_requires_selection(client, fake_codebook_backend):
+    resp = client.post(
+        "/codebooks/test-corpus-id/export",
+        data={},
+        follow_redirects=True,
+    )
+
+    assert resp.status_code == 200
+    assert b"Select at least one codebook to export" in resp.data

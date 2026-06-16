@@ -168,7 +168,9 @@ class FakeBackend:
 
     def delete_demographic_file(self, corpus_id, file_id) -> None:
         self._maybe_raise("delete_demographic_file")
-        pass
+        self.demographic_files = [
+            f for f in self.demographic_files if f.get("id") != file_id
+        ]
 
     # ---- Codebook generation jobs -------------------------------------------
 

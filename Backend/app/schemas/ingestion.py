@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from app.schemas.common import BaseSchema
 
@@ -49,6 +50,7 @@ class CorpusDocumentContentSchema(CorpusDocumentSchema):
     """API response shape for a single document including its full text content."""
 
     content: str
+    demographic_data: dict[str, Any] | None = None
 
 
 class IngestResultSchema(BaseSchema):

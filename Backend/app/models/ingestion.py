@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import uuid
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.models.demographic import DemographicRow
 
 from sqlalchemy import ForeignKey, String, Text, Uuid
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
 
@@ -48,7 +52,14 @@ class CorpusDocument(Base, TimestampMixin):
         nullable=True,
         index=True,
     )
+    demographic_row: Mapped[DemographicRow] = relationship()
+
     title: Mapped[str] = mapped_column(String(500))
     # Original uploaded filename (after duplicate-collision resolution). NULL for body-ingested docs.
     filename: Mapped[str | None] = mapped_column(String(500), nullable=True)
     content: Mapped[str] = mapped_column(Text())
+
+    @property
+    def demographic_data(self) -> dict[str, Any] | None:
+        return self.demographic_row.data if self.demographic_row else None
+

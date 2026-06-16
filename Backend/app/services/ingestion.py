@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.exceptions import NotFoundError, UnprocessableError
 from app.models.ingestion import Corpus, CorpusDocument
@@ -149,7 +150,9 @@ class IngestionService:
     async def get_document(self, corpus_id: uuid.UUID, document_id: uuid.UUID) -> CorpusDocument:
         """Fetch a single document by ID within the given corpus. Raises NotFoundError if absent."""
         result = await self._session.execute(
-            select(CorpusDocument).where(
+            select(CorpusDocument)
+            .options(joinedload(CorpusDocument.demographic_row))
+            .where(
                 CorpusDocument.id == document_id,
                 CorpusDocument.corpus_id == corpus_id,
             )

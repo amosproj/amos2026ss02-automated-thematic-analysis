@@ -244,6 +244,30 @@ def delete_transcript(corpus_id: str, document_id: str):
     return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
 
 
+@bp.post("/<corpus_id>/delete")
+def delete_selected_transcripts(corpus_id: str):
+    """Delete transcripts selected in the list view."""
+    set_active_corpus_id(corpus_id)
+    document_ids = [item_id for item_id in request.form.getlist("item_ids") if item_id]
+    if not document_ids:
+        flash("Select at least one transcript to delete.", "warning")
+        return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+
+    deleted = 0
+    try:
+        client = _backend()
+        for document_id in document_ids:
+            client.delete_document(corpus_id, document_id)
+            deleted += 1
+        flash(f"Deleted {deleted} transcript{'s' if deleted != 1 else ''}.", "success")
+    except BackendError as exc:
+        if deleted:
+            flash(f"Deleted {deleted} transcript{'s' if deleted != 1 else ''} before an error occurred.", "warning")
+        flash(exc.user_message, "danger")
+
+    return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+
+
 @bp.get("/<corpus_id>/<document_id>/read")
 def read_transcript(corpus_id: str, document_id: str) -> str:
     set_active_corpus_id(corpus_id)

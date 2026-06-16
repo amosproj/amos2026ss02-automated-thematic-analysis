@@ -111,6 +111,64 @@ def build_codebook_application_prompt() -> ChatPromptTemplate:
     )
 
 
+APPLY_CODEBOOK_WITH_CODES_SYSTEM_PROMPT = """You are an experienced qualitative researcher performing deductive qualitative coding.
+You receive a fixed codebook with themes, subthemes, and codes. Apply only this codebook to the transcript.
+
+Rules:
+- Use only theme labels and code labels that appear in the provided codebook.
+- Do not invent, rename, merge, or split themes or codes.
+- Assign codes to concrete transcript excerpts, not to the whole document.
+- Every code assignment MUST include one short exact verbatim quote from the transcript.
+- The same code can be assigned to multiple distinct quotes if the transcript supports it.
+- If no code applies, return an empty "codes" array.
+- Evaluate theme presence from the transcript and the code assignments.
+- If a theme is present, include a short exact verbatim supporting quote.
+- Stay close to participant wording and avoid over-claiming.
+- Return valid JSON only. Do not wrap the JSON in markdown.
+
+Return JSON with this exact shape:
+{{
+  "summary": "A 2-3 sentence orientation to what the transcript is about.",
+  "researcher_notes": "Ambiguities, contradictions, or useful follow-up notes.",
+  "themes": [
+    {{
+      "theme_label": "Theme label from the codebook",
+      "present": true,
+      "confidence": 0.82,
+      "quote": "Exact supporting quote or null if absent"
+    }}
+  ],
+  "codes": [
+    {{
+      "code_label": "Code label from the codebook",
+      "theme_label": "Theme label from the codebook",
+      "quote": "Exact transcript quote supporting this code",
+      "confidence": 0.91,
+      "rationale": "Brief reason for the assignment"
+    }}
+  ]
+}}"""
+
+APPLY_CODEBOOK_WITH_CODES_USER_INSTRUCTION = """Apply the provided codebook to the transcript.
+
+--- CODEBOOK START ---
+{codebook}
+--- CODEBOOK END ---
+
+--- TRANSCRIPT START ---
+{transcript}
+--- TRANSCRIPT END ---"""
+
+
+def build_codebook_application_with_codes_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", APPLY_CODEBOOK_WITH_CODES_SYSTEM_PROMPT),
+            ("user", APPLY_CODEBOOK_WITH_CODES_USER_INSTRUCTION),
+        ]
+    )
+
+
 GENERATE_CODEBOOK_SYSTEM_PROMPT = """You are an experienced qualitative researcher.
 You receive one transcript passage at a time and must propose candidate themes,
 subthemes, and codes grounded in the exact passage text.
