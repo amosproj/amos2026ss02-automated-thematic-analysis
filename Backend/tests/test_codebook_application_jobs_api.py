@@ -133,13 +133,19 @@ def _application_result(quote: str = "manual handoffs slow") -> CodebookApplicat
 
 
 def _patch_application(monkeypatch, single_transcript_fn) -> None:
-    async def _fake_apply(transcript: str, codebook_context: str, *_, **__):
+    async def _fake_apply_batch(transcripts: list[str], codebook_context: str, *_, **__):
         del codebook_context
-        return single_transcript_fn(transcript)
+        results = []
+        for transcript in transcripts:
+            try:
+                results.append(single_transcript_fn(transcript))
+            except Exception as exc:
+                results.append(exc)
+        return results
 
     monkeypatch.setattr(
-        "app.services.codebook_application.apply_codebook_with_codes_to_transcript",
-        _fake_apply,
+        "app.services.codebook_application.apply_codebook_with_codes_to_transcripts",
+        _fake_apply_batch,
     )
     monkeypatch.setattr(
         "app.services.codebook_application.build_codebook_application_with_codes_chain",
@@ -227,6 +233,51 @@ async def test_apply_codebook_job_retries_llm_and_fails_only_one_transcript(clie
     assert statuses == {"coded", "failed"}
 
 
+async def test_apply_codebook_job_uses_generation_parallelization_settings(client, db_engine, monkeypatch) -> None:
+    corpus_id, codebook_id, document_ids = await _seed_corpus_codebook(
+        db_engine,
+        texts=[f"Participant: The manual handoffs slow team {index}." for index in range(17)],
+    )
+    del corpus_id
+
+    batch_sizes: list[int] = []
+    max_concurrency_values: list[int | None] = []
+
+    async def _fake_apply_batch(
+        transcripts: list[str],
+        codebook_context: str,
+        *_,
+        max_concurrency: int | None = None,
+        **__,
+    ):
+        del codebook_context
+        batch_sizes.append(len(transcripts))
+        max_concurrency_values.append(max_concurrency)
+        return [_application_result(quote="manual handoffs slow") for _ in transcripts]
+
+    monkeypatch.setattr(
+        "app.services.codebook_application.apply_codebook_with_codes_to_transcripts",
+        _fake_apply_batch,
+    )
+    monkeypatch.setattr(
+        "app.services.codebook_application.build_codebook_application_with_codes_chain",
+        lambda: object(),
+    )
+
+    create_response = await client.post(
+        f"{API_CODEBOOKS}/{codebook_id}/apply-jobs",
+        json={"transcript_document_ids": document_ids},
+    )
+
+    assert create_response.status_code == 202
+    terminal_job = await _wait_for_terminal_job_status(client, create_response.json()["data"]["id"])
+    assert terminal_job["status"] == "succeeded"
+    assert terminal_job["documents_coded"] == 17
+    assert terminal_job["documents_failed"] == 0
+    assert batch_sizes == [16, 1]
+    assert max_concurrency_values == [8, 8]
+
+
 async def test_apply_codebook_job_creates_new_run_without_overwrite(client, db_engine, monkeypatch) -> None:
     corpus_id, codebook_id, document_ids = await _seed_corpus_codebook(
         db_engine,
@@ -262,14 +313,14 @@ async def test_apply_codebook_job_can_be_cancelled_while_running(client, db_engi
     )
     del corpus_id
 
-    async def _slow_apply(transcript: str, codebook_context: str, *_, **__):
-        del transcript, codebook_context
+    async def _slow_apply_batch(transcripts: list[str], codebook_context: str, *_, **__):
+        del codebook_context
         await asyncio.sleep(0.05)
-        return _application_result()
+        return [_application_result() for _ in transcripts]
 
     monkeypatch.setattr(
-        "app.services.codebook_application.apply_codebook_with_codes_to_transcript",
-        _slow_apply,
+        "app.services.codebook_application.apply_codebook_with_codes_to_transcripts",
+        _slow_apply_batch,
     )
     monkeypatch.setattr(
         "app.services.codebook_application.build_codebook_application_with_codes_chain",
