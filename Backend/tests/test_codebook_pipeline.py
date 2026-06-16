@@ -8,8 +8,8 @@ import pytest
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 
-from app.llm.pipelines import apply_codebook_to_interview
-from app.schemas.llm import InterviewAnalysisResult
+from app.llm.pipelines import apply_codebook_to_interview, apply_codebook_with_codes_to_transcripts
+from app.schemas.llm import CodebookApplicationResult, InterviewAnalysisResult
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -200,4 +200,40 @@ class TestMultipleInterviews:
         assert theme_to_count["Poor Change Management"] == 1
         assert theme_to_count["Collaboration Benefits"] == 1
         assert "Steep Learning Curve" not in theme_to_count
+
+
+class TestApplyCodebookBatchPipeline:
+    async def test_batch_helper_preserves_order_and_exceptions(self) -> None:
+        class FakeChain:
+            async def abatch(self, inputs, *, config=None, return_exceptions=False):
+                assert config == {"max_concurrency": 8}
+                assert return_exceptions is True
+                return [
+                    {
+                        "summary": "First transcript",
+                        "researcher_notes": None,
+                        "themes": [],
+                        "codes": [],
+                    },
+                    RuntimeError("provider timeout"),
+                    {
+                        "summary": "Third transcript",
+                        "researcher_notes": None,
+                        "themes": [],
+                        "codes": [],
+                    },
+                ]
+
+        results = await apply_codebook_with_codes_to_transcripts(
+            ["first", "second", "third"],
+            SAMPLE_CODEBOOK,
+            chain=FakeChain(),
+            max_concurrency=8,
+        )
+
+        assert isinstance(results[0], CodebookApplicationResult)
+        assert results[0].summary == "First transcript"
+        assert isinstance(results[1], RuntimeError)
+        assert isinstance(results[2], CodebookApplicationResult)
+        assert results[2].summary == "Third transcript"
 
