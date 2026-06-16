@@ -125,7 +125,7 @@ def create_corpus_submit():
     return redirect(url_for("ingestion.upload_form", corpus_id=new_corpus_id))
 
 
-@bp.post("/<corpus_id>/delete")
+@bp.post("/<corpus_id>/delete_corpus")
 def delete_corpus_submit(corpus_id: str):
     """Delete a corpus and redirect to landing page."""
     try:
