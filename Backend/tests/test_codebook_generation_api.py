@@ -820,3 +820,38 @@ async def test_generate_codebook_persists_research_query_on_codebook(
     async with session_factory() as session:
         codebook = (await session.execute(select(Codebook).where(Codebook.id == codebook_id))).scalar_one()
         assert codebook.research_query == query
+
+
+async def test_generate_codebook_persists_researcher_topics_on_codebook(
+    client,
+    db_engine,
+    monkeypatch,
+) -> None:
+    # researcher_topics persists independently of research_query (omitted here).
+    corpus_id, document_ids = await _create_corpus_and_docs(client)
+    topics = "isolation, productivity, work-life balance"
+
+    def _fake(passage: str, **_kwargs) -> PassageCodebookGeneration:
+        return PassageCodebookGeneration(
+            themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Workflow Friction")])],
+            codes=[GeneratedCodeSuggestion(label="Delay", description=None, theme_path=["Workflow Friction"])],
+        )
+
+    _patch_batched_generation(monkeypatch, _fake)
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate",
+        json={
+            "codebook_name": "Topics Persistence",
+            "corpus_id": corpus_id,
+            "researcher_topics": topics,
+        },
+    )
+    assert response.status_code == 201
+
+    codebook_id = UUID(response.json()["data"]["codebook"]["id"])
+    session_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_factory() as session:
+        codebook = (await session.execute(select(Codebook).where(Codebook.id == codebook_id))).scalar_one()
+        assert codebook.researcher_topics == topics
+        assert codebook.research_query is None
