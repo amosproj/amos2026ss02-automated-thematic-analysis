@@ -827,8 +827,7 @@ async def test_generate_codebook_persists_researcher_topics_on_codebook(
     db_engine,
     monkeypatch,
 ) -> None:
-    # researcher_topics is a distinct field from research_query; it must be
-    # persisted on the codebook independently (here research_query is omitted).
+    # researcher_topics persists independently of research_query (omitted here).
     corpus_id, document_ids = await _create_corpus_and_docs(client)
     topics = "isolation, productivity, work-life balance"
 

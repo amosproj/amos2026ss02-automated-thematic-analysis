@@ -237,15 +237,12 @@ def test_confirm_submit_success(client, fake_codebook_backend):
     assert payload["name"] == "Verified Codebook"
     assert len(payload["themes"]) == 2
     assert payload["themes"][0]["name"] == "Theme 1"
-    # No source draft on the upload/manual path → nothing is deleted.
+    # No source draft -> nothing deleted.
     assert fake_codebook_backend.deleted_ids == []
 
 
 def test_confirm_submit_deletes_draft_after_edit(client, fake_codebook_backend):
-    # Semi-auto: the researcher edited the generated draft (name differs from the
-    # original), so confirm creates a new codebook AND deletes the draft, leaving
-    # exactly one codebook. (An *unchanged* codebook returns early and reuses the
-    # draft — covered separately.)
+    # Edited draft (name differs) -> new codebook created and draft deleted.
     fake_codebook_backend.get_codebook_result = {"name": "Original Draft", "themes": []}
     fake_codebook_backend.create_codebook_result = {"id": "new-id", "name": "Edited Codebook"}
 
@@ -267,8 +264,7 @@ def test_confirm_submit_deletes_draft_after_edit(client, fake_codebook_backend):
 
 
 def test_confirm_submit_edit_survives_failed_draft_cleanup(client, fake_codebook_backend):
-    # If deleting the draft fails, the user's edited codebook already exists, so
-    # the flow must still succeed (best-effort cleanup, never fatal).
+    # A failed draft delete must not break the flow (best-effort cleanup).
     fake_codebook_backend.get_codebook_result = {"name": "Original Draft", "themes": []}
     fake_codebook_backend.create_codebook_result = {"id": "new-id", "name": "Edited"}
     fake_codebook_backend.raise_on = "delete_codebook"

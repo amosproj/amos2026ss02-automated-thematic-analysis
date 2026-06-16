@@ -7,7 +7,7 @@
     const tree        = JSON.parse(appRoot.dataset.tree        || "[]");
     const codes       = JSON.parse(appRoot.dataset.codes       || "[]");
 
-    // Topics the researcher asked the AI to focus on (comma-separated string).
+    // Topics the researcher asked the AI to focus on.
     const researcherTopics = (() => {
         try {
             const raw = JSON.parse(appRoot.dataset.researcherTopics || '""');
@@ -20,10 +20,7 @@
         }
     })();
 
-    // Match a theme/code label against the requested topics. Returns the matched
-    // topic (original casing-insensitive form) or null. Space-padded token
-    // matching means "work" won't match "network", while the LLM's rephrasings
-    // still match (topic "isolation" -> theme "Social Isolation and Loneliness").
+    // Returns the matched topic for a label, or null. Space-padded so "work" won't match "network" but "isolation" matches "Social Isolation".
     function matchedTopicFor(label) {
         if (!researcherTopics.length || !label) return null;
         const cleaned = label.replace(/^\[CODE\]\s*/i, "");
@@ -230,7 +227,6 @@
             row.classList.add("theme-row-selectable");
             row.addEventListener("click", () => showThemeDetails(theme.theme_id));
 
-            // Name (+ flag if it matches a researcher-requested topic)
             const nameCell = document.createElement("td");
             nameCell.appendChild(document.createTextNode(theme.theme_name));
             const matchedTopic = matchedTopicFor(theme.theme_name);
@@ -324,7 +320,6 @@
 
         // Label rendered via textContent — auto-escapes any HTML in the label.
         row.appendChild(document.createTextNode(theme.label));
-        // Compact star marker if this node matches a requested topic.
         const matchedTreeTopic = matchedTopicFor(theme.label);
         if (matchedTreeTopic) {
             const star = document.createElement("span");

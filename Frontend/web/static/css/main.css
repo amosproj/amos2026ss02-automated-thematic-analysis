@@ -133,9 +133,7 @@
 
 .theme-zero { color: #9ca3af; }
 
-/* ── Researcher-topic highlighting ──────────────────────────────────────────
-   Themes/codes that match a topic the researcher asked the AI to focus on.
-   Amber palette, distinct from the indigo selection highlight. */
+/* ── Researcher-topic highlighting (amber, distinct from indigo selection) ── */
 .theme-topic-badge {
     display: inline-block;
     font-size: 0.68rem;
@@ -157,7 +155,7 @@
 
 .theme-row-matched td:first-child { font-weight: 600; }
 
-/* Compact marker used in the (narrow) hierarchy tree. */
+/* Compact marker for the hierarchy tree. */
 .theme-topic-star {
     color: #d97706;
     margin-left: 6px;

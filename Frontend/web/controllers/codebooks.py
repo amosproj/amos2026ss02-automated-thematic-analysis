@@ -502,11 +502,8 @@ def confirm_submit(corpus_id: str) -> str:
             error=str(exc),
         )
 
-    # Semi-auto path: the system persisted a draft before review, and the
-    # researcher edited it (an unchanged codebook returns early above, reusing
-    # the draft). The edited version is now its own codebook, so remove the draft
-    # to leave exactly one. Best-effort: the new codebook already exists, so a
-    # failed cleanup must not error the flow (a stray draft can be deleted later).
+    # Semi-auto: the edited codebook is saved, so delete the original draft to leave just one. 
+    # Best-effort — the new codebook already exists.
     if source_codebook_id and source_codebook_id != str(codebook_id):
         try:
             client.delete_codebook(source_codebook_id)
