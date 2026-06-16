@@ -125,7 +125,7 @@ def create_corpus_submit():
     return redirect(url_for("ingestion.upload_form", corpus_id=new_corpus_id))
 
 
-@bp.post("/<corpus_id>/delete_corpus")
+@bp.post("/<corpus_id>/delete")
 def delete_corpus_submit(corpus_id: str):
     """Delete a corpus and redirect to landing page."""
     try:
@@ -244,7 +244,7 @@ def delete_transcript(corpus_id: str, document_id: str):
     return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
 
 
-@bp.post("/<corpus_id>/delete")
+@bp.post("/<corpus_id>/delete_transcripts")
 def delete_selected_transcripts(corpus_id: str):
     """Delete transcripts selected in the list view."""
     set_active_corpus_id(corpus_id)

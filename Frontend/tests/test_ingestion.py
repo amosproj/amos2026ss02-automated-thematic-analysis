@@ -305,7 +305,7 @@ def test_delete_corpus_success(client, fake_backend):
         {"id": "other-id", "name": "Corpus 2"}
     ]
     
-    resp = client.post(f"/transcripts/{CORPUS}/delete_corpus")
+    resp = client.post(f"/transcripts/{CORPUS}/delete")
     assert resp.status_code == 302
     assert resp.headers["Location"].endswith("/transcripts/")
 
@@ -317,7 +317,7 @@ def test_delete_corpus_success(client, fake_backend):
 
 def test_delete_corpus_backend_error(client, fake_backend):
     fake_backend.raise_on = "delete_corpus"
-    resp = client.post(f"/transcripts/{CORPUS}/delete_corpus", follow_redirects=True)
+    resp = client.post(f"/transcripts/{CORPUS}/delete", follow_redirects=True)
     assert resp.status_code == 200
     assert b"simulated delete_corpus failure" in resp.data
 
@@ -329,7 +329,7 @@ def test_delete_selected_transcripts_success(client, fake_backend):
     ]
 
     resp = client.post(
-        f"/transcripts/{CORPUS}/delete",
+        f"/transcripts/{CORPUS}/delete_transcripts",
         data={"item_ids": ["doc-1", "doc-2"]},
         follow_redirects=True,
     )
@@ -340,6 +340,6 @@ def test_delete_selected_transcripts_success(client, fake_backend):
 
 
 def test_delete_selected_transcripts_requires_selection(client, fake_backend):
-    resp = client.post(f"/transcripts/{CORPUS}/delete", data={}, follow_redirects=True)
+    resp = client.post(f"/transcripts/{CORPUS}/delete_transcripts", data={}, follow_redirects=True)
     assert resp.status_code == 200
     assert b"Select at least one transcript to delete" in resp.data
