@@ -262,3 +262,58 @@ async def test_manual_link_unknown_document_is_404(client):
     resp = await _link(client, corpus_id, bogus_doc, row_id)
     assert resp.status_code == 404
     assert resp.json()["success"] is False
+
+
+# ---------------------------------------------------------------------------
+# Manual overrides survive a subsequent link-summary read
+#
+# get_link_summary must NOT re-run auto-linking; otherwise a manual unlink of a
+# title-matched transcript (or a reassign away from one) is silently reverted on
+# the next board/list load.
+# ---------------------------------------------------------------------------
+
+
+async def test_manual_unlink_survives_link_summary_reload(client):
+    corpus_id = await _create_corpus(client, "Unlink Persists")
+    await _bulk_ingest(client, corpus_id, ["participant_01"])
+    await _upload_and_confirm_csv(client, corpus_id, ["participant_01"])
+
+    summary = await _get_link_summary(client, corpus_id)
+    assert summary["matched"] == 1  # auto-linked on title match
+    doc_id = _doc_id(summary, "participant_01")
+
+    unlink = await _unlink(client, corpus_id, doc_id)
+    assert unlink.status_code == 200, unlink.text
+
+    # Reload the summary: the manual unlink must stick even though the title
+    # still matches the interviewee_id.
+    reloaded = await _get_link_summary(client, corpus_id)
+    assert reloaded["matched"] == 0
+    detail = next(d for d in reloaded["details"] if d["document_id"] == doc_id)
+    assert detail["matched"] is False
+    assert detail["demographic_row_id"] is None
+
+
+async def test_manual_reassign_survives_link_summary_reload(client):
+    """Reassigning a title-matched row to another transcript must not be undone
+    by auto-linking on the next read (which would double-link the row)."""
+    corpus_id = await _create_corpus(client, "Reassign Persists")
+    await _bulk_ingest(client, corpus_id, ["doc_a", "doc_b"])
+    await _upload_and_confirm_csv(client, corpus_id, ["doc_a"])
+
+    summary = await _get_link_summary(client, corpus_id)
+    row_id = _row_id(summary, "doc_a")
+    doc_a = _doc_id(summary, "doc_a")
+    doc_b = _doc_id(summary, "doc_b")
+
+    resp = await _link(client, corpus_id, doc_b, row_id)
+    assert resp.status_code == 200, resp.text
+
+    # Reload: the row must remain on doc_b only — doc_a must not be re-linked.
+    reloaded = await _get_link_summary(client, corpus_id)
+    assert reloaded["matched"] == 1
+    assert next(d for d in reloaded["details"] if d["document_id"] == doc_b)["demographic_row_id"] == row_id
+    assert next(d for d in reloaded["details"] if d["document_id"] == doc_a)["demographic_row_id"] is None
+    # The row maps to exactly one transcript.
+    linked_docs = [d for d in reloaded["details"] if d["demographic_row_id"] == row_id]
+    assert len(linked_docs) == 1

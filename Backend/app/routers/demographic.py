@@ -16,7 +16,7 @@ from app.schemas.demographic import (
     UploadDemographicConfirmResponse,
 )
 from app.services.demographic import DemographicService
-from app.services.linking import auto_link_demographics, set_document_link
+from app.services.linking import set_document_link
 
 router = APIRouter(prefix="/demographic/{corpus_id}", tags=["demographic"])
 
@@ -235,7 +235,10 @@ async def get_link_summary(
 ) -> ResponseEnvelope[LinkingSummary]:
     service = DemographicService(session, settings)
     try:
-        await auto_link_demographics(session, corpus_id)
+        # Auto-linking runs at ingestion and on demographic confirm; we must not
+        # re-run it here. Doing so on every read re-creates links that were
+        # manually removed (and can double-link a row after a reassign), silently
+        # reverting the manual overrides this endpoint is meant to surface.
         summary = await service.get_link_summary(corpus_id)
     except UnprocessableError as exc:
         return ResponseEnvelope[LinkingSummary].fail(
