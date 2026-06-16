@@ -45,53 +45,6 @@ def _codebook_to_csv(codebook: dict) -> str:
     codes = codebook.get("codes", [])
 
     flat_rows = []
-    exported_ids = set()
-
-    def traverse(node: dict, parent_name: str) -> None:
-        exported_ids.add(node.get("id"))
-        flat_rows.append({
-            "Node Type": node.get("node_type", "THEME"),
-            "Name": node.get("name", ""),
-            "Description": node.get("description", ""),
-            "Parent Name": parent_name,
-        })
-        for child in node.get("children", []):
-            traverse(child, node.get("name", ""))
-
-    for theme in themes:
-        traverse(theme, "")
-
-    for code in codes:
-        if code.get("id") not in exported_ids:
-            flat_rows.append({
-                "Node Type": "CODE",
-                "Name": code.get("name", ""),
-                "Description": code.get("description", ""),
-                "Parent Name": "",
-            })
-
-    output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["Node Type", "Name", "Description", "Parent Name"])
-    writer.writeheader()
-    writer.writerows(flat_rows)
-    return output.getvalue()
-
-
-def _safe_export_filename(name: str, version: int | str | None) -> str:
-    safe_name = "".join(
-        ch if ch.isalnum() or ch in ("-", "_") else "_"
-        for ch in (name or "codebook").strip()
-    ).strip("_")
-    if not safe_name:
-        safe_name = "codebook"
-    return f"{safe_name}_v{version or 1}.csv"
-
-
-def _codebook_to_csv(codebook: dict) -> str:
-    themes = codebook.get("themes", [])
-    codes = codebook.get("codes", [])
-
-    flat_rows = []
     exported_ids: set = set()
 
     def traverse(node: dict, parent_name: str) -> None:
