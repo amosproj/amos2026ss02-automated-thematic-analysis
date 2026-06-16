@@ -27,6 +27,7 @@ def index() -> str:
         disabled_reason = "No active corpus selected."
     else:
         try:
+            # Fetch at most 1 document since we only need to check if the corpus is empty
             docs_resp = client.list_documents(active_corpus_id, page_size=1)
             transcripts_count = len(docs_resp)
             
