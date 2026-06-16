@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -233,12 +233,11 @@ async def test_apply_codebook_job_retries_llm_and_fails_only_one_transcript(clie
     assert statuses == {"coded", "failed"}
 
 
-async def test_apply_codebook_job_uses_generation_parallelization_settings(client, db_engine, monkeypatch) -> None:
+async def test_apply_codebook_uses_application_parallelization_settings(db_engine, monkeypatch) -> None:
     corpus_id, codebook_id, document_ids = await _seed_corpus_codebook(
         db_engine,
         texts=[f"Participant: The manual handoffs slow team {index}." for index in range(17)],
     )
-    del corpus_id
 
     batch_sizes: list[int] = []
     max_concurrency_values: list[int | None] = []
@@ -264,16 +263,16 @@ async def test_apply_codebook_job_uses_generation_parallelization_settings(clien
         lambda: object(),
     )
 
-    create_response = await client.post(
-        f"{API_CODEBOOKS}/{codebook_id}/apply-jobs",
-        json={"transcript_document_ids": document_ids},
-    )
+    session_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_factory() as session:
+        summary = await CodebookApplicationService(session).apply_codebook(
+            corpus_id=UUID(corpus_id),
+            codebook_id=UUID(codebook_id),
+            transcript_document_ids=[UUID(document_id) for document_id in document_ids],
+        )
 
-    assert create_response.status_code == 202
-    terminal_job = await _wait_for_terminal_job_status(client, create_response.json()["data"]["id"])
-    assert terminal_job["status"] == "succeeded"
-    assert terminal_job["documents_coded"] == 17
-    assert terminal_job["documents_failed"] == 0
+    assert summary.documents_coded == 17
+    assert summary.documents_failed == 0
     assert batch_sizes == [16, 1]
     assert max_concurrency_values == [8, 8]
 
