@@ -9,7 +9,7 @@
       <div class="alert alert-danger" role="alert">
         <h2 class="h5 alert-heading">Failed to retrieve codebook details</h2>
         <p class="mb-3">{{ error }}</p>
-        <a href="{{ url_for('codebooks.upload_form', corpus_id=corpus_id) }}" class="btn btn-sm btn-danger">Try Again</a>
+        <a href="{{ url_for('ingestion.upload_form', corpus_id=corpus_id, focus='codebook') }}" class="btn btn-sm btn-danger">Try Again</a>
       </div>
     {% else %}
       <div class="bg-white border rounded-3 shadow-sm p-4 p-md-5 text-center">

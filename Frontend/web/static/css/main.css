@@ -449,6 +449,12 @@
 }
 .upload-card--cyan:hover { border-color: #06b6d4; }
 
+.upload-card--dimmed {
+    opacity: 0.35;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
 .upload-card-icon {
     width: 26px;
     height: 26px;

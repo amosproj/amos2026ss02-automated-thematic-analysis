@@ -64,7 +64,7 @@ def codebooks_upload_landing() -> str:
         flash(exc.user_message, "danger")
         return redirect(url_for("codebooks.list_codebooks"))
 
-    return redirect(url_for("codebooks.upload_form", corpus_id=active_corpus_id))
+    return redirect(url_for("ingestion.upload_form", corpus_id=active_corpus_id, focus="codebook"))
 
 
 @bp.get("/<corpus_id>/")
@@ -402,7 +402,7 @@ def success(corpus_id: str) -> str:
     """Show details of the successfully saved codebook."""
     codebook_id = request.args.get("codebook_id")
     if not codebook_id:
-        return redirect(url_for("codebooks.upload_form", corpus_id=corpus_id))
+        return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id, focus="codebook"))
 
     try:
         client = _backend()
@@ -452,8 +452,8 @@ def new_codebook_mode_submit(corpus_id: str):
             url_for("codebooks.new_codebook_auto_form", corpus_id=corpus_id, mode=mode)
         )
 
-    # mode == "manual": branch 9's upload form is corpus-scoped.
-    return redirect(url_for("codebooks.upload_form", corpus_id=corpus_id))
+    # mode == "manual": send to the unified upload page with the codebook card focused.
+    return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id, focus="codebook"))
 
 
 def _resolve_mode(value: str) -> str:

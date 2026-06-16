@@ -17,7 +17,7 @@
   <div class="row g-4 upload-row">
 
     {# ─── Transcripts card (primary, indigo) ─────────────────────────── #}
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-lg-4" id="transcript-upload-col">
       <div class="upload-card upload-card--indigo h-100">
 
         <div class="upload-card-header">
@@ -79,7 +79,7 @@
     </div>
 
     {# ─── Demographics card (secondary, teal) ────────────────────────── #}
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-lg-4" id="demographic-upload-col">
       <div class="upload-card upload-card--cyan h-100">
 
         <div class="upload-card-header">
@@ -165,7 +165,7 @@
     </div>
 
     {# ─── Codebook card (tertiary, teal) ───────────────────────────── #}
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-lg-4" id="codebook-upload-col">
       <div class="upload-card upload-card--teal h-100">
 
         <div class="upload-card-header">
@@ -182,7 +182,7 @@
             <span class="text-white-50 fw-normal fs-6">(optional)</span>
           </p>
           <p class="upload-card-subtitle">
-            Single CSV · Required columns <code class="text-white">node type</code>, <code class="text-white">name</code> and <code class="text-white">description</code>. · Preview and rename before saving
+            Single CSV · Required columns <code class="text-white">node type</code>, <code class="text-white">name</code> and <code class="text-white">description</code> · Max {{ max_size_mb }} MB · Preview and rename before saving
           </p>
         </div>
 
@@ -222,9 +222,15 @@
               <div id="codebook-file-warning" class="small text-danger mt-2"></div>
             </div>
 
-            <button id="codebook-submit-btn" type="submit" class="btn btn-teal" disabled>
-              Upload &amp; preview
-            </button>
+            <div>
+              <button id="codebook-submit-btn" type="submit" class="btn btn-teal" disabled>
+                Upload &amp; preview
+              </button>
+              <div class="mt-2">
+                <a href="{{ url_for('codebooks.manual_form', corpus_id=corpus_id) }}"
+                   class="small text-secondary">Or enter manually &rarr;</a>
+              </div>
+            </div>
           </form>
         </div>
 
@@ -395,6 +401,9 @@
     // Codebook form — single-file picker that mirrors the demographics card's
     // preview UI.
     (() => {
+      const MAX_MB = {{ max_size_mb }};
+      const MAX_BYTES = MAX_MB * 1024 * 1024;
+
       const input    = document.getElementById("codebook_file");
       const preview  = document.getElementById("codebook-file-preview");
       const nameEl   = document.getElementById("codebook-file-name");
@@ -423,11 +432,17 @@
         sizeEl.textContent = formatBytes(file.size);
 
         const isCsv = file.name.toLowerCase().endsWith(".csv");
-        preview.classList.toggle("is-oversize", !isCsv);
-        warning.textContent = isCsv
-          ? ""
-          : "Only CSV files (.csv extension) are supported. Remove or replace it.";
-        submitBtn.disabled = !isCsv;
+        const tooBig = file.size > MAX_BYTES;
+        const invalid = !isCsv || tooBig;
+        preview.classList.toggle("is-oversize", invalid);
+        if (!isCsv) {
+          warning.textContent = "Only CSV files (.csv extension) are supported. Remove or replace it.";
+        } else if (tooBig) {
+          warning.textContent = "File must be at most " + MAX_MB + " MB. Remove or replace it.";
+        } else {
+          warning.textContent = "";
+        }
+        submitBtn.disabled = invalid;
       }
 
       input.addEventListener("change", render);
@@ -435,6 +450,16 @@
         input.value = "";
         render();
       });
+    })();
+
+    // If the page was opened with ?focus=codebook (e.g. from the mode-select
+    // wizard), dim the other cards and scroll the codebook card into view.
+    (() => {
+      const focus = new URLSearchParams(window.location.search).get("focus");
+      if (focus !== "codebook") return;
+      document.getElementById("transcript-upload-col").querySelector(".upload-card").classList.add("upload-card--dimmed");
+      document.getElementById("demographic-upload-col").querySelector(".upload-card").classList.add("upload-card--dimmed");
+      document.getElementById("codebook-upload-col").scrollIntoView({ behavior: "smooth", block: "nearest" });
     })();
   </script>
 {% endblock %}

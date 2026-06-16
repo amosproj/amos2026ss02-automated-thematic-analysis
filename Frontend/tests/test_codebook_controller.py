@@ -96,15 +96,32 @@ def test_list_codebooks_surfaces_backend_error(client, fake_codebook_backend):
 
 
 # ---------------------------------------------------------------------------
-# GET /codebooks/upload
+# GET /codebooks/upload  — landing now redirects to the unified upload page
 # ---------------------------------------------------------------------------
 
 
-def test_upload_form_renders_correctly(client):
-    resp = client.get("/codebooks/test-corpus-id/upload")
+def test_codebooks_upload_landing_redirects_to_unified(client, fake_codebook_backend):
+    resp = client.get("/codebooks/upload")
+    assert resp.status_code == 302
+    assert _UNIFIED_UPLOAD_PATH in resp.headers["Location"]
+    assert "focus=codebook" in resp.headers["Location"]
+
+
+def test_codebooks_upload_landing_backend_error_redirects_to_list(client, fake_codebook_backend):
+    fake_codebook_backend.raise_on = "list_corpora"
+    resp = client.get("/codebooks/upload")
+    assert resp.status_code == 302
+    assert "/codebooks/" in resp.headers["Location"]
+    assert _UNIFIED_UPLOAD_PATH not in resp.headers["Location"]
+
+
+def test_unified_upload_page_shows_codebook_card(client, fake_backend):
+    resp = client.get(_UNIFIED_UPLOAD_PATH)
     assert resp.status_code == 200
-    assert b"Upload" in resp.data
+    assert b"Upload Codebook" in resp.data
     assert b"CSV" in resp.data
+    assert b"Or enter manually" in resp.data
+    assert b"/codebooks/test-corpus-id/manual" in resp.data
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +135,21 @@ def test_manual_form_renders_blank_row(client, fake_codebook_backend):
     assert b"Preview &amp; Confirm Themes" in resp.data
     assert b'name="theme_names[]"' in resp.data
     assert b'name="theme_descriptions[]"' in resp.data
+
+
+# ---------------------------------------------------------------------------
+# POST /codebooks/new/<corpus_id>  — mode selection submit
+# ---------------------------------------------------------------------------
+
+
+def test_mode_submit_manual_redirects_to_unified(client):
+    resp = client.post(
+        "/codebooks/new/test-corpus-id",
+        data={"mode": "manual"},
+    )
+    assert resp.status_code == 302
+    assert _UNIFIED_UPLOAD_PATH in resp.headers["Location"]
+    assert "focus=codebook" in resp.headers["Location"]
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +383,23 @@ def test_success_renders_saved_details(client, fake_codebook_backend):
     assert b"Success Codebook" in resp.data
     assert b"Theme A" in resp.data
     assert fake_codebook_backend.last_fetched_id == "e2f1ad9a-6ab3-4df4-a3f2-c3a2f8b5a002"
+
+
+def test_success_no_codebook_id_redirects_to_unified(client):
+    resp = client.get("/codebooks/test-corpus-id/success")
+    assert resp.status_code == 302
+    assert _UNIFIED_UPLOAD_PATH in resp.headers["Location"]
+    assert "focus=codebook" in resp.headers["Location"]
+
+
+def test_success_backend_error_shows_try_again_to_unified(client, fake_codebook_backend):
+    fake_codebook_backend.raise_on = "get_codebook"
+    resp = client.get("/codebooks/test-corpus-id/success?codebook_id=bad-id")
+    assert resp.status_code == 200
+    assert b"Try Again" in resp.data
+    assert _UNIFIED_UPLOAD_PATH.encode() in resp.data
+    assert b"codebooks/test-corpus-id/upload" not in resp.data
+
 
 # ---------------------------------------------------------------------------
 # GET /codebooks/<codebook_id>/export
