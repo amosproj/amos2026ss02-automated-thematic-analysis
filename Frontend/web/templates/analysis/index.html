@@ -44,20 +44,136 @@
       </li>
     </ul>
 
-    <form method="POST" action="{{ url_for('analysis.trigger_analysis') }}" class="mt-4">
+    <form method="POST" action="{{ url_for('analysis.trigger_analysis') }}" class="mt-4" id="analysis-form">
       <input type="hidden" name="corpus_id" value="{{ active_corpus_id }}">
-      {% if codebook %}
-      <input type="hidden" name="codebook_id" value="{{ codebook.id }}">
-      {% endif %}
+      
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <label for="name" class="form-label fw-semibold">Run Name (Optional)</label>
+          <input type="text" class="form-control" id="name" name="name" placeholder="E.g. Initial Run">
+        </div>
+        <div class="col-md-6">
+          <label for="codebook_id" class="form-label fw-semibold">Select Codebook</label>
+          <select class="form-select" id="codebook_id" name="codebook_id" required>
+            {% for cb in codebooks %}
+              <option value="{{ cb.id }}">{{ cb.name }} (v{{ cb.version }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="form-label fw-semibold">Select Transcripts</label>
+        <div class="form-text mb-2">Select the transcripts to analyze. If none are selected, all transcripts will be used.</div>
+        <div class="ata-selectable-list border rounded-2" data-selectable-list>
+          <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th class="ata-selectable-list__checkbox-cell ps-3" scope="col">
+                    <input class="form-check-input" type="checkbox" id="selectAllTranscripts" aria-label="Select all transcripts" checked>
+                  </th>
+                  <th>Filename</th>
+                  <th>Title</th>
+                  <th>Uploaded</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for t in transcripts %}
+                  <tr class="ata-selectable-list__row" data-selectable-list-row data-item-id="{{ t.id }}">
+                    <td class="ata-selectable-list__checkbox-cell ps-3">
+                      <input class="form-check-input transcript-checkbox"
+                             type="checkbox"
+                             name="transcript_document_ids"
+                             value="{{ t.id }}"
+                             data-selectable-list-checkbox
+                             aria-label="Select transcript {{ t.title }}" checked>
+                    </td>
+                    <td>{{ t.get('filename') or '—' }}</td>
+                    <td>{{ t.get('title', 'Unknown') }}</td>
+                    <td class="text-secondary">{{ (t.get('created_at') or '')[:10] }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
       
       <div class="d-grid gap-2 d-md-flex justify-content-md-start">
         <span {% if not can_run_analysis %}data-bs-toggle="tooltip" title="{{ disabled_reason }}" tabindex="0"{% endif %}>
-          <button type="submit" class="btn {% if can_run_analysis %}btn-primary{% else %}btn-outline-primary{% endif %} px-4 py-2 fw-semibold rounded-3" {% if not can_run_analysis %}disabled style="pointer-events: none;"{% endif %}>
+          <button type="submit" id="submit-analysis-btn" class="btn {% if can_run_analysis %}btn-primary{% else %}btn-outline-primary{% endif %} px-4 py-2 fw-semibold rounded-3" {% if not can_run_analysis %}disabled style="pointer-events: none;"{% endif %}>
             Run Analysis
           </button>
         </span>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Table of previous runs -->
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-body p-4">
+    <h5 class="card-title fw-bold mb-3">Previous Analysis Runs</h5>
+    {% if previous_runs %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Name</th>
+            <th>Run ID</th>
+            <th>Codebook</th>
+            <th>Status</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in previous_runs %}
+          <tr>
+            <td>{{ run.name or '-' }}</td>
+            <td>{{ run.custom_id or '-' }}</td>
+            <td>{{ run.codebook_name }}</td>
+            <td>
+              {% if run.status == 'succeeded' %}
+                <span class="badge bg-success">Succeeded</span>
+              {% elif run.status == 'failed' %}
+                <span class="badge bg-danger">Failed</span>
+              {% elif run.status == 'cancelled' %}
+                <span class="badge bg-secondary">Cancelled</span>
+              {% else %}
+                <span class="badge bg-primary">Running</span>
+              {% endif %}
+            </td>
+            <td>{{ run.created_at[:10] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">No previous analysis runs found for this corpus.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Warning Modal -->
+<div class="modal fade" id="duplicateWarningModal" tabindex="-1" aria-labelledby="duplicateWarningModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header text-warning">
+        <h5 class="modal-title" id="duplicateWarningModalLabel">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>Duplicate Warning
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="duplicateWarningModalMessage">
+        An analysis run with this Codebook and set of Transcripts already exists for this corpus. Are you sure you want to run it again?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-warning" id="confirmSubmitBtn">Proceed Anyway</button>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -68,7 +184,65 @@
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
       return new bootstrap.Tooltip(tooltipTriggerEl)
-    })
+    });
+
+    const previousRuns = {{ previous_runs | tojson | safe }};
+    const form = document.getElementById('analysis-form');
+    const duplicateModal = new bootstrap.Modal(document.getElementById('duplicateWarningModal'));
+    let forceSubmit = false;
+
+    const selectAllCb = document.getElementById('selectAllTranscripts');
+    const transcriptCbs = document.querySelectorAll('.transcript-checkbox');
+    
+    if (selectAllCb) {
+      selectAllCb.addEventListener('change', function(e) {
+        transcriptCbs.forEach(cb => cb.checked = e.target.checked);
+      });
+    }
+
+    if (form) {
+      form.addEventListener('submit', function(e) {
+        if (forceSubmit) return;
+
+        const selectedCodebookId = document.getElementById('codebook_id').value;
+        const selectedTranscriptCheckboxes = document.querySelectorAll('.transcript-checkbox:checked');
+        let selectedTranscriptIds = Array.from(selectedTranscriptCheckboxes).map(cb => cb.value);
+
+        // If no transcripts are selected, the backend assumes ALL transcripts are selected.
+        if (selectedTranscriptIds.length === 0) {
+            selectedTranscriptIds = Array.from(transcriptCbs).map(cb => cb.value);
+        }
+
+        selectedTranscriptIds.sort();
+
+        const isDuplicate = previousRuns.some(run => {
+          if (run.codebook_id !== selectedCodebookId) return false;
+          
+          let runTranscripts = run.transcript_document_ids || [];
+          let runTranscriptIds = [...runTranscripts].sort();
+          
+          if (runTranscriptIds.length !== selectedTranscriptIds.length) return false;
+          
+          return selectedTranscriptIds.every((val, index) => val === runTranscriptIds[index]);
+        });
+
+        if (isDuplicate) {
+          e.preventDefault();
+          document.getElementById('duplicateWarningModalMessage').textContent = 
+            'An analysis run with the exact same Codebook and Transcripts already exists. Are you sure you want to run it again?';
+          duplicateModal.show();
+        }
+      });
+    }
+
+    const confirmBtn = document.getElementById('confirmSubmitBtn');
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', function() {
+        forceSubmit = true;
+        duplicateModal.hide();
+        form.submit();
+      });
+    }
   });
 </script>
 {% endblock %}

@@ -284,34 +284,34 @@ class BackendClient:
         except (json.JSONDecodeError, KeyError) as exc:
             self._handle_exc(exc, path, "DELETE", started_at)
 
-    # ---- Analysis Jobs (Mocked for Issue #10) -------------------------------
+    # ---- Analysis Jobs ------------------------------------------------------
 
-    def trigger_analysis(self, corpus_id: str, codebook_id: str) -> dict:
-        import uuid
-        job_id = str(uuid.uuid4())
-        # Store a fake start time on the class to simulate progress across requests
-        if not hasattr(self.__class__, "_mock_analysis_jobs"):
-            self.__class__._mock_analysis_jobs = {}
-        self.__class__._mock_analysis_jobs[job_id] = {"start_time": time.time(), "total": 10}
-        return {"id": job_id, "status": "queued"}
+    def trigger_analysis(
+        self,
+        corpus_id: str,
+        codebook_id: str,
+        name: str | None = None,
+        custom_id: str | None = None,
+        transcript_document_ids: list[str] | None = None,
+    ) -> dict:
+        payload: dict = {}
+        if name:
+            payload["name"] = name
+        if custom_id:
+            payload["custom_id"] = custom_id
+        if transcript_document_ids:
+            payload["transcript_document_ids"] = transcript_document_ids
+            
+        return self._post(f"/codebooks/{codebook_id}/apply-jobs", json=payload)
 
     def get_analysis_job(self, job_id: str) -> dict:
-        if not hasattr(self.__class__, "_mock_analysis_jobs") or job_id not in self.__class__._mock_analysis_jobs:
-            return {"id": job_id, "status": "succeeded", "passages_done": 10, "passages_total": 10}
-        
-        job_data = self.__class__._mock_analysis_jobs[job_id]
-        elapsed = time.time() - job_data["start_time"]
-        
-        # Simulate 1 passage done per second
-        done = min(int(elapsed * 2), job_data["total"])
-        status = "succeeded" if done >= job_data["total"] else "running"
-        
-        return {
-            "id": job_id,
-            "status": status,
-            "passages_done": done,
-            "passages_total": job_data["total"]
-        }
+        return self._get(f"/codebooks/apply-jobs/{job_id}")
+
+    def list_codebook_application_runs(self, codebook_id: str) -> list[dict]:
+        result = self._get(f"/codebooks/{codebook_id}/application-runs")
+        if isinstance(result, list):
+            return result
+        return result.get("items", result) if isinstance(result, dict) else []
 
     # ---- Codebook Upload & Parsing ------------------------------------------
 
