@@ -12,6 +12,7 @@
   {% set switch_template_url = url_for('ingestion.upload_form', corpus_id='__CORPUS_ID__') %}
   {% set helper_text = 'This selection applies to both transcript and demographic uploads on this page.' %}
   {% set show_create_form = True %}
+  {% set show_delete_corpus = True %}
   {% include "_corpus_select.html" %}
 
   <div class="row g-4 upload-row">
