@@ -13,6 +13,8 @@ RunStatus = Literal["running", "succeeded", "failed", "cancelled"]
 
 
 class CodebookApplicationJobCreateRequest(BaseSchema):
+    name: str | None = Field(default=None, description="User-defined name for the analysis run.")
+    custom_id: str | None = Field(default=None, description="User-defined ID for the analysis run.")
     corpus_id: UUID | None = Field(
         default=None,
         description="Deprecated. The application corpus is resolved from the selected codebook.",
@@ -39,6 +41,8 @@ class CodebookApplicationJobCreateRequest(BaseSchema):
 
 class CodebookApplicationJobSchema(BaseSchema):
     id: UUID
+    name: str | None = None
+    custom_id: str | None = None
     status: JobStatus
     phase: str
     progress_percent: int
@@ -60,6 +64,8 @@ class CodebookApplicationJobSchema(BaseSchema):
 
 class CodebookApplicationRunSchema(BaseSchema):
     id: UUID
+    name: str | None = None
+    custom_id: str | None = None
     corpus_id: UUID
     codebook_id: UUID
     status: RunStatus
@@ -70,6 +76,7 @@ class CodebookApplicationRunSchema(BaseSchema):
     updated_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    transcript_document_ids: list[UUID] = Field(default_factory=list)
 
 
 class ThemeAssignmentSchema(BaseSchema):

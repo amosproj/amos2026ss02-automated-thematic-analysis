@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.dependencies import DbSession
@@ -16,6 +16,7 @@ from app.models import (
     Codebook,
     CodebookApplicationJob,
     CodebookApplicationRun,
+    Corpus,
     CorpusDocument,
     DocumentCoding,
     ThemeAssignment,
@@ -64,6 +65,8 @@ def _compute_progress_percent(job: CodebookApplicationJob) -> int:
 def _to_job_schema(job: CodebookApplicationJob) -> CodebookApplicationJobSchema:
     return CodebookApplicationJobSchema(
         id=job.id,
+        name=job.name,
+        custom_id=job.custom_id,
         status=job.status,
         phase=job.phase,
         progress_percent=_compute_progress_percent(job),
@@ -84,8 +87,11 @@ def _to_job_schema(job: CodebookApplicationJob) -> CodebookApplicationJobSchema:
     )
 
 
-def _to_run_schema(run: CodebookApplicationRun) -> CodebookApplicationRunSchema:
-    return CodebookApplicationRunSchema.model_validate(run)
+def _to_run_schema(run: CodebookApplicationRun, transcript_document_ids: list[UUID] | None = None) -> CodebookApplicationRunSchema:
+    schema = CodebookApplicationRunSchema.model_validate(run)
+    if transcript_document_ids is not None:
+        schema.transcript_document_ids = transcript_document_ids
+    return schema
 
 
 def _to_document_coding_schema(
@@ -166,8 +172,32 @@ async def create_apply_codebook_job(
     session: DbSession,
 ) -> JSONResponse:
     corpus_id = await _validate_job_create_payload(codebook_id=codebook_id, payload=payload, session=session)
+
+    # Auto-generate name and custom_id if empty
+    name = payload.name
+    custom_id = payload.custom_id
+
+    if not name or not custom_id:
+        # Get run count for this corpus to generate incrementing ID
+        run_count_query = select(func.count(CodebookApplicationRun.id)).where(CodebookApplicationRun.corpus_id == corpus_id)
+        run_count = await session.scalar(run_count_query) or 0
+        run_number = run_count + 1
+
+        if not custom_id:
+            custom_id = f"RUN-{run_number:03d}"
+
+        if not name:
+            corpus = await session.get(Corpus, corpus_id)
+            corpus_name = corpus.name if corpus else "Corpus"
+            if run_number == 1:
+                name = f"{corpus_name} Analysis"
+            else:
+                name = f"{corpus_name} Analysis {run_number}"
+
     job = CodebookApplicationJob(
         id=uuid4(),
+        name=name,
+        custom_id=custom_id,
         status="queued",
         phase="queued",
         corpus_id=corpus_id,
@@ -257,8 +287,28 @@ async def list_codebook_application_runs(
         .order_by(desc(CodebookApplicationRun.created_at))
     )
     runs = list((await session.scalars(stmt)).all())
+
+    if not runs:
+        return JSONResponse(content=ResponseEnvelope.ok([]).model_dump(mode="json"))
+
+    run_ids = [run.id for run in runs]
+
+    docs_stmt = select(DocumentCoding.application_run_id, DocumentCoding.document_id).where(
+        DocumentCoding.application_run_id.in_(run_ids)
+    )
+    docs_result = await session.execute(docs_stmt)
+
+    run_to_docs: dict[UUID, list[UUID]] = {run_id: [] for run_id in run_ids}
+    for run_id, document_id in docs_result:
+        run_to_docs[run_id].append(document_id)
+
+    schemas = [
+        _to_run_schema(run, transcript_document_ids=run_to_docs[run.id])
+        for run in runs
+    ]
+
     return JSONResponse(
-        content=ResponseEnvelope.ok([_to_run_schema(run) for run in runs]).model_dump(mode="json")
+        content=ResponseEnvelope.ok(schemas).model_dump(mode="json")
     )
 
 
@@ -275,8 +325,9 @@ async def get_codebook_application_run(
     if run is None:
         raise NotFoundError(f"Codebook application run '{run_id}' not found")
     document_codings = await _load_document_coding_schemas(run_id=run_id, session=session)
+    transcript_ids = [dc.document_id for dc in document_codings]
     detail = CodebookApplicationRunDetailSchema(
-        **_to_run_schema(run).model_dump(),
+        **_to_run_schema(run, transcript_document_ids=transcript_ids).model_dump(),
         document_codings=document_codings,
     )
     return JSONResponse(content=ResponseEnvelope.ok(detail).model_dump(mode="json"))

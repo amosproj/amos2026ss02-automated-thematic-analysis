@@ -89,6 +89,8 @@ class CodebookApplicationService:
     async def apply_codebook(
         self,
         *,
+        name: str | None = None,
+        custom_id: str | None = None,
         corpus_id: UUID,
         codebook_id: UUID,
         transcript_document_ids: list[UUID] | None,
@@ -120,6 +122,8 @@ class CodebookApplicationService:
 
         application_run = CodebookApplicationRun(
             id=uuid.uuid4(),
+            name=name,
+            custom_id=custom_id,
             corpus_id=corpus_id,
             codebook_id=codebook_id,
             status="running",

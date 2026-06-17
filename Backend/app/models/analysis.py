@@ -25,6 +25,8 @@ class CodebookApplicationRun(Base, TimestampMixin):
     __tablename__ = "codebook_application_runs"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    custom_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     corpus_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("corpora.id", ondelete="CASCADE"), index=True
     )
@@ -112,6 +114,8 @@ class CodebookApplicationJob(Base, TimestampMixin):
     __tablename__ = "codebook_application_jobs"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    custom_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(32), index=True, default="queued")
     phase: Mapped[str] = mapped_column(String(64), default="queued")
     corpus_id: Mapped[uuid.UUID] = mapped_column(
