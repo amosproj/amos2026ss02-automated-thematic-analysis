@@ -86,7 +86,7 @@ def test_trigger_analysis_missing_data(client, fake_backend):
 def test_analysis_wait_page(client):
     resp = client.get("/analysis/job/test-job")
     assert resp.status_code == 200
-    assert b"Analysis in Progress" in resp.data
+    assert b"Applying Codebook" in resp.data
 
 def test_analysis_job_status(client, fake_backend):
     job = fake_backend.trigger_analysis("test", "cb1")

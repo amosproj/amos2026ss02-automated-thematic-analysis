@@ -251,7 +251,14 @@ class FakeBackend:
 
     # ---- Analysis Jobs ------------------------------------------------------
     
-    def trigger_analysis(self, corpus_id: str, codebook_id: str) -> dict:
+    def trigger_analysis(
+        self,
+        corpus_id: str,
+        codebook_id: str,
+        name: str | None = None,
+        custom_id: str | None = None,
+        transcript_document_ids: list[str] | None = None,
+    ) -> dict:
         self._maybe_raise("trigger_analysis")
         import uuid
         job_id = str(uuid.uuid4())
@@ -260,8 +267,11 @@ class FakeBackend:
             "status": "queued",
             "corpus_id": corpus_id,
             "codebook_id": codebook_id,
-            "passages_total": 5,
-            "passages_done": 0,
+            "name": name,
+            "custom_id": custom_id,
+            "transcript_document_ids": transcript_document_ids or [],
+            "documents_total": 5,
+            "documents_done": 0,
         }
         if not hasattr(self, "analysis_jobs"):
             self.analysis_jobs = {}
@@ -271,8 +281,12 @@ class FakeBackend:
     def get_analysis_job(self, job_id: str) -> dict:
         self._maybe_raise("get_analysis_job")
         if not hasattr(self, "analysis_jobs") or job_id not in self.analysis_jobs:
-            return {"id": job_id, "status": "succeeded", "passages_total": 5, "passages_done": 5}
+            return {"id": job_id, "status": "succeeded", "documents_total": 5, "documents_done": 5}
         return self.analysis_jobs[job_id]
+
+    def list_codebook_application_runs(self, codebook_id: str) -> list[dict]:
+        self._maybe_raise("list_codebook_application_runs")
+        return []
 
     # ---- Internal -----------------------------------------------------------
 

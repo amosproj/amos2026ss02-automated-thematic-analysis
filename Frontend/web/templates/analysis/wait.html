@@ -1,90 +1,172 @@
 {% extends "base.html" %}
-
-{% block title %}Analysis in Progress{% endblock %}
-
-{% block head_extra %}
-<style>
-  .wait-container {
-    max-width: 600px;
-    margin: 4rem auto;
-    text-align: center;
-  }
-  .spinner-border {
-    width: 4rem;
-    height: 4rem;
-    color: var(--bs-primary);
-  }
-</style>
-{% endblock %}
-
+{% block title %}Applying Codebook{% endblock %}
 {% block content %}
-<div class="wait-container">
-  <div class="spinner-border mb-4" role="status">
-    <span class="visually-hidden">Loading...</span>
+  <div class="mb-4">
+    <h1 class="h3 mb-1">Applying Codebook</h1>
+    <p class="text-secondary mb-0 d-flex align-items-center gap-2">
+      <span id="status-spinner"
+            class="spinner-border spinner-border-sm text-secondary"
+            role="status"
+            aria-hidden="true"></span>
+      <span id="status-line">Starting analysis run&hellip;</span>
+    </p>
   </div>
-  
-  <h2 class="h3 mb-3">Analysis in Progress</h2>
-  <p class="text-secondary mb-4">
-    The system is now tagging your transcripts based on the codebook. This may take a few minutes depending on the size of the corpus.
-  </p>
 
-  <div class="progress mb-3" style="height: 1.5rem;">
-    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+  <div class="bg-white border rounded-2 p-4" style="max-width: 640px;"
+       data-job-id="{{ job_id }}"
+       data-status-url="{{ url_for('analysis.job_status', job_id=job_id) }}"
+       data-list-url="{{ url_for('analysis.index') }}"
+       id="progress-app">
+
+    <div class="progress mb-3" role="progressbar" aria-label="Analysis progress">
+      <div id="progress-bar"
+           class="progress-bar progress-bar-striped progress-bar-animated"
+           style="width: 0%">0%</div>
+    </div>
+
+    <div class="text-secondary small mb-3">
+      <span id="progress-counts">Preparing&hellip;</span>
+    </div>
+
+    <div id="progress-error" class="alert alert-danger d-none" role="alert"></div>
+
+    <form id="cancel-form" method="post" action="">
+      <button type="button" id="cancel-btn" class="btn btn-outline-secondary">Cancel</button>
+    </form>
   </div>
-  
-  <div id="progress-text" class="text-muted small">Initializing...</div>
-</div>
-{% endblock %}
 
-{% block scripts %}
-<script>
-  (function() {
-    const jobId = "{{ job_id }}";
-    const statusUrl = "{{ url_for('analysis.job_status', job_id=job_id) }}";
-    const progressBar = document.getElementById("progress-bar");
-    const progressText = document.getElementById("progress-text");
+  <script>
+    (() => {
+      const app = document.getElementById("progress-app");
+      const jobId = app.dataset.jobId;
+      const statusUrl = app.dataset.statusUrl;
+      const listUrl = app.dataset.listUrl;
 
-    async function poll() {
-      try {
-        const response = await fetch(statusUrl, { headers: { "Accept": "application/json" } });
-        if (!response.ok) throw new Error("Network response was not ok");
-        const status = await response.json();
+      const statusLine = document.getElementById("status-line");
+      const statusSpinner = document.getElementById("status-spinner");
+      const bar = document.getElementById("progress-bar");
+      const counts = document.getElementById("progress-counts");
+      const errorEl = document.getElementById("progress-error");
+      const cancelBtn = document.getElementById("cancel-btn");
 
-        if (status.status === "succeeded") {
-          progressBar.style.width = "100%";
-          progressBar.textContent = "100%";
-          progressBar.classList.remove("progress-bar-animated");
-          progressBar.classList.add("bg-success");
-          progressText.textContent = "Analysis complete! Redirecting...";
-          
-          setTimeout(() => {
-            // Replace with actual results page when ready
-            window.location.href = "{{ url_for('analysis.index') }}";
-          }, 1500);
-          return;
-        } else if (status.status === "failed") {
-          progressBar.classList.remove("progress-bar-animated");
-          progressBar.classList.add("bg-danger");
-          progressText.textContent = "Analysis failed: " + (status.error_message || "Unknown error");
-          return;
-        }
+      let pollIntervalMs = 600;
+      const MAX_INTERVAL_MS = 1800;
 
-        const total = status.passages_total || 0;
-        const done = status.passages_done || 0;
-        if (total > 0) {
-          const pct = Math.round((done / total) * 100);
-          progressBar.style.width = pct + "%";
-          progressBar.textContent = pct + "%";
-          progressText.textContent = `Processed ${done} of ${total} passages...`;
-        }
+      let stopped = false;
+      let tickCount = 0;
 
-      } catch (err) {
-        console.error("Polling error:", err);
+      function showError(message) {
+        errorEl.textContent = message;
+        errorEl.classList.remove("d-none");
       }
-      setTimeout(poll, 1000);
-    }
 
-    setTimeout(poll, 500);
-  })();
-</script>
+      function setBar(pct) {
+        bar.style.width = pct + "%";
+        bar.textContent = pct + "%";
+        bar.setAttribute("aria-valuenow", String(pct));
+      }
+
+      function paint(job) {
+        const total = job.documents_total || 0;
+        const done = job.documents_done || 0;
+
+        if (job.status === "queued") {
+          setBar(0);
+          counts.textContent = "Preparing…";
+          statusLine.textContent = "Waiting for a worker…";
+          return;
+        }
+
+        if (job.status === "running" && done === 0) {
+          setBar(2);
+          counts.textContent = total > 0
+            ? ("0 / " + total + " transcripts")
+            : "Connected — waiting to process first transcript…";
+          statusLine.textContent = "Connected to worker — initializing analysis…";
+          return;
+        }
+
+        if (job.status === "running") {
+          const raw = total > 0 ? Math.round((done / total) * 100) : 2;
+          const pct = Math.min(99, Math.max(2, raw));
+          setBar(pct);
+          counts.textContent = done + " / " + total + " transcripts";
+          statusLine.textContent = total > 0
+            ? "Applying codebook — " + done + " of " + total + " transcripts analyzed…"
+            : "Applying codebook…";
+          return;
+        }
+
+        if (job.status === "succeeded") {
+          setBar(100);
+          counts.textContent = (done || total) + " / " + (total || done) + " transcripts";
+          statusLine.textContent = "Done. Redirecting to results…";
+        } else {
+          statusLine.textContent = "Status: " + job.status;
+        }
+      }
+
+      function stopAnimation() {
+        bar.classList.remove("progress-bar-animated", "progress-bar-striped");
+        statusSpinner.classList.add("d-none");
+      }
+
+      function redirectFor(job) {
+        window.location = listUrl;
+      }
+
+      function onTerminal(job) {
+        stopped = true;
+        if (job.status === "succeeded") {
+          setBar(100);
+          statusLine.textContent = "Done. Redirecting to results…";
+          cancelBtn.disabled = true;
+          setTimeout(() => redirectFor(job), 1000);
+          return;
+        }
+        stopAnimation();
+        cancelBtn.disabled = true;
+        if (job.status === "failed") {
+          showError(job.error_message || "Analysis failed.");
+        } else if (job.status === "cancelled") {
+          showError("Analysis was cancelled.");
+        }
+      }
+
+      async function tick() {
+        if (stopped) return;
+        try {
+          const r = await fetch(statusUrl, { headers: { "Accept": "application/json" } });
+          const job = await r.json();
+          if (job.error) {
+            stopAnimation();
+            showError(job.error);
+            return;
+          }
+          paint(job);
+          if (["succeeded", "failed", "cancelled"].includes(job.status)) {
+            onTerminal(job);
+            return;
+          }
+        } catch (e) {
+        }
+        tickCount += 1;
+        if (tickCount >= 5 && pollIntervalMs < MAX_INTERVAL_MS) {
+          pollIntervalMs = MAX_INTERVAL_MS;
+        }
+        setTimeout(tick, pollIntervalMs);
+      }
+
+      cancelBtn.addEventListener("click", async () => {
+        cancelBtn.disabled = true;
+        try {
+          // Send cancel request to the job cancellation endpoint
+          await fetch("/api/v1/codebooks/apply-jobs/" + jobId + "/cancel", { method: "POST" });
+        } catch (e) {
+        }
+      });
+
+      tick();
+    })();
+  </script>
 {% endblock %}

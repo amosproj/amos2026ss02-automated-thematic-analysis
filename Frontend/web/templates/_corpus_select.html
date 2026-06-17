@@ -15,7 +15,7 @@
           </option>
         {% endfor %}
       </select>
-      {% if active_corpus_id %}
+      {% if active_corpus_id and show_delete_corpus %}
       <button type="button" class="btn btn-outline-danger shadow-none" data-bs-toggle="modal" data-bs-target="#deleteCorpusModal-{{ active_corpus_id }}">
         <i class="bi bi-trash"></i> Delete
       </button>

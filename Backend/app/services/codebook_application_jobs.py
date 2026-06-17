@@ -123,6 +123,8 @@ class CodebookApplicationJobRunner:
 
             try:
                 summary = await service.apply_codebook(
+                    name=job.name,
+                    custom_id=job.custom_id,
                     corpus_id=job.corpus_id,
                     codebook_id=job.codebook_id,
                     transcript_document_ids=transcript_document_ids,
