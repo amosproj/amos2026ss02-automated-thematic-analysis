@@ -1,0 +1,55 @@
+Title	URL	Assignees	Status	Estimated size	Real size	Labels	Merge Status	Priority
+Add Theme Descriptions to Codebook Page	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/178		Product Backlog			Codebook, Sprint 10		
+Add Theme Descriptions to Codebook Page	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/178		Product Backlog			Codebook, Sprint 10		
+Drill Down into a Theme	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/15		Product Backlog			Corpus View, Sprint 10		
+Navigate to Source Quote	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/16		Product Backlog			Corpus View, Interview View		
+Select Demographic Dimensions	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/17		Product Backlog			Corpus View		
+View Demographic Breakdown	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/18		Product Backlog			Corpus View		
+Open Individual Interview	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/19		Product Backlog			Interview View		
+View Highlighted Themes	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/22		Product Backlog			Interview View		
+View Theme Legend	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/23		Product Backlog			Interview View		
+Windows Installer	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/169		Product Backlog			Sprint 10, System / AI Processing		
+LLM API Configuration UI	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/176		Product Backlog			Sprint 10, System / AI Processing		
+LLM API Configuration Backend	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/177		Product Backlog			Sprint 10, System / AI Processing		
+Implement Analysis Page UI	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/93		Product Backlog			System / AI Processing		
+Post-Analysis Natural Language Querying	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/88		Product Backlog			System / AI Processing		
+LLM Selection Evaluation	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/44		Product Backlog			System / AI Processing		
+Remove theme type distinction from the frontend	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/168	slnkahveci	Sprint Backlog			Sprint 9		
+Wrong declarationof multiple file upload in corpus/upload router	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/111	julianlucawendlandt-jpg	Sprint Backlog					
+Linking Interviews and Demographic Data manually	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/74	hrasul	In Progress	5		Corpus Management		
+Apply Codebook to Corpus	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/12	julianlucawendlandt-jpg, Wecoreator	Awaiting Review	8		Sprint 8, System / AI Processing	Merged	High Priority
+Semi-Automatic Codebook Creation	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/124	slnkahveci	Awaiting Review			Codebook, Sprint 8		
+Codebook application parallelization & batching	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/159	Wecoreator	Awaiting Review			Codebook, Sprint 9	Merged	
+Delete Corpus	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/134	ClimbTheGrind, paulKlarer	Awaiting Review	3		Corpus Management, Sprint 9		
+Uniform Design for list item actions	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/151	ClimbTheGrind, Wecoreator	Awaiting Review			Corpus View, Interview View, Sprint 9	Merged	
+View Interviewee Demographics	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/24	ClimbTheGrind, paulKlarer	Awaiting Review	3		Interview View	Merged	
+Read Full Transcript	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/20	ClimbTheGrind, paulKlarer	Awaiting Review	3		Interview View, Sprint 8	Merged	
+Trigger Codebook Application	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/10	ClimbTheGrind, paulKlarer	Awaiting Review	2		Query & Analysis Initialization, Sprint 8	Merged	
+Change industry partner's reference	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/165	slnkahveci	Awaiting Review			Sprint 8	Merged	
+Unify the Upload Pages	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/130	slnkahveci	Awaiting Review			Sprint 8		
+Ingestion endpoint (/ingestion/corpora/{corpus_id}/upload) returns status ok even if error happens	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/110	julianlucawendlandt-jpg	Awaiting Review				Merged	
+Setup Frontend	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/57	annus3, slnkahveci	Feature Archive	8	8	Set Up, Sprint 4, Sprint 5	Merged	High Priority
+Implement Automatic Codebook Generation	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/86	julianlucawendlandt-jpg, Wecoreator	Feature Archive	5	5	Sprint 6, System / AI Processing		High Priority
+Refactor Transcript ingestion/saving to reduce complexity	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/129	julianlucawendlandt-jpg	Feature Archive	5	5		Merged	High Priority
+Export Codebook	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/85	ClimbTheGrind	Feature Archive	2	2	Codebook, Sprint 6		
+Delete Transkript	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/136	ClimbTheGrind, Wecoreator	Feature Archive	3	2	Corpus Management, Sprint 8	Merged	
+Delete Demographic Data	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/137	ClimbTheGrind, paulKlarer	Feature Archive	3	2	Corpus Management, Sprint 8	Merged	
+Delete Codebook	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/135	ClimbTheGrind, paulKlarer	Feature Archive	3	3	Corpus Management, Sprint 8	Merged	
+Demographic Data Upload Frontend	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/91	annus3, ClimbTheGrind, paulKlarer	Feature Archive	2	2	Corpus Management, Sprint 6		
+Demographic Data Viewer Page	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/92	ClimbTheGrind, paulKlarer	Feature Archive	2	2	Corpus Management, Sprint 6		
+Link Transcripts and Demographic Data	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/5	julianlucawendlandt-jpg, Wecoreator	Feature Archive	5	3	Corpus Management, Sprint 5		
+Upload Demographic Data	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/3	julianlucawendlandt-jpg, Wecoreator	Feature Archive	3	5	Corpus Management, Sprint 4, Sprint 5		
+Upload Transcripts	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/2	slnkahveci	Feature Archive	3	3	Corpus Management, Sprint 4		
+Transcript text normalization	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/63	slnkahveci	Feature Archive	1		Corpus Management, Sprint 4		
+Simple data persistence layer	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/39	julianlucawendlandt-jpg, Wecoreator	Feature Archive	5	6	Corpus Management, Sprint 3		
+View Theme Overview	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/13	julianlucawendlandt-jpg, Wecoreator	Feature Archive	8	8	Corpus View, Sprint 3		
+Enter Natural Language Query	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/6	hrasul, slnkahveci	Feature Archive	3	3	Query & Analysis Initialization, Sprint 7	Merged	
+Select Coding Mode Frontend	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/7	slnkahveci	Feature Archive	3	3	Query & Analysis Initialization, Sprint 6		
+Upload Predefined Codebook	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/9	ClimbTheGrind, paulKlarer	Feature Archive	3	5	Query & Analysis Initialization, Sprint 4, Sprint 5		
+Automated database structure setup	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/49	julianlucawendlandt-jpg, Wecoreator	Feature Archive		1	Query & Analysis Initialization, Sprint 3		
+setup.ps1 -Rebuild flag fails	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/125	Wecoreator	Feature Archive			Set Up, Sprint 7		
+CI/CD Pipeline GitHub Actions	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/96	Wecoreator	Feature Archive	1	3	Set Up, Sprint 6		
+Integrate Frontend build into setup.sh script	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/94	hrasul	Feature Archive	1	1	Set Up, Sprint 6		
+Implement Build Process	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/55	hrasul	Feature Archive	1	3	Set Up, Sprint 4		
+Plan Build Process	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/43		Feature Archive	5		Set Up, Sprint 3		
+Setup pytest container	https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/issues/51	julianlucawendlandt-jpg, Wecoreator	Feature Archive		1	Set Up, Sprint 3		
