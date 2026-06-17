@@ -20,6 +20,7 @@ Once the application is running, you can access the following services:
 A **Corpus** is a collection of related documents.
 - **Create a Corpus:** Group your research materials logically (e.g., "Customer Interviews 2026").
 - **Upload Documents:** Add unstructured text documents (PDFs, transcripts) to a Corpus. The system automatically breaks these documents down into manageable **Chunks**.
+- **Delete Corpus:** Note that deleting a corpus is a permanent action and is ONLY accessible from the "Upload" view of your selected corpus.
 
 ### 2. Codebook Interaction
 A **Codebook** defines the themes you are looking for. It acts as a hierarchical structure of nodes/themes.
@@ -38,5 +39,5 @@ The system builds a queryable thematic knowledge graph based on your analysis.
 1. **Setup:** Ensure your administrator has configured the `LLM_API_KEY` to enable the AI pipeline.
 2. **Ingest Data:** Navigate to the API or Demo UI and create a new Corpus. Upload your source files.
 3. **Select/Upload a Codebook:** Provide a hierarchical tree of themes (in JSON or CSV format, depending on your setup) that represents what you want to extract.
-4. **Run Analysis:** Trigger the thematic mapping process. The LangChain pipeline will analyze each text chunk.
-5. **Review Results:** Explore the knowledge graph to discover insights, validate mappings, and track overarching themes across all documents.
+4. **Run Analysis:** Navigate to the "Trigger Analysis" page. You can optionally name your run. You may choose a specific Codebook and select the transcripts you wish to run against from the list. *Note: The system will warn you if you attempt to submit a run with the exact same Codebook and Transcripts as a previous run.*
+5. **Review Results:** You can track the progress and status of your analysis runs in the "Previous Analysis Runs" table located beneath the trigger form. Explore the knowledge graph to discover insights, validate mappings, and track overarching themes across all documents.
