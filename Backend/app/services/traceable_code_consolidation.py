@@ -4,6 +4,8 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
+from loguru import logger
+
 from app.config import Settings, get_settings
 from app.schemas.traceable_llm import CodeRelationshipResult
 from app.services.remote_embeddings import RemoteEmbeddingClient, cosine_similarity
@@ -47,8 +49,15 @@ async def consolidate_code_candidates(
     if not candidates:
         return [], []
 
+    # Cheap deterministic cleanup first: exact label duplicates do not need
+    # embeddings or an LLM relationship call.
     exact_groups = _group_exact_labels(candidates)
     grouped_candidates = [_merge_exact_group(group) for group in exact_groups]
+    logger.info(
+        "Traceable consolidation started: raw_candidates={}, exact_groups={}",
+        len(candidates),
+        len(grouped_candidates),
+    )
     if len(grouped_candidates) == 1:
         only = grouped_candidates[0]
         return [
@@ -60,6 +69,8 @@ async def consolidate_code_candidates(
             )
         ], []
 
+    # Embeddings are used only as a prefilter. The LLM sees a much smaller set
+    # of likely-related pairs instead of the full O(n^2) code-pair space.
     embeddings = await (embedding_client or RemoteEmbeddingClient()).embed(
         [_embedding_text(candidate) for candidate in grouped_candidates]
     )
@@ -67,6 +78,14 @@ async def consolidate_code_candidates(
         embeddings,
         threshold=cfg.CODE_SIMILARITY_THRESHOLD,
         top_k=cfg.CODE_PAIR_TOP_K,
+    )
+    logger.info(
+        "Traceable consolidation embedding prefilter complete: candidates={}, candidate_pairs={}, "
+        "similarity_threshold={}, top_k={}",
+        len(grouped_candidates),
+        len(pair_scores),
+        cfg.CODE_SIMILARITY_THRESHOLD,
+        cfg.CODE_PAIR_TOP_K,
     )
 
     equivalent_parent = list(range(len(grouped_candidates)))
@@ -91,9 +110,12 @@ async def consolidate_code_candidates(
         if result.confidence < 0.65:
             return
         if result.relationship == "equivalent":
+            # Equivalent codes are merged immediately with union-find.
             preferred, other = _preferred_candidate_pair(grouped_candidates, left_index, right_index)
             _union(equivalent_parent, preferred, other)
         elif result.relationship == "a_subordinate_to_b":
+            # Subordinate relations are kept as graph edges first. High-frequency
+            # child codes may survive as distinct codes later.
             subordinate_edges.add((left_index, right_index))
             action_log.append({"action": "subsumed_code", "source": left.label, "target": right.label})
         elif result.relationship == "b_subordinate_to_a":
@@ -111,6 +133,7 @@ async def consolidate_code_candidates(
     root_to_group_index = {root: index for index, root in enumerate(equivalent_roots)}
     group_parent = list(range(len(equivalent_roots)))
     grouped_edges: set[tuple[int, int]] = set()
+    # Resolve equivalent groups before applying subordinate relationships.
     for child_index, parent_index in _transitive_edges(subordinate_edges):
         child_root = _find(equivalent_parent, child_index)
         parent_root = _find(equivalent_parent, parent_index)
@@ -129,6 +152,8 @@ async def consolidate_code_candidates(
         child = merged_groups[child_group_index]
         if child.frequency > cfg.TRACEABLE_MIN_CODE_FREQUENCY:
             continue
+        # Only low-frequency child codes are folded upward. This approximates
+        # the paper's hierarchy cleanup without erasing recurring subdimensions.
         best_parent_index = max(
             parent_group_indexes,
             key=lambda index: _merge_score(merged_groups[index], child_count_by_parent[index]),
@@ -144,8 +169,12 @@ async def consolidate_code_candidates(
         )
 
     final_groups: dict[int, list[ConsolidatedCode]] = defaultdict(list)
+    dropped_orphans = 0
     for group_index, code in enumerate(merged_groups):
         if code.frequency <= cfg.TRACEABLE_MIN_CODE_FREQUENCY and group_index not in parents_by_child:
+            dropped_orphans += 1
+            # One-off concepts that are not attached to a broader parent are
+            # treated as weak codebook candidates and retained only in the log.
             action_log.append(
                 {
                     "action": "dropped_low_frequency_orphan_code",
@@ -160,6 +189,15 @@ async def consolidate_code_candidates(
     if not consolidated:
         consolidated = merged_groups
     consolidated.sort(key=lambda code: (-code.frequency, code.label.lower()))
+    logger.info(
+        "Traceable consolidation finished: equivalent_groups={}, subordinate_edges={}, "
+        "dropped_orphans={}, final_codes={}, actions={}",
+        len(merged_groups),
+        len(grouped_edges),
+        dropped_orphans,
+        len(consolidated),
+        len(action_log),
+    )
     return consolidated, action_log
 
 
@@ -254,6 +292,8 @@ def _candidate_pair_scores(
     threshold: float,
     top_k: int,
 ) -> list[tuple[int, int, float]]:
+    # Keep only top-k neighbors above threshold for each code. This preserves
+    # likely semantic overlaps while controlling LLM pair-classification cost.
     candidates: set[tuple[int, int]] = set()
     scored: list[tuple[int, int, float]] = []
     for left_index, left_vector in enumerate(embeddings):

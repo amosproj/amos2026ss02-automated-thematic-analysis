@@ -85,6 +85,12 @@ class TraceableAnalysisJobRunner:
             job.phase = "extracting_quote_codes"
             job.started_at = _utc_now_naive()
             await session.commit()
+            logger.info(
+                "Traceable analysis job started: job_id={}, corpus_id={}, codebook_name='{}'",
+                job.id,
+                job.corpus_id,
+                job.codebook_name,
+            )
 
             transcript_document_ids = [UUID(raw) for raw in json.loads(job.transcript_document_ids_json)]
             service = TraceableAnalysisService(session)
@@ -107,6 +113,7 @@ class TraceableAnalysisJobRunner:
                         return
                     phase_job.phase = phase
                     await phase_session.commit()
+                logger.info("Traceable analysis job phase changed: job_id={}, phase={}", job_id, phase)
 
             async def _on_codebook_created(codebook_id: UUID) -> None:
                 async with session_factory() as codebook_session:
@@ -164,6 +171,17 @@ class TraceableAnalysisJobRunner:
                 job.error_message = None
                 job.finished_at = _utc_now_naive()
                 await session.commit()
+                logger.info(
+                    "Traceable analysis job succeeded: job_id={}, codebook_id={}, application_run_id={}, "
+                    "quotes={}, codes={}, themes={}, documents_coded={}",
+                    job_id,
+                    result.codebook_id,
+                    result.application_run_id,
+                    result.quotes_created,
+                    result.codes_created,
+                    result.themes_created,
+                    result.documents_coded,
+                )
             except TraceableAnalysisCancelledError:
                 await session.rollback()
                 await session.refresh(job)
@@ -171,6 +189,7 @@ class TraceableAnalysisJobRunner:
                 job.phase = "cancelled"
                 job.finished_at = _utc_now_naive()
                 await session.commit()
+                logger.info("Traceable analysis job cancelled: job_id={}", job_id)
             except Exception as exc:
                 await session.rollback()
                 await session.refresh(job)
@@ -179,6 +198,7 @@ class TraceableAnalysisJobRunner:
                 job.error_message = str(exc)
                 job.finished_at = _utc_now_naive()
                 await session.commit()
+                logger.exception("Traceable analysis job failed: job_id={}, error={}", job_id, exc)
 
 
 traceable_analysis_job_runner = TraceableAnalysisJobRunner()

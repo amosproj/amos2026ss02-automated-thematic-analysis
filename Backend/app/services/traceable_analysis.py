@@ -9,14 +9,17 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from langchain_core.output_parsers import JsonOutputParser
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.exceptions import NotFoundError, UnprocessableError
 from app.llm.client import build_chat_model
 from app.llm.traceable_prompts import (
     build_code_relationship_prompt,
     build_codebook_review_prompt,
+    build_missing_code_generation_prompt,
     build_quote_code_extraction_prompt,
     build_research_query_block,
     build_researcher_topics_block,
@@ -44,6 +47,7 @@ from app.schemas.traceable_llm import (
     CodebookReviewResult,
     CodebookSynthesisResult,
     CodeRelationshipResult,
+    MissingCodeGenerationResult,
     QuoteCodeExtractionResult,
     SubthemeSynthesisResult,
     SynthesizedCode,
@@ -114,7 +118,13 @@ def _utc_now_naive() -> datetime:
 
 
 class TraceableAnalysisService:
-    """Experimental quote-grounded codebook generation plus application."""
+    """Experimental quote-grounded codebook generation plus application.
+
+    The pipeline follows the paper's overall shape while adapting persistence to
+    the existing codebook/application tables: quote-code evidence first, code
+    consolidation, code->subtheme->theme synthesis, reviewer refinement, then a
+    final fixed-codebook application pass.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -137,6 +147,16 @@ class TraceableAnalysisService:
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> TraceableAnalysisResult:
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
+        logger.info(
+            "Traceable analysis started: corpus_id={}, selected_documents={}, codebook_name='{}', "
+            "max_refinement_rounds={}, research_query_present={}, researcher_topics_present={}",
+            corpus_id,
+            len(normalized_document_ids) if normalized_document_ids else "all",
+            codebook_name,
+            max_refinement_rounds,
+            bool(research_query),
+            bool(researcher_topics),
+        )
         await self._load_corpus(corpus_id)
         documents = await self._load_documents(
             corpus_id=corpus_id,
@@ -145,11 +165,18 @@ class TraceableAnalysisService:
         documents = [document for document in documents if document.content.strip()]
         if not documents:
             raise UnprocessableError("No non-empty transcripts found for traceable analysis.")
+        logger.info(
+            "Traceable analysis loaded documents: corpus_id={}, documents={}",
+            corpus_id,
+            len(documents),
+        )
 
         await self._session.rollback()
 
         if on_phase is not None:
             await on_phase("extracting_quote_codes")
+        # Paper stage: extract grounded evidence before any theme synthesis.
+        # This is the main guard against zero-shot theme hallucination.
         quote_evidence = await self._extract_quote_codes(
             documents=documents,
             research_query=research_query,
@@ -159,6 +186,12 @@ class TraceableAnalysisService:
         )
         if not quote_evidence:
             raise UnprocessableError("Traceable analysis extracted no grounded quote-code pairs.")
+        logger.info(
+            "Traceable extraction complete: documents={}, quote_code_pairs={}, unique_initial_codes={}",
+            len(documents),
+            len(quote_evidence),
+            len({self._label_key(evidence.code_label) for evidence in quote_evidence}),
+        )
 
         action_log: list[dict[str, object]] = [
             {
@@ -171,6 +204,8 @@ class TraceableAnalysisService:
         if on_phase is not None:
             await on_phase("consolidating_codes")
         await self._raise_if_cancelled(should_cancel)
+        # Paper stage: use embeddings to shortlist likely duplicate/related
+        # codes, then let the LLM classify only those candidate relationships.
         consolidated_codes, consolidation_log = await consolidate_code_candidates(
             candidates,
             classifier=self._classify_code_pair,
@@ -178,9 +213,17 @@ class TraceableAnalysisService:
         action_log.extend(consolidation_log)
         if not consolidated_codes:
             raise UnprocessableError("Code consolidation produced no usable codes.")
+        logger.info(
+            "Traceable code consolidation complete: initial_candidates={}, consolidated_codes={}, actions={}",
+            len(candidates),
+            len(consolidated_codes),
+            len(consolidation_log),
+        )
 
         if on_phase is not None:
             await on_phase("synthesizing_themes")
+        # Paper stage: synthesize upward from consolidated codes. The helper
+        # does this in two prompts: codes->subthemes, then subthemes->themes.
         synthesis = await self._synthesize_codebook(
             consolidated_codes=consolidated_codes,
             quote_evidence=quote_evidence,
@@ -188,6 +231,11 @@ class TraceableAnalysisService:
             researcher_topics=researcher_topics,
         )
         synthesis = self._ensure_synthesis_covers_codes(synthesis, consolidated_codes)
+        logger.info(
+            "Traceable synthesis complete: theme_paths={}, codes={}",
+            len(synthesis.themes),
+            len(synthesis.codes),
+        )
         action_log.append(
             {
                 "action": "synthesize_codebook",
@@ -195,17 +243,27 @@ class TraceableAnalysisService:
                 "codes": len(synthesis.codes),
             }
         )
-        synthesis, review_log = await self._refine_codebook(
+        synthesis, consolidated_codes, review_log = await self._refine_codebook(
             synthesis=synthesis,
             quote_evidence=quote_evidence,
             consolidated_codes=consolidated_codes,
+            research_query=research_query,
+            researcher_topics=researcher_topics,
             max_rounds=max_refinement_rounds,
             should_cancel=should_cancel,
         )
         action_log.extend(review_log)
+        logger.info(
+            "Traceable refinement complete: theme_paths={}, codes={}, review_actions={}",
+            len(synthesis.themes),
+            len(synthesis.codes),
+            len(review_log),
+        )
 
         if on_phase is not None:
             await on_phase("persisting_codebook")
+        # Adaptation: the paper's artifacts are persisted into the existing
+        # Codebook/Theme/Code tables so the current UI can read the result.
         persisted = await self._persist_codebook(
             codebook_name=codebook_name,
             corpus_id=corpus_id,
@@ -215,9 +273,17 @@ class TraceableAnalysisService:
         )
         if on_codebook_created is not None:
             await on_codebook_created(persisted.codebook.id)
+        logger.info(
+            "Traceable codebook persisted: codebook_id={}, themes={}, codes={}",
+            persisted.codebook.id,
+            len(persisted.theme_by_label),
+            len(persisted.code_by_label),
+        )
 
         if on_phase is not None:
             await on_phase("applying_codebook")
+        # Final paper-style application: after refinement, apply only the fixed
+        # generated codebook. Generation quotes are provenance, not assignments.
         applied_evidence = await self._apply_codebook_to_documents(
             documents=documents,
             synthesis=synthesis,
@@ -230,6 +296,11 @@ class TraceableAnalysisService:
                 "assignments": len(applied_evidence),
             }
         )
+        logger.info(
+            "Traceable final application complete: documents={}, assignments={}",
+            len(documents),
+            len(applied_evidence),
+        )
         application_run = await self._persist_application(
             analysis_name=analysis_name,
             custom_id=custom_id,
@@ -240,12 +311,24 @@ class TraceableAnalysisService:
         )
         if on_application_run_created is not None:
             await on_application_run_created(application_run.id)
+        logger.info(
+            "Traceable analysis finished: codebook_id={}, application_run_id={}, documents_coded={}, "
+            "documents_failed={}, final_themes={}, final_codes={}",
+            persisted.codebook.id,
+            application_run.id,
+            application_run.documents_coded,
+            application_run.documents_failed,
+            len(persisted.theme_by_label),
+            len(persisted.code_by_label),
+        )
 
         provenance = self._build_provenance_payload(
             quote_evidence=quote_evidence,
             consolidated_codes=consolidated_codes,
             synthesis=synthesis,
+            applied_evidence=applied_evidence,
         )
+        action_log = self._with_action_ids(action_log)
         return TraceableAnalysisResult(
             codebook_id=persisted.codebook.id,
             application_run_id=application_run.id,
@@ -351,6 +434,7 @@ class TraceableAnalysisService:
                 }
             )
             result = QuoteCodeExtractionResult(**raw_result)
+            document_pairs_before = len(evidence)
             for pair_index, pair in enumerate(result.quote_code_pairs, start=1):
                 label = self._normalize_label(pair.code_label)
                 quote = pair.quote.strip()
@@ -375,6 +459,14 @@ class TraceableAnalysisService:
                 )
             if on_unit_progress is not None:
                 await on_unit_progress(index, len(documents))
+            logger.info(
+                "Traceable extraction document complete: document_index={}, documents_total={}, "
+                "document_id={}, quote_code_pairs={}",
+                index,
+                len(documents),
+                document.id,
+                len(evidence) - document_pairs_before,
+            )
         return evidence
 
     def _build_code_candidates(self, quote_evidence: list[_QuoteEvidence]) -> list[CodeCandidate]:
@@ -423,6 +515,8 @@ class TraceableAnalysisService:
         quote_by_id = {quote.quote_id: quote for quote in quote_evidence}
         payload = []
         for code in consolidated_codes:
+            # Limit examples per code to keep the synthesis prompt bounded
+            # while still preserving direct evidence for each concept.
             examples = [quote_by_id[quote_id].quote for quote_id in code.quote_ids[:5] if quote_id in quote_by_id]
             payload.append(
                 {
@@ -444,6 +538,11 @@ class TraceableAnalysisService:
         )
         subthemes = SubthemeSynthesisResult(**raw_subthemes)
         subthemes = self._ensure_subthemes_cover_codes(subthemes, consolidated_codes)
+        logger.info(
+            "Traceable subtheme synthesis complete: consolidated_codes={}, subthemes={}",
+            len(consolidated_codes),
+            len(subthemes.subthemes),
+        )
 
         theme_parser = JsonOutputParser(pydantic_object=ThemeSynthesisResult)
         theme_chain = build_theme_synthesis_prompt() | build_chat_model(temperature=0.0) | theme_parser
@@ -456,6 +555,11 @@ class TraceableAnalysisService:
         )
         themes = ThemeSynthesisResult(**raw_themes)
         themes = self._ensure_themes_cover_subthemes(themes, subthemes)
+        logger.info(
+            "Traceable theme synthesis complete: subthemes={}, themes={}",
+            len(subthemes.subthemes),
+            len(themes.themes),
+        )
         return self._compose_codebook_synthesis(
             consolidated_codes=consolidated_codes,
             subthemes=subthemes,
@@ -467,6 +571,8 @@ class TraceableAnalysisService:
         synthesis: CodebookSynthesisResult,
         consolidated_codes: list[ConsolidatedCode],
     ) -> CodebookSynthesisResult:
+        # LLM synthesis can omit or rename codes. The paper requires traceable
+        # code artifacts, so canonical consolidated labels are enforced here.
         canonical_by_key = {self._label_key(code.label): code for code in consolidated_codes}
         returned: set[str] = set()
         themes = list(synthesis.themes)
@@ -507,6 +613,8 @@ class TraceableAnalysisService:
         subthemes: SubthemeSynthesisResult,
         consolidated_codes: list[ConsolidatedCode],
     ) -> SubthemeSynthesisResult:
+        # Repair pass: every consolidated code must remain reachable from a
+        # subtheme, even if the model drops it in the first synthesis response.
         canonical_by_key = {self._label_key(code.label): code for code in consolidated_codes}
         covered: set[str] = set()
         cleaned_subthemes = []
@@ -543,6 +651,8 @@ class TraceableAnalysisService:
         themes: ThemeSynthesisResult,
         subthemes: SubthemeSynthesisResult,
     ) -> ThemeSynthesisResult:
+        # Repair pass: every subtheme must be attached to a root theme so the
+        # persisted hierarchy stays navigable as a tree.
         subtheme_by_key = {
             self._label_key(subtheme.subtheme_label): subtheme
             for subtheme in subthemes.subthemes
@@ -583,6 +693,8 @@ class TraceableAnalysisService:
         subthemes: SubthemeSynthesisResult,
         themes: ThemeSynthesisResult,
     ) -> CodebookSynthesisResult:
+        # Collapse the paper's separate theme/subtheme/code artifacts into the
+        # existing flat ThemePath + Code schema used by persistence and UI code.
         code_by_key = {self._label_key(code.label): code for code in consolidated_codes}
         subtheme_by_key = {
             self._label_key(subtheme.subtheme_label): subtheme
@@ -644,14 +756,19 @@ class TraceableAnalysisService:
         synthesis: CodebookSynthesisResult,
         quote_evidence: list[_QuoteEvidence],
         consolidated_codes: list[ConsolidatedCode],
+        research_query: str | None,
+        researcher_topics: str | None,
         max_rounds: int,
         should_cancel: Callable[[], Awaitable[bool]] | None,
-    ) -> tuple[CodebookSynthesisResult, list[dict[str, object]]]:
+    ) -> tuple[CodebookSynthesisResult, list[ConsolidatedCode], list[dict[str, object]]]:
         action_log: list[dict[str, object]] = []
         current = synthesis
+        current_codes = list(consolidated_codes)
         for round_index in range(max(0, max_rounds)):
             await self._raise_if_cancelled(should_cancel)
             before_labels = self._codebook_label_set(current)
+            # Reviewer pass: ask for structural edits using a constrained action
+            # vocabulary so changes can be logged and applied deterministically.
             review = await self._review_codebook(
                 synthesis=current,
                 quote_evidence=quote_evidence,
@@ -660,21 +777,138 @@ class TraceableAnalysisService:
             )
             if not review.actions:
                 action_log.append({"action": "review_complete", "round": round_index + 1, "edits": 0})
+                logger.info(
+                    "Traceable refinement round complete: round={}, proposed_actions=0, status=no_edits",
+                    round_index + 1,
+                )
                 break
             current, applied_actions = self._apply_review_actions(current, review, round_index=round_index + 1)
             action_log.extend(applied_actions)
-            current = self._ensure_synthesis_covers_codes(current, consolidated_codes)
+            logger.info(
+                "Traceable refinement round actions: round={}, proposed_actions={}, applied_actions={}",
+                round_index + 1,
+                len(review.actions),
+                sum(1 for action in applied_actions if action.get("applied")),
+            )
+            if any(action.action == "generate" for action in review.actions):
+                # If the reviewer identifies a genuine missing concept, generate
+                # only quote-backed codes from the original evidence payload.
+                missing_codes = await self._generate_missing_codes(
+                    synthesis=current,
+                    quote_evidence=quote_evidence,
+                    existing_codes=current_codes,
+                    round_index=round_index + 1,
+                )
+                if missing_codes:
+                    existing_keys = {self._label_key(code.label) for code in current_codes}
+                    additions = [
+                        code for code in missing_codes
+                        if self._label_key(code.label) not in existing_keys
+                    ]
+                    if additions:
+                        current_codes.extend(additions)
+                        action_log.extend(
+                            {
+                                "action": "generate_grounded_code",
+                                "round": round_index + 1,
+                                "target": code.label,
+                                "outputs": {"quote_ids": code.quote_ids},
+                            }
+                            for code in additions
+                        )
+                        current = await self._synthesize_codebook(
+                            consolidated_codes=current_codes,
+                            quote_evidence=quote_evidence,
+                            research_query=research_query,
+                            researcher_topics=researcher_topics,
+                        )
+                        logger.info(
+                            "Traceable refinement generated missing codes: round={}, generated_codes={}",
+                            round_index + 1,
+                            len(additions),
+                        )
+            current = self._ensure_synthesis_covers_codes(current, current_codes)
             after_labels = self._codebook_label_set(current)
-            if self._jaccard_similarity(before_labels, after_labels) >= 0.98:
+            threshold = get_settings().TRACEABLE_REFINEMENT_JACCARD_THRESHOLD
+            jaccard = self._jaccard_similarity(before_labels, after_labels)
+            logger.info(
+                "Traceable refinement round summary: round={}, labels_before={}, labels_after={}, "
+                "jaccard={:.3f}, threshold={:.3f}",
+                round_index + 1,
+                len(before_labels),
+                len(after_labels),
+                jaccard,
+                threshold,
+            )
+            if jaccard >= threshold:
+                # Paper-style early stopping: once labels stabilize, further
+                # refinement rounds are unlikely to add useful structure.
                 action_log.append(
                     {
                         "action": "refinement_stabilized",
                         "round": round_index + 1,
-                        "jaccard": self._jaccard_similarity(before_labels, after_labels),
+                        "jaccard": jaccard,
+                        "threshold": threshold,
                     }
                 )
                 break
-        return current, action_log
+        return current, current_codes, action_log
+
+    async def _generate_missing_codes(
+        self,
+        *,
+        synthesis: CodebookSynthesisResult,
+        quote_evidence: list[_QuoteEvidence],
+        existing_codes: list[ConsolidatedCode],
+        round_index: int,
+    ) -> list[ConsolidatedCode]:
+        del round_index
+        existing_labels = {self._label_key(code.label) for code in existing_codes}
+        quote_by_id = {quote.quote_id: quote for quote in quote_evidence}
+        evidence_payload = [
+            {
+                "quote_id": quote.quote_id,
+                "quote": quote.quote,
+                "initial_code_label": quote.code_label,
+            }
+            for quote in quote_evidence
+        ]
+        parser = JsonOutputParser(pydantic_object=MissingCodeGenerationResult)
+        chain = build_missing_code_generation_prompt() | build_chat_model(temperature=0.0) | parser
+        raw_result = await chain.ainvoke(
+            {
+                "codebook": json.dumps(synthesis.model_dump(mode="json"), ensure_ascii=True, indent=2),
+                "quote_evidence": json.dumps(evidence_payload, ensure_ascii=True, indent=2),
+            }
+        )
+        result = MissingCodeGenerationResult(**raw_result)
+        missing: list[ConsolidatedCode] = []
+        for item in result.codes:
+            label = self._truncate_label(self._normalize_label(item.code_label))
+            if not label or self._label_key(label) in existing_labels:
+                continue
+            quote_ids = [
+                quote_id
+                for quote_id in item.source_quote_ids
+                if quote_id in quote_by_id
+            ]
+            if not quote_ids:
+                continue
+            existing_labels.add(self._label_key(label))
+            missing.append(
+                ConsolidatedCode(
+                    label=label,
+                    description=self._clean_optional_text(item.code_description),
+                    candidate_ids=[f"generated:{self._label_key(label)}"],
+                    quote_ids=quote_ids,
+                )
+            )
+        logger.info(
+            "Traceable missing-code generation complete: requested_quote_evidence={}, generated_codes={}",
+            len(quote_evidence),
+            len(missing),
+        )
+        return missing
 
     async def _review_codebook(
         self,
@@ -709,6 +943,9 @@ class TraceableAnalysisService:
         *,
         round_index: int,
     ) -> tuple[CodebookSynthesisResult, list[dict[str, object]]]:
+        # Most reviewer actions are conservative metadata/tree edits. Split is
+        # intentionally audit-only because it requires creating new child scopes
+        # that should be reviewed by a human or a richer structured prompt.
         current = synthesis
         action_log: list[dict[str, object]] = []
         for action in review.actions:
@@ -1098,6 +1335,9 @@ class TraceableAnalysisService:
         synthesis: CodebookSynthesisResult,
         should_cancel: Callable[[], Awaitable[bool]] | None,
     ) -> list[_AppliedEvidence]:
+        # This is the deductive application pass. It intentionally ignores the
+        # initial open-coding assignments and asks the model to use the finalized
+        # codebook labels only.
         codebook_context = self._build_application_codebook_context(synthesis)
         parser = JsonOutputParser(pydantic_object=TraceableApplicationResult)
         chain = build_traceable_application_prompt() | build_chat_model(temperature=0.0) | parser
@@ -1117,6 +1357,7 @@ class TraceableAnalysisService:
                 }
             )
             result = TraceableApplicationResult(**raw_result)
+            document_assignments_before = len(applied)
             for assignment in result.codes:
                 canonical_code = allowed_codes.get(self._label_key(assignment.code_label))
                 if canonical_code is None or not assignment.quote.strip():
@@ -1140,6 +1381,11 @@ class TraceableAnalysisService:
                         researcher_notes=self._clean_optional_text(result.researcher_notes),
                     )
                 )
+            logger.info(
+                "Traceable application document complete: document_id={}, assignments={}",
+                document.id,
+                len(applied) - document_assignments_before,
+            )
         return applied
 
     @staticmethod
@@ -1238,8 +1484,89 @@ class TraceableAnalysisService:
         quote_evidence: list[_QuoteEvidence],
         consolidated_codes: list[ConsolidatedCode],
         synthesis: CodebookSynthesisResult,
+        applied_evidence: list[_AppliedEvidence],
     ) -> dict[str, object]:
+        # Store paper-like artifact provenance as JSON on the experimental job
+        # instead of adding normalized provenance tables during this test phase.
+        theme_artifacts: dict[str, dict[str, object]] = {}
+        subtheme_artifacts: dict[str, dict[str, object]] = {}
+        for theme in synthesis.themes:
+            if not theme.path:
+                continue
+            root = theme.path[0]
+            root_id = TraceableAnalysisService._artifact_id("theme", root.label)
+            theme_artifacts[root_id] = {
+                "theme_id": root_id,
+                "label": root.label,
+                "description": root.description,
+                "subtheme_ids": [],
+            }
+            if len(theme.path) > 1:
+                child = theme.path[-1]
+                child_id = TraceableAnalysisService._artifact_id("subtheme", child.label)
+                subtheme_artifacts[child_id] = {
+                    "subtheme_id": child_id,
+                    "label": child.label,
+                    "description": child.description,
+                    "theme_id": root_id,
+                    "code_ids": [],
+                }
+                theme_artifacts[root_id]["subtheme_ids"].append(child_id)  # type: ignore[index,union-attr]
+
+        code_artifacts = []
+        subtheme_id_by_code: dict[str, str | None] = {}
+        for code in synthesis.codes:
+            code_id = TraceableAnalysisService._artifact_id("code", code.code_label)
+            subtheme_id = (
+                TraceableAnalysisService._artifact_id("subtheme", code.theme_path[-1])
+                if code.theme_path
+                else None
+            )
+            subtheme_id_by_code[TraceableAnalysisService._label_key(code.code_label)] = subtheme_id
+            if subtheme_id and subtheme_id in subtheme_artifacts:
+                subtheme_artifacts[subtheme_id]["code_ids"].append(code_id)  # type: ignore[index,union-attr]
+            source = next(
+                (
+                    consolidated
+                    for consolidated in consolidated_codes
+                    if TraceableAnalysisService._label_key(consolidated.label)
+                    == TraceableAnalysisService._label_key(code.code_label)
+                ),
+                None,
+            )
+            code_artifacts.append(
+                {
+                    "code_id": code_id,
+                    "label": code.code_label,
+                    "description": code.code_description,
+                    "subtheme_id": subtheme_id,
+                    "quote_ids": source.quote_ids if source else [],
+                    "candidate_ids": source.candidate_ids if source else [],
+                    "frequency": source.frequency if source else 0,
+                }
+            )
+        used_code_keys = {
+            TraceableAnalysisService._label_key(evidence.code_label)
+            for evidence in applied_evidence
+        }
+        total_codes = max(1, len(synthesis.codes))
+        exact_matches = [
+            evidence for evidence in applied_evidence
+            if evidence.quote_match_status == "exact"
+        ]
         return {
+            "metrics": {
+                "code_reusability": len(used_code_keys) / total_codes,
+                "assignments_total": len(applied_evidence),
+                "quote_exact_match_rate": (
+                    len(exact_matches) / len(applied_evidence)
+                    if applied_evidence
+                    else 0.0
+                ),
+            },
+            "themes": list(theme_artifacts.values()),
+            "subthemes": list(subtheme_artifacts.values()),
+            "codes": code_artifacts,
             "quotes": [
                 {
                     "quote_id": quote.quote_id,
@@ -1252,17 +1579,40 @@ class TraceableAnalysisService:
                 }
                 for quote in quote_evidence
             ],
-            "consolidated_codes": [
+            "applications": [
                 {
-                    "label": code.label,
-                    "candidate_ids": code.candidate_ids,
-                    "quote_ids": code.quote_ids,
-                    "frequency": code.frequency,
+                    "document_id": str(evidence.document_id),
+                    "code_id": TraceableAnalysisService._artifact_id("code", evidence.code_label),
+                    "subtheme_id": subtheme_id_by_code.get(
+                        TraceableAnalysisService._label_key(evidence.code_label)
+                    ),
+                    "quote": evidence.quote,
+                    "start_char": evidence.start_char,
+                    "end_char": evidence.end_char,
+                    "quote_match_status": evidence.quote_match_status,
                 }
-                for code in consolidated_codes
+                for evidence in applied_evidence
             ],
             "synthesis": synthesis.model_dump(mode="json"),
         }
+
+    @staticmethod
+    def _with_action_ids(action_log: list[dict[str, object]]) -> list[dict[str, object]]:
+        enriched = []
+        for index, action in enumerate(action_log, start=1):
+            action_with_id = {
+                "action_id": f"act_{index:04d}",
+                "inputs": action.get("inputs", {}),
+                "outputs": action.get("outputs", {}),
+                **action,
+            }
+            enriched.append(action_with_id)
+        return enriched
+
+    @staticmethod
+    def _artifact_id(prefix: str, label: str) -> str:
+        key = TraceableAnalysisService._label_key(label).replace(" ", "_")
+        return f"{prefix}_{key[:80]}"
 
     @staticmethod
     def _normalize_label(value: str) -> str:

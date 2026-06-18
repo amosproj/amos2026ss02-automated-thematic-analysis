@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     CODE_SIMILARITY_THRESHOLD: float = 0.78
     CODE_PAIR_TOP_K: int = 20
     TRACEABLE_MIN_CODE_FREQUENCY: int = 1
+    TRACEABLE_REFINEMENT_JACCARD_THRESHOLD: float = 0.98
 
     # Select which provider is active: "FAU" | "ACADEMIC"
     SELECTED_API: str = "FAU"

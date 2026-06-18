@@ -90,6 +90,17 @@ class CodebookReviewResult(BaseModel):
     actions: list[CodebookReviewAction] = Field(default_factory=list)
 
 
+class MissingCodeSuggestion(BaseModel):
+    code_label: str
+    code_description: str | None = None
+    source_quote_ids: list[str] = Field(default_factory=list)
+    reason: str | None = None
+
+
+class MissingCodeGenerationResult(BaseModel):
+    codes: list[MissingCodeSuggestion] = Field(default_factory=list)
+
+
 class TraceableAppliedCodeAssignment(BaseModel):
     code_label: str
     theme_label: str | None = None

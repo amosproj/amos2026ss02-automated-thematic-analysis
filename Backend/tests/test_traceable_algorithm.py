@@ -12,6 +12,7 @@ from app.schemas.traceable_llm import (
 from app.services.traceable_analysis import TraceableAnalysisService
 from app.services.traceable_code_consolidation import (
     CodeCandidate,
+    ConsolidatedCode,
     consolidate_code_candidates,
 )
 
@@ -104,3 +105,73 @@ def test_reviewer_actions_revise_and_move_code_paths() -> None:
     }
     assert [action["action"] for action in action_log] == ["revise", "move"]
     assert all(action["applied"] for action in action_log)
+
+
+def test_provenance_payload_links_theme_to_quote_and_application() -> None:
+    quote = type(
+        "Quote",
+        (),
+        {
+            "quote_id": "quote-1",
+            "document_id": "00000000-0000-0000-0000-000000000001",
+            "candidate_id": "candidate-1",
+            "code_label": "Manual handoffs slow work",
+            "start_char": 5,
+            "end_char": 25,
+            "quote_match_status": "exact",
+        },
+    )()
+    applied = type(
+        "Applied",
+        (),
+        {
+            "document_id": "00000000-0000-0000-0000-000000000001",
+            "code_label": "Manual handoffs slow work",
+            "quote": "manual handoffs slow",
+            "start_char": 5,
+            "end_char": 25,
+            "quote_match_status": "exact",
+        },
+    )()
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(
+                path=[
+                    SynthesizedThemeNode(label="Workflow Friction"),
+                    SynthesizedThemeNode(label="Coordination Breakdowns"),
+                ]
+            )
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label="Manual handoffs slow work",
+                code_description="Manual handoffs slow review work.",
+                theme_path=["Workflow Friction", "Coordination Breakdowns"],
+            )
+        ],
+    )
+    consolidated = [
+        ConsolidatedCode(
+            label="Manual handoffs slow work",
+            description="Manual handoffs slow review work.",
+            candidate_ids=["candidate-1"],
+            quote_ids=["quote-1"],
+        )
+    ]
+
+    payload = TraceableAnalysisService._build_provenance_payload(
+        quote_evidence=[quote],  # type: ignore[list-item]
+        consolidated_codes=consolidated,
+        synthesis=synthesis,
+        applied_evidence=[applied],  # type: ignore[list-item]
+    )
+    action_log = TraceableAnalysisService._with_action_ids([
+        {"action": "extract_quote_code_pairs", "outputs": {"quote_ids": ["quote-1"]}},
+    ])
+
+    assert payload["themes"][0]["subtheme_ids"] == ["subtheme_coordination_breakdowns"]
+    assert payload["subthemes"][0]["code_ids"] == ["code_manual_handoffs_slow_work"]
+    assert payload["codes"][0]["quote_ids"] == ["quote-1"]
+    assert payload["applications"][0]["code_id"] == "code_manual_handoffs_slow_work"
+    assert payload["metrics"]["code_reusability"] == 1.0
+    assert action_log[0]["action_id"] == "act_0001"

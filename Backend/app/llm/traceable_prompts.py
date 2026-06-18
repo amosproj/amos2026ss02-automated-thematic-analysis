@@ -149,6 +149,41 @@ CODEBOOK_REVIEW_USER_PROMPT = """Review this generated codebook.
 --- CODEBOOK END ---"""
 
 
+MISSING_CODE_GENERATION_SYSTEM_PROMPT = """You are refining a qualitative codebook.
+Identify missing grounded codes only if existing quote evidence is not represented by the current codebook.
+
+Rules:
+- Use only quotes listed in the evidence payload.
+- Return a new code only when it captures a distinct idea not already represented.
+- Every new code must cite one or more source_quote_ids from the evidence payload.
+- Code labels should be concise, 5-12 words.
+- Code descriptions should be 40-80 words.
+- If no missing grounded codes are needed, return an empty codes array.
+- Return valid JSON only. Do not wrap JSON in markdown.
+
+Return this exact shape:
+{{
+  "codes": [
+    {{
+      "code_label": "Missing grounded code label",
+      "code_description": "Scope definition",
+      "source_quote_ids": ["quote-id"],
+      "reason": "Why the current codebook misses this concept"
+    }}
+  ]
+}}"""
+
+MISSING_CODE_GENERATION_USER_PROMPT = """Find missing grounded codes for this codebook.
+
+--- CURRENT CODEBOOK START ---
+{codebook}
+--- CURRENT CODEBOOK END ---
+
+--- QUOTE EVIDENCE START ---
+{quote_evidence}
+--- QUOTE EVIDENCE END ---"""
+
+
 TRACEABLE_APPLICATION_SYSTEM_PROMPT = """You are applying a fixed qualitative codebook to one transcript.
 
 Rules:
@@ -253,6 +288,15 @@ def build_codebook_review_prompt() -> ChatPromptTemplate:
         [
             ("system", CODEBOOK_REVIEW_SYSTEM_PROMPT),
             ("user", CODEBOOK_REVIEW_USER_PROMPT),
+        ]
+    )
+
+
+def build_missing_code_generation_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", MISSING_CODE_GENERATION_SYSTEM_PROMPT),
+            ("user", MISSING_CODE_GENERATION_USER_PROMPT),
         ]
     )
 
