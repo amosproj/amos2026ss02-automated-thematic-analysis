@@ -14,6 +14,7 @@ class ThemeNodeView(BaseSchema):
     label: str
     is_active: bool
     node_type: str = "THEME"
+    description: str | None = None
 
 
 class ThemeEdgeView(BaseSchema):

@@ -178,14 +178,16 @@ class ThemeGraphService:
                 id=theme.id,
                 label=theme.label,
                 is_active=theme.is_active,
-                node_type="THEME"
+                node_type="THEME",
+                description=theme.description,
             )
         for code in codes:
             nodes[code.id] = ThemeNodeView(
                 id=code.id,
                 label=code.label,
                 is_active=code.is_active,
-                node_type="CODE"
+                node_type="CODE",
+                description=code.description,
             )
         return nodes
 
