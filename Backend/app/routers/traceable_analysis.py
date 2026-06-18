@@ -51,6 +51,12 @@ def _compute_progress_percent(job: TraceableAnalysisJob) -> int:
     if job.phase == "extracting_quote_codes" and job.analysis_units_total > 0:
         unit_progress = int((job.analysis_units_done * 35) / job.analysis_units_total)
         return max(5, min(40, 5 + unit_progress))
+    if job.phase == "consolidating_codes" and job.analysis_units_total > 0:
+        unit_progress = int((job.analysis_units_done * 20) / job.analysis_units_total)
+        return max(40, min(60, 40 + unit_progress))
+    if job.phase == "applying_codebook" and job.analysis_units_total > 0:
+        unit_progress = int((job.analysis_units_done * 9) / job.analysis_units_total)
+        return max(90, min(99, 90 + unit_progress))
     return phase_progress.get(job.phase, 1)
 
 

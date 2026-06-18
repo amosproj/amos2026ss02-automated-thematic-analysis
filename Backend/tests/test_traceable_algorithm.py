@@ -59,6 +59,48 @@ async def test_consolidation_subsumes_low_frequency_child_code() -> None:
     assert any(action["action"] == "subsumed_low_frequency_code" for action in action_log)
 
 
+async def test_consolidation_falls_back_when_batch_relationship_classification_fails() -> None:
+    candidates = [
+        CodeCandidate(
+            candidate_id="a",
+            label="AI privacy concern",
+            description="Concern that AI systems expose private information.",
+            quote_ids=["q-a"],
+        ),
+        CodeCandidate(
+            candidate_id="b",
+            label="Fear of AI data leaks",
+            description="Fear that AI tools leak personal data.",
+            quote_ids=["q-b"],
+        ),
+    ]
+
+    async def _classifier(left: CodeCandidate, right: CodeCandidate) -> CodeRelationshipResult:
+        assert left.label == "AI privacy concern"
+        assert right.label == "Fear of AI data leaks"
+        return CodeRelationshipResult(
+            relationship="equivalent",
+            confidence=0.9,
+            reason="Both codes describe privacy/data-leak concern.",
+        )
+
+    async def _batch_classifier(
+        pairs: list[tuple[int, CodeCandidate, CodeCandidate]],
+    ) -> dict[int, CodeRelationshipResult]:
+        raise ValueError("Invalid json output: malformed confidence")
+
+    consolidated, action_log = await consolidate_code_candidates(
+        candidates,
+        classifier=_classifier,
+        batch_classifier=_batch_classifier,
+        embedding_client=_FakeEmbeddingClient(),  # type: ignore[arg-type]
+    )
+
+    assert len(consolidated) == 1
+    assert set(consolidated[0].quote_ids) == {"q-a", "q-b"}
+    assert any(action["action"] == "classify_code_pair" for action in action_log)
+
+
 def test_reviewer_actions_revise_and_move_code_paths() -> None:
     service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
     synthesis = CodebookSynthesisResult(

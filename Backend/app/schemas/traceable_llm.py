@@ -33,6 +33,14 @@ class CodeRelationshipResult(BaseModel):
     reason: str | None = None
 
 
+class BatchCodeRelationshipResult(CodeRelationshipResult):
+    pair_id: int
+
+
+class BatchCodeRelationshipResults(BaseModel):
+    pairs: list[BatchCodeRelationshipResult] = Field(default_factory=list)
+
+
 class SynthesizedThemeNode(BaseModel):
     label: str
     description: str | None = None

@@ -60,6 +60,31 @@ Label: {label_b}
 Description: {description_b}"""
 
 
+BATCH_CODE_RELATIONSHIP_SYSTEM_PROMPT = """You are consolidating qualitative codes.
+Compare multiple code-definition pairs and classify each semantic relationship.
+
+Use exactly one relationship per pair:
+- equivalent: same underlying concept and can be merged.
+- a_subordinate_to_b: code A is a narrower type/example/dimension of code B.
+- b_subordinate_to_a: code B is a narrower type/example/dimension of code A.
+- orthogonal: keep them separate.
+
+Return valid JSON only. Include every input pair_id exactly once:
+{{
+  "pairs": [
+    {{
+      "pair_id": 1,
+      "relationship": "equivalent",
+      "confidence": 0.9,
+      "reason": "Brief reason"
+    }}
+  ]
+}}"""
+
+BATCH_CODE_RELATIONSHIP_USER_PROMPT = """Pairs to classify:
+{pairs_json}"""
+
+
 SUBTHEME_SYNTHESIS_SYSTEM_PROMPT = """You are building subthemes from consolidated grounded codes.
 Group semantically related codes into candidate subthemes.
 
@@ -261,6 +286,15 @@ def build_code_relationship_prompt() -> ChatPromptTemplate:
         [
             ("system", CODE_RELATIONSHIP_SYSTEM_PROMPT),
             ("user", CODE_RELATIONSHIP_USER_PROMPT),
+        ]
+    )
+
+
+def build_batch_code_relationship_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", BATCH_CODE_RELATIONSHIP_SYSTEM_PROMPT),
+            ("user", BATCH_CODE_RELATIONSHIP_USER_PROMPT),
         ]
     )
 

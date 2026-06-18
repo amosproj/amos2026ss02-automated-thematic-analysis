@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections import defaultdict
@@ -17,6 +18,7 @@ from app.config import get_settings
 from app.exceptions import NotFoundError, UnprocessableError
 from app.llm.client import build_chat_model
 from app.llm.traceable_prompts import (
+    build_batch_code_relationship_prompt,
     build_code_relationship_prompt,
     build_codebook_review_prompt,
     build_missing_code_generation_prompt,
@@ -44,6 +46,7 @@ from app.models import (
 )
 from app.schemas.traceable_analysis import TraceableAnalysisResult
 from app.schemas.traceable_llm import (
+    BatchCodeRelationshipResults,
     CodebookReviewResult,
     CodebookSynthesisResult,
     CodeRelationshipResult,
@@ -66,6 +69,9 @@ from app.services.traceable_code_consolidation import (
 
 class TraceableAnalysisCancelledError(Exception):
     pass
+
+
+_RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS = 3
 
 
 @dataclass(frozen=True)
@@ -128,6 +134,8 @@ class TraceableAnalysisService:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+        self._code_relationship_chain = None
+        self._batch_code_relationship_chain = None
 
     async def run_analysis(
         self,
@@ -141,6 +149,7 @@ class TraceableAnalysisService:
         researcher_topics: str | None = None,
         max_refinement_rounds: int = 1,
         on_unit_progress: Callable[[int, int], Awaitable[None]] | None = None,
+        on_phase_progress: Callable[[str, int, int], Awaitable[None]] | None = None,
         on_phase: Callable[[str], Awaitable[None]] | None = None,
         on_codebook_created: Callable[[UUID], Awaitable[None]] | None = None,
         on_application_run_created: Callable[[UUID], Awaitable[None]] | None = None,
@@ -209,6 +218,12 @@ class TraceableAnalysisService:
         consolidated_codes, consolidation_log = await consolidate_code_candidates(
             candidates,
             classifier=self._classify_code_pair,
+            batch_classifier=self._classify_code_pairs,
+            on_pair_progress=(
+                (lambda done, total: on_phase_progress("consolidating_codes", done, total))
+                if on_phase_progress is not None
+                else None
+            ),
         )
         action_log.extend(consolidation_log)
         if not consolidated_codes:
@@ -492,17 +507,94 @@ class TraceableAnalysisService:
         left: CodeCandidate,
         right: CodeCandidate,
     ) -> CodeRelationshipResult:
-        parser = JsonOutputParser(pydantic_object=CodeRelationshipResult)
-        chain = build_code_relationship_prompt() | build_chat_model(temperature=0.0) | parser
-        raw_result = await chain.ainvoke(
+        if self._code_relationship_chain is None:
+            parser = JsonOutputParser(pydantic_object=CodeRelationshipResult)
+            self._code_relationship_chain = build_code_relationship_prompt() | build_chat_model(temperature=0.0) | parser
+        payload = {
+            "label_a": left.label,
+            "description_a": left.description or "",
+            "label_b": right.label,
+            "description_b": right.description or "",
+        }
+        for attempt in range(1, _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS + 1):
+            try:
+                raw_result = await self._code_relationship_chain.ainvoke(payload)
+                return CodeRelationshipResult(**raw_result)
+            except Exception as exc:
+                if attempt >= _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS:
+                    logger.warning(
+                        "Traceable pair classification failed after retries; using conservative fallback: "
+                        "code_a='{}', code_b='{}', error={}",
+                        left.label,
+                        right.label,
+                        exc,
+                    )
+                    return CodeRelationshipResult(
+                        relationship="orthogonal",
+                        confidence=0.0,
+                        reason=f"Classification failed after retries: {type(exc).__name__}",
+                    )
+                logger.warning(
+                    "Traceable pair classification retry: attempt={}, code_a='{}', code_b='{}', error={}",
+                    attempt,
+                    left.label,
+                    right.label,
+                    exc,
+                )
+                await asyncio.sleep(0.5 * attempt)
+
+    async def _classify_code_pairs(
+        self,
+        pairs: list[tuple[int, CodeCandidate, CodeCandidate]],
+    ) -> dict[int, CodeRelationshipResult]:
+        if self._batch_code_relationship_chain is None:
+            parser = JsonOutputParser(pydantic_object=BatchCodeRelationshipResults)
+            self._batch_code_relationship_chain = (
+                build_batch_code_relationship_prompt() | build_chat_model(temperature=0.0) | parser
+            )
+        pairs_payload = [
             {
-                "label_a": left.label,
-                "description_a": left.description or "",
-                "label_b": right.label,
-                "description_b": right.description or "",
+                "pair_id": pair_id,
+                "code_a": {
+                    "label": left.label,
+                    "description": left.description or "",
+                },
+                "code_b": {
+                    "label": right.label,
+                    "description": right.description or "",
+                },
             }
-        )
-        return CodeRelationshipResult(**raw_result)
+            for pair_id, left, right in pairs
+        ]
+        payload = {"pairs_json": json.dumps(pairs_payload, ensure_ascii=False)}
+        for attempt in range(1, _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS + 1):
+            try:
+                raw_result = await self._batch_code_relationship_chain.ainvoke(payload)
+                parsed = BatchCodeRelationshipResults(**raw_result)
+                return {
+                    item.pair_id: CodeRelationshipResult(
+                        relationship=item.relationship,
+                        confidence=item.confidence,
+                        reason=item.reason,
+                    )
+                    for item in parsed.pairs
+                }
+            except Exception as exc:
+                if attempt >= _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS:
+                    logger.warning(
+                        "Traceable batch pair classification failed after retries: pairs={}, error={}",
+                        len(pairs),
+                        exc,
+                    )
+                    raise
+                logger.warning(
+                    "Traceable batch pair classification retry: attempt={}, pairs={}, error={}",
+                    attempt,
+                    len(pairs),
+                    exc,
+                )
+                await asyncio.sleep(0.5 * attempt)
+        return {}
 
     async def _synthesize_codebook(
         self,

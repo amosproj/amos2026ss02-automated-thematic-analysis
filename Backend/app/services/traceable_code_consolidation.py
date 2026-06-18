@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -36,14 +37,21 @@ class ConsolidatedCode:
 
 
 PairClassifier = Callable[[CodeCandidate, CodeCandidate], Awaitable[CodeRelationshipResult]]
+PairBatchClassifier = Callable[
+    [list[tuple[int, CodeCandidate, CodeCandidate]]],
+    Awaitable[dict[int, CodeRelationshipResult]],
+]
+ProgressCallback = Callable[[int, int], Awaitable[None]]
 
 
 async def consolidate_code_candidates(
     candidates: list[CodeCandidate],
     *,
     classifier: PairClassifier,
+    batch_classifier: PairBatchClassifier | None = None,
     embedding_client: RemoteEmbeddingClient | None = None,
     settings: Settings | None = None,
+    on_pair_progress: ProgressCallback | None = None,
 ) -> tuple[list[ConsolidatedCode], list[dict[str, object]]]:
     cfg = settings or get_settings()
     if not candidates:
@@ -92,10 +100,101 @@ async def consolidate_code_candidates(
     subordinate_edges: set[tuple[int, int]] = set()
     action_log: list[dict[str, object]] = []
 
-    async def classify_and_apply(left_index: int, right_index: int, score: float) -> None:
+    async def classify_pair(
+        sequence: int,
+        left_index: int,
+        right_index: int,
+        score: float,
+    ) -> tuple[int, int, int, float, CodeRelationshipResult]:
         left = grouped_candidates[left_index]
         right = grouped_candidates[right_index]
         result = await classifier(left, right)
+        return sequence, left_index, right_index, score, result
+
+    async def classify_batch(
+        batch: list[tuple[int, int, int, float]],
+    ) -> list[tuple[int, int, int, float, CodeRelationshipResult]]:
+        if batch_classifier is None:
+            results: list[tuple[int, int, int, float, CodeRelationshipResult]] = []
+            for sequence, left_index, right_index, score in batch:
+                results.append(await classify_pair(sequence, left_index, right_index, score))
+            return results
+
+        payload = [
+            (sequence, grouped_candidates[left_index], grouped_candidates[right_index])
+            for sequence, left_index, right_index, _score in batch
+        ]
+        try:
+            batch_results = await batch_classifier(payload)
+        except Exception as exc:
+            # A single malformed JSON value in a batch should not fail the full
+            # analysis. Fall back to pair-level classification; the pair
+            # classifier itself has retries and a conservative final fallback.
+            logger.warning(
+                "Traceable consolidation batch classification failed; falling back to individual pairs: "
+                "batch_size={}, error={}",
+                len(batch),
+                exc,
+            )
+            results: list[tuple[int, int, int, float, CodeRelationshipResult]] = []
+            for sequence, left_index, right_index, score in batch:
+                results.append(await classify_pair(sequence, left_index, right_index, score))
+            return results
+        results = []
+        for sequence, left_index, right_index, score in batch:
+            result = batch_results.get(sequence)
+            if result is None:
+                result = await classifier(grouped_candidates[left_index], grouped_candidates[right_index])
+            results.append((sequence, left_index, right_index, score, result))
+        return results
+
+    concurrency = max(1, cfg.CODE_PAIR_CLASSIFICATION_CONCURRENCY)
+    batch_size = max(1, cfg.CODE_PAIR_CLASSIFICATION_BATCH_SIZE)
+    indexed_pair_scores = [
+        (sequence, left_index, right_index, score)
+        for sequence, (left_index, right_index, score) in enumerate(pair_scores)
+    ]
+    batches = [
+        indexed_pair_scores[index : index + batch_size]
+        for index in range(0, len(indexed_pair_scores), batch_size)
+    ]
+    logger.info(
+        "Traceable consolidation classifying code pairs: pair_count={}, batch_count={}, batch_size={}, concurrency={}",
+        len(pair_scores),
+        len(batches),
+        batch_size,
+        concurrency,
+    )
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def classify_batch_limited(
+        batch: list[tuple[int, int, int, float]],
+    ) -> list[tuple[int, int, int, float, CodeRelationshipResult]]:
+        async with semaphore:
+            return await classify_batch(batch)
+
+    pair_results: list[tuple[int, int, int, float, CodeRelationshipResult]] = []
+    completed_pairs = 0
+    tasks = [asyncio.create_task(classify_batch_limited(batch)) for batch in batches]
+    if on_pair_progress is not None:
+        await on_pair_progress(0, len(pair_scores))
+    for task in asyncio.as_completed(tasks):
+        batch_results = await task
+        pair_results.extend(batch_results)
+        completed_pairs += len(batch_results)
+        if on_pair_progress is not None:
+            await on_pair_progress(completed_pairs, len(pair_scores))
+        logger.info(
+            "Traceable consolidation pair classification progress: classified_pairs={}, total_pairs={}",
+            completed_pairs,
+            len(pair_scores),
+        )
+
+    # Apply LLM decisions after all calls complete. This keeps graph mutation
+    # deterministic while still allowing the slow network calls to run in parallel.
+    for _sequence, left_index, right_index, score, result in sorted(pair_results, key=lambda item: item[0]):
+        left = grouped_candidates[left_index]
+        right = grouped_candidates[right_index]
         action_log.append(
             {
                 "action": "classify_code_pair",
@@ -121,9 +220,6 @@ async def consolidate_code_candidates(
         elif result.relationship == "b_subordinate_to_a":
             subordinate_edges.add((right_index, left_index))
             action_log.append({"action": "subsumed_code", "source": right.label, "target": left.label})
-
-    for left_index, right_index, score in pair_scores:
-        await classify_and_apply(left_index, right_index, score)
 
     equivalent_groups_by_root: dict[int, list[CodeCandidate]] = defaultdict(list)
     for index, candidate in enumerate(grouped_candidates):

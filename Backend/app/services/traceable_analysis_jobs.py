@@ -106,12 +106,24 @@ class TraceableAnalysisJobRunner:
                     progress_job.documents_total = total
                     await progress_session.commit()
 
+            async def _on_phase_progress(phase: str, done: int, total: int) -> None:
+                async with session_factory() as progress_session:
+                    progress_job = await progress_session.get(TraceableAnalysisJob, job_id)
+                    if progress_job is None:
+                        return
+                    progress_job.phase = phase
+                    progress_job.analysis_units_done = done
+                    progress_job.analysis_units_total = total
+                    await progress_session.commit()
+
             async def _on_phase(phase: str) -> None:
                 async with session_factory() as phase_session:
                     phase_job = await phase_session.get(TraceableAnalysisJob, job_id)
                     if phase_job is None:
                         return
                     phase_job.phase = phase
+                    phase_job.analysis_units_done = 0
+                    phase_job.analysis_units_total = 0
                     await phase_session.commit()
                 logger.info("Traceable analysis job phase changed: job_id={}, phase={}", job_id, phase)
 
@@ -147,6 +159,7 @@ class TraceableAnalysisJobRunner:
                     researcher_topics=job.researcher_topics,
                     max_refinement_rounds=job.max_refinement_rounds,
                     on_unit_progress=_on_unit_progress,
+                    on_phase_progress=_on_phase_progress,
                     on_phase=_on_phase,
                     on_codebook_created=_on_codebook_created,
                     on_application_run_created=_on_application_run_created,
