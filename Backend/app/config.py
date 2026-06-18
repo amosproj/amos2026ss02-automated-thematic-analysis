@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     LLM_API_KEY_FAU: str | None = None
     LLM_BASE_URL_FAU: str = "https://hub.nhr.fau.de/api/llmgw/v1"
     LLM_MODEL_FAU: str = "gpt-oss-120b"
+    EMBEDDING_MODEL_FAU: str = "multilingual-e5-large"
+    EMBEDDING_BATCH_SIZE: int = 64
+    CODE_SIMILARITY_THRESHOLD: float = 0.78
+    CODE_PAIR_TOP_K: int = 20
+    TRACEABLE_MIN_CODE_FREQUENCY: int = 1
 
     # Select which provider is active: "FAU" | "ACADEMIC"
     SELECTED_API: str = "FAU"
