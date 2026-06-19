@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class QuoteCodeSuggestion(BaseModel):
@@ -88,6 +88,23 @@ class CodebookSplitChild(BaseModel):
     code_label: str
     code_description: str | None = None
     source_quote_ids: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_llm_aliases(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        if "code_label" not in normalized and "label" in normalized:
+            normalized["code_label"] = normalized["label"]
+        if "code_description" not in normalized and "description" in normalized:
+            normalized["code_description"] = normalized["description"]
+        if "source_quote_ids" not in normalized:
+            for alias in ("quote_ids", "source_quotes", "evidence_quote_ids"):
+                if alias in normalized:
+                    normalized["source_quote_ids"] = normalized[alias]
+                    break
+        return normalized
 
 
 class CodebookReviewAction(BaseModel):

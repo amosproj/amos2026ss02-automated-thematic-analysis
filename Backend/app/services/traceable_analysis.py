@@ -51,6 +51,7 @@ from app.schemas.traceable_llm import (
     BatchCodeRelationshipResults,
     CodebookMissingConcept,
     CodebookQualityEvaluationResult,
+    CodebookReviewAction,
     CodebookReviewResult,
     CodebookSplitChild,
     CodebookSynthesisResult,
@@ -79,6 +80,7 @@ class TraceableAnalysisCancelledError(Exception):
 _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS = 3
 _APPLICATION_MAX_ATTEMPTS = 3
 _EVALUATION_MAX_ATTEMPTS = 2
+_REVIEW_MAX_ATTEMPTS = 2
 
 
 @dataclass(frozen=True)
@@ -1673,8 +1675,73 @@ class TraceableAnalysisService:
         }
         parser = JsonOutputParser(pydantic_object=CodebookReviewResult)
         chain = build_codebook_review_prompt() | build_chat_model(temperature=0.0) | parser
-        raw_result = await chain.ainvoke({"codebook": json.dumps(payload, ensure_ascii=True, indent=2)})
-        return CodebookReviewResult(**raw_result)
+        chain_payload = {"codebook": json.dumps(payload, ensure_ascii=True, indent=2)}
+        for attempt in range(1, _REVIEW_MAX_ATTEMPTS + 1):
+            try:
+                raw_result = await chain.ainvoke(chain_payload)
+                return self._coerce_review_result(raw_result)
+            except Exception as exc:
+                if attempt >= _REVIEW_MAX_ATTEMPTS:
+                    logger.warning(
+                        "Traceable codebook review failed after retries; continuing without reviewer edits: "
+                        "round={}, error={}",
+                        round_index,
+                        exc,
+                    )
+                    return CodebookReviewResult(actions=[])
+                logger.warning(
+                    "Traceable codebook review retry: round={}, attempt={}, error={}",
+                    round_index,
+                    attempt,
+                    exc,
+                )
+                await asyncio.sleep(0.5 * attempt)
+        return CodebookReviewResult(actions=[])
+
+    def _coerce_review_result(self, raw_result: object) -> CodebookReviewResult:
+        if isinstance(raw_result, CodebookReviewResult):
+            return raw_result
+        if not isinstance(raw_result, dict):
+            return CodebookReviewResult(actions=[])
+        raw_actions = raw_result.get("actions", [])
+        if not isinstance(raw_actions, list):
+            return CodebookReviewResult(actions=[])
+
+        allowed_actions = {"generate", "merge", "split", "revise", "move", "delete"}
+        normalized_actions: list[CodebookReviewAction] = []
+        for raw_action in raw_actions:
+            if not isinstance(raw_action, dict):
+                continue
+            if raw_action.get("action") not in allowed_actions:
+                continue
+            action_payload = dict(raw_action)
+            split_children = []
+            for raw_child in action_payload.get("split_children", []) or []:
+                if not isinstance(raw_child, dict):
+                    continue
+                child_payload = dict(raw_child)
+                if "code_label" not in child_payload and "label" in child_payload:
+                    child_payload["code_label"] = child_payload["label"]
+                if "code_description" not in child_payload and "description" in child_payload:
+                    child_payload["code_description"] = child_payload["description"]
+                if "source_quote_ids" not in child_payload:
+                    for alias in ("quote_ids", "source_quotes", "evidence_quote_ids"):
+                        if alias in child_payload:
+                            child_payload["source_quote_ids"] = child_payload[alias]
+                            break
+                if child_payload.get("code_label"):
+                    split_children.append(child_payload)
+            action_payload["split_children"] = split_children
+            try:
+                normalized_actions.append(CodebookReviewAction(**action_payload))
+            except Exception as exc:
+                logger.warning(
+                    "Traceable codebook review action skipped: action={}, target={}, error={}",
+                    raw_action.get("action"),
+                    raw_action.get("target"),
+                    exc,
+                )
+        return CodebookReviewResult(actions=normalized_actions)
 
     def _apply_review_actions(
         self,

@@ -277,6 +277,61 @@ def test_reviewer_code_split_creates_grounded_child_codes() -> None:
     assert {tuple(code.quote_ids) for code in refined_codes} == {("q-label",), ("q-policy",)}
 
 
+def test_reviewer_split_children_accept_label_alias_from_llm() -> None:
+    review = CodebookReviewResult(
+        actions=[
+            {
+                "action": "split",
+                "target": "Policy and governance recommendations for AI",
+                "artifact_type": "code",
+                "split_children": [
+                    {
+                        "label": "AI content labeling and disclosure",
+                        "description": "Mandates visible disclosures for AI-generated content.",
+                        "quote_ids": ["q-label"],
+                    }
+                ],
+            }
+        ]
+    )
+
+    child = review.actions[0].split_children[0]
+    assert child.code_label == "AI content labeling and disclosure"
+    assert child.code_description == "Mandates visible disclosures for AI-generated content."
+    assert child.source_quote_ids == ["q-label"]
+
+
+def test_review_result_coercion_skips_malformed_actions_without_crashing() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    review = service._coerce_review_result(
+        {
+            "actions": [
+                {
+                    "action": "split",
+                    "target": "Policy and governance recommendations for AI",
+                    "artifact_type": "code",
+                    "split_children": [
+                        {
+                            "label": "AI content labeling and disclosure",
+                            "source_quote_ids": ["q-label"],
+                        },
+                        {"source_quote_ids": ["q-missing-label"]},
+                    ],
+                },
+                {
+                    "action": "unsupported",
+                    "target": "Invalid action",
+                },
+            ]
+        }
+    )
+
+    assert len(review.actions) == 1
+    assert review.actions[0].action == "split"
+    assert len(review.actions[0].split_children) == 1
+    assert review.actions[0].split_children[0].code_label == "AI content labeling and disclosure"
+
+
 def test_reviewer_rejects_broad_cross_theme_code_merge() -> None:
     service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
     synthesis = CodebookSynthesisResult(
