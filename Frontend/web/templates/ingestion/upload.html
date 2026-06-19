@@ -224,12 +224,12 @@
             </div>
 
             <div>
-              <button id="codebook-submit-btn" type="submit" class="btn btn-teal" disabled>
+              <button id="codebook-submit-btn" type="submit" class="btn btn-teal w-100" disabled>
                 Upload &amp; preview
               </button>
               <div class="mt-2">
-                <a href="{{ url_for('codebooks.manual_form', corpus_id=corpus_id) }}"
-                   class="small text-secondary">Or enter manually &rarr;</a>
+                <a href="{{ url_for('codebooks.new_codebook_mode_select', corpus_id=corpus_id) }}"
+                   class="small text-secondary">Generate or enter manually &rarr;</a>
               </div>
             </div>
           </form>

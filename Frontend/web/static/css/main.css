@@ -629,15 +629,13 @@
 }
 
 .btn-teal {
-    /* Solid deep teal — matches the dominant start colour of the
-       .upload-card--teal header gradient (same reasoning as .btn-indigo). */
-    background: #0f766e;
+    background: #0d9488;
 }
 .btn-teal:hover,
 .btn-teal:focus {
-    background: #115e59;
+    background: #0f766e;
     color: #fff;
-    box-shadow: 0 6px 14px -6px rgba(15, 118, 110, 0.45);
+    box-shadow: 0 6px 14px -6px rgba(13, 148, 136, 0.45);
 }
 .btn-teal:active {
     transform: translateY(1px);
@@ -645,8 +643,8 @@
 }
 .btn-teal:disabled,
 .btn-teal.disabled {
-    background: #ccfbf1;
-    color: #ecfeff;
+    background: #dcfce7;
+    color: #f0fdf4;
     opacity: 0.85;
     cursor: not-allowed;
     pointer-events: auto;     /* see .btn-indigo:disabled for rationale */
