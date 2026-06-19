@@ -80,12 +80,13 @@
     const subThemesValue    = document.getElementById("sub-themes-value");
     const codesValue        = document.getElementById("codes-value");
     const themesTableBody   = document.getElementById("themes-table-body");
-    const themeDetailsEmpty   = document.getElementById("theme-details-empty");
-    const themeDetailsContent = document.getElementById("theme-details-content");
-    const themeDetailsName    = document.getElementById("theme-details-name");
-    const themeDetailsId      = document.getElementById("theme-details-id");
-    const themeDetailsOccur   = document.getElementById("theme-details-occurrences");
-    const themeDetailsCoverage = document.getElementById("theme-details-coverage");
+    const themeDetailsEmpty       = document.getElementById("theme-details-empty");
+    const themeDetailsContent     = document.getElementById("theme-details-content");
+    const themeDetailsName        = document.getElementById("theme-details-name");
+    const themeDetailsDescription = document.getElementById("theme-details-description");
+    const themeDetailsId          = document.getElementById("theme-details-id");
+    const themeDetailsOccur       = document.getElementById("theme-details-occurrences");
+    const themeDetailsCoverage    = document.getElementById("theme-details-coverage");
 
     // Guard: table body is absent when an error or empty-state is rendered.
     if (!themesTableBody) return;
@@ -136,6 +137,7 @@
                 theme_name:                    cur.theme_name ?? t.label,
                 occurrence_count:              cur.occurrence_count ?? 0,
                 interview_coverage_percentage: cur.interview_coverage_percentage ?? 0,
+                description:                   t.description ?? null,
             };
         }
         return map;
@@ -179,10 +181,11 @@
         selectedThemeId = null;
         themeDetailsEmpty.classList.remove("d-none");
         themeDetailsContent.classList.add("d-none");
-        themeDetailsName.textContent     = "";
-        themeDetailsId.textContent       = "";
-        themeDetailsOccur.textContent    = "";
-        themeDetailsCoverage.textContent = "";
+        themeDetailsName.textContent        = "";
+        themeDetailsDescription.textContent = "";
+        themeDetailsId.textContent          = "";
+        themeDetailsOccur.textContent       = "";
+        themeDetailsCoverage.textContent    = "";
     }
 
     // Sync the visual selection highlight across both the table and tree.
@@ -207,6 +210,8 @@
         if (matchedDetailTopic) {
             themeDetailsName.appendChild(makeTopicBadge(matchedDetailTopic));
         }
+        themeDetailsDescription.textContent = info.description ?? "";
+        themeDetailsDescription.classList.toggle("d-none", !info.description);
         themeDetailsId.textContent       = info.theme_id   ?? "-";
         themeDetailsOccur.textContent    = String(info.occurrence_count ?? 0);
         themeDetailsCoverage.textContent = formatCoverage(info.interview_coverage_percentage ?? 0);
