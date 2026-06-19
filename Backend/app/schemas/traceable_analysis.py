@@ -39,8 +39,8 @@ class TraceableAnalysisJobCreateRequest(BaseSchema):
     max_refinement_rounds: int = Field(
         default=1,
         ge=0,
-        le=3,
-        description="Maximum conservative reviewer/refinement rounds after theme synthesis.",
+        le=10,
+        description="Maximum conservative reviewer/refinement rounds; the experimental pipeline evaluates initial + refined iterations.",
     )
 
     @field_validator("codebook_name")

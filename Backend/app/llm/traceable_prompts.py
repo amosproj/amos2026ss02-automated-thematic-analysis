@@ -149,6 +149,11 @@ CODEBOOK_REVIEW_SYSTEM_PROMPT = """You are reviewing a generated qualitative cod
 Identify conservative edits that improve clarity without adding unsupported concepts.
 
 Check for duplicated concepts, inconsistent granularity, orphan codes/subthemes, and weak grounding.
+Use any supplied metrics and diagnostics to prefer conservative edits:
+- Low reusability means the codebook may be too granular.
+- Low parsimony means the code count is outside the target range.
+- High merge-risk codes may contain unrelated concepts and should be split only if grounded labels are already present.
+- Do not merge codes merely because they share a broad topic; merge only duplicated or near-equivalent concepts.
 Allowed actions: generate, merge, split, revise, move, delete.
 Return valid JSON only:
 {{
@@ -216,6 +221,7 @@ Rules:
 - Do not invent, rename, merge, or split codes.
 - Select at most 20 existing codes that are actually supported by the transcript.
 - Every assignment MUST include one short exact quote copied from the transcript.
+- Every confidence MUST be a valid JSON number such as 0.9. Never write words inside numbers, such as 0. nine.
 - Stay close to participant wording and avoid over-claiming.
 - Return valid JSON only. Do not wrap JSON in markdown.
 

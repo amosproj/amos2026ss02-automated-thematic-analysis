@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.config import Settings
 from app.schemas.traceable_llm import (
     CodebookReviewAction,
     CodebookReviewResult,
@@ -51,6 +52,10 @@ async def test_consolidation_subsumes_low_frequency_child_code() -> None:
         candidates,
         classifier=_classifier,
         embedding_client=_FakeEmbeddingClient(),  # type: ignore[arg-type]
+        settings=Settings(
+            DATABASE_URL="sqlite+aiosqlite:///:memory:",
+            TRACEABLE_MIN_CODE_FREQUENCY=1,
+        ),
     )
 
     assert len(consolidated) == 1

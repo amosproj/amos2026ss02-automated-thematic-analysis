@@ -207,17 +207,25 @@ async def consolidate_code_candidates(
             }
         )
         if result.confidence < 0.65:
-            return
-        if result.relationship == "equivalent":
+            continue
+        if result.relationship == "equivalent" and result.confidence >= cfg.CODE_EQUIVALENT_MIN_CONFIDENCE:
             # Equivalent codes are merged immediately with union-find.
             preferred, other = _preferred_candidate_pair(grouped_candidates, left_index, right_index)
             _union(equivalent_parent, preferred, other)
-        elif result.relationship == "a_subordinate_to_b":
+        elif (
+            result.relationship == "a_subordinate_to_b"
+            and result.confidence >= cfg.CODE_SUBORDINATE_MIN_CONFIDENCE
+            and score >= cfg.CODE_SUBORDINATE_MIN_SIMILARITY
+        ):
             # Subordinate relations are kept as graph edges first. High-frequency
             # child codes may survive as distinct codes later.
             subordinate_edges.add((left_index, right_index))
             action_log.append({"action": "subsumed_code", "source": left.label, "target": right.label})
-        elif result.relationship == "b_subordinate_to_a":
+        elif (
+            result.relationship == "b_subordinate_to_a"
+            and result.confidence >= cfg.CODE_SUBORDINATE_MIN_CONFIDENCE
+            and score >= cfg.CODE_SUBORDINATE_MIN_SIMILARITY
+        ):
             subordinate_edges.add((right_index, left_index))
             action_log.append({"action": "subsumed_code", "source": right.label, "target": left.label})
 
@@ -246,6 +254,8 @@ async def consolidate_code_candidates(
 
     for child_group_index, parent_group_indexes in parents_by_child.items():
         child = merged_groups[child_group_index]
+        if cfg.TRACEABLE_MIN_CODE_FREQUENCY <= 0:
+            continue
         if child.frequency > cfg.TRACEABLE_MIN_CODE_FREQUENCY:
             continue
         # Only low-frequency child codes are folded upward. This approximates
@@ -267,7 +277,11 @@ async def consolidate_code_candidates(
     final_groups: dict[int, list[ConsolidatedCode]] = defaultdict(list)
     dropped_orphans = 0
     for group_index, code in enumerate(merged_groups):
-        if code.frequency <= cfg.TRACEABLE_MIN_CODE_FREQUENCY and group_index not in parents_by_child:
+        if (
+            cfg.TRACEABLE_MIN_CODE_FREQUENCY > 0
+            and code.frequency <= cfg.TRACEABLE_MIN_CODE_FREQUENCY
+            and group_index not in parents_by_child
+        ):
             dropped_orphans += 1
             # One-off concepts that are not attached to a broader parent are
             # treated as weak codebook candidates and retained only in the log.

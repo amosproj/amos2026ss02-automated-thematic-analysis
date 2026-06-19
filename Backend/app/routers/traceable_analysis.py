@@ -45,6 +45,7 @@ def _compute_progress_percent(job: TraceableAnalysisJob) -> int:
         "extracting_quote_codes": 5,
         "consolidating_codes": 45,
         "synthesizing_themes": 65,
+        "evaluating_iterations": 75,
         "persisting_codebook": 80,
         "applying_codebook": 90,
     }

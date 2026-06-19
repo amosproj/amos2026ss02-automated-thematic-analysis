@@ -9,7 +9,7 @@ from app.schemas.traceable_llm import (
     SynthesizedThemeNode,
     SynthesizedThemePath,
 )
-from app.services.traceable_analysis import _AppliedEvidence, _QuoteEvidence
+from app.services.traceable_analysis import _ApplicationPassResult, _AppliedEvidence, _QuoteEvidence
 from app.services.traceable_code_consolidation import ConsolidatedCode
 
 API_INGESTION = "/api/v1/ingestion"
@@ -118,19 +118,22 @@ async def test_traceable_analysis_job_creates_codebook_and_application_run(clien
         document = documents[0]
         quote = "manual handoffs slow"
         start = document.content.index(quote)
-        return [
-            _AppliedEvidence(
-                document_id=document.id,
-                code_label="Manual handoffs slow work",
-                theme_label="Workflow Friction",
-                quote=quote,
-                start_char=start,
-                end_char=start + len(quote),
-                quote_match_status="exact",
-                confidence=0.91,
-                rationale="The generated codebook code is directly supported.",
-            )
-        ]
+        return _ApplicationPassResult(
+            evidence=[
+                _AppliedEvidence(
+                    document_id=document.id,
+                    code_label="Manual handoffs slow work",
+                    theme_label="Workflow Friction",
+                    quote=quote,
+                    start_char=start,
+                    end_char=start + len(quote),
+                    quote_match_status="exact",
+                    confidence=0.91,
+                    rationale="The generated codebook code is directly supported.",
+                )
+            ],
+            failed_document_ids=[],
+        )
 
     monkeypatch.setattr(
         "app.services.traceable_analysis.TraceableAnalysisService._extract_quote_codes",
