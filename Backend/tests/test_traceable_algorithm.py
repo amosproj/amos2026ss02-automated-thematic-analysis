@@ -154,6 +154,62 @@ def test_reviewer_actions_revise_and_move_code_paths() -> None:
     assert all(action["applied"] for action in action_log)
 
 
+def test_reviewer_code_merge_combines_source_codes() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(
+                path=[
+                    SynthesizedThemeNode(label="AI Governance"),
+                    SynthesizedThemeNode(label="Privacy"),
+                ]
+            )
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label="Calls for government data privacy protection",
+                code_description="Government should protect personal data.",
+                theme_path=["AI Governance", "Privacy"],
+            ),
+            SynthesizedCode(
+                code_label="Policy suggestion: mandatory AI content watermarking",
+                code_description="AI content should be disclosed.",
+                theme_path=["AI Governance", "Privacy"],
+            ),
+            SynthesizedCode(
+                code_label="Fear of job loss due to technology",
+                code_description="Automation may eliminate work.",
+                theme_path=["Labor", "Job Security"],
+            ),
+        ],
+    )
+    review = CodebookReviewResult(
+        actions=[
+            CodebookReviewAction(
+                action="merge",
+                source_labels=[
+                    "Calls for government data privacy protection",
+                    "Policy suggestion: mandatory AI content watermarking",
+                ],
+                replacement="Privacy and transparency safeguards",
+                new_parent_path=["AI Governance", "Privacy"],
+                artifact_type="code",
+                reason="Both are transparency/privacy safeguards.",
+            )
+        ]
+    )
+
+    refined, action_log = service._apply_review_actions(synthesis, review, round_index=1)
+
+    assert action_log[0]["applied"] is True
+    assert sorted(code.code_label for code in refined.codes) == [
+        "Fear of job loss due to technology",
+        "Privacy and transparency safeguards",
+    ]
+    merged = next(code for code in refined.codes if code.code_label == "Privacy and transparency safeguards")
+    assert merged.theme_path == ["AI Governance", "Privacy"]
+
+
 def test_provenance_payload_links_theme_to_quote_and_application() -> None:
     quote = type(
         "Quote",
@@ -222,3 +278,51 @@ def test_provenance_payload_links_theme_to_quote_and_application() -> None:
     assert payload["applications"][0]["code_id"] == "code_manual_handoffs_slow_work"
     assert payload["metrics"]["code_reusability"] == 1.0
     assert action_log[0]["action_id"] == "act_0001"
+
+
+def test_provenance_keeps_multiple_subthemes_for_same_root_theme() -> None:
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(
+                path=[
+                    SynthesizedThemeNode(label="AI Governance"),
+                    SynthesizedThemeNode(label="Privacy"),
+                ]
+            ),
+            SynthesizedThemePath(
+                path=[
+                    SynthesizedThemeNode(label="AI Governance"),
+                    SynthesizedThemeNode(label="Employment Protection"),
+                ]
+            ),
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label="Privacy safeguards",
+                code_description=None,
+                theme_path=["AI Governance", "Privacy"],
+            ),
+            SynthesizedCode(
+                code_label="Job protection rules",
+                code_description=None,
+                theme_path=["AI Governance", "Employment Protection"],
+            ),
+        ],
+    )
+    consolidated = [
+        ConsolidatedCode(label="Privacy safeguards", description=None, candidate_ids=["c1"], quote_ids=["q1"]),
+        ConsolidatedCode(label="Job protection rules", description=None, candidate_ids=["c2"], quote_ids=["q2"]),
+    ]
+
+    payload = TraceableAnalysisService._build_provenance_payload(
+        quote_evidence=[],  # type: ignore[list-item]
+        consolidated_codes=consolidated,
+        synthesis=synthesis,
+        applied_evidence=[],  # type: ignore[list-item]
+    )
+
+    assert len(payload["themes"]) == 1
+    assert set(payload["themes"][0]["subtheme_ids"]) == {
+        "subtheme_privacy",
+        "subtheme_employment_protection",
+    }

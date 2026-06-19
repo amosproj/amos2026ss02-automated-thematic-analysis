@@ -1006,6 +1006,10 @@ class TraceableAnalysisService:
                     code for code in current_codes
                     if self._label_key(code.label) not in deleted_code_keys
                 ]
+            current_codes = self._apply_code_merge_actions_to_consolidated_codes(
+                current_codes,
+                applied_actions,
+            )
 
             if any(action.action == "generate" for action in review.actions):
                 missing_codes = await self._generate_missing_codes(
@@ -1167,6 +1171,55 @@ class TraceableAnalysisService:
             candidate_count = max(1, len(code.candidate_ids))
             scores.append(1.0 if candidate_count <= 4 else 4 / candidate_count)
         return sum(scores) / len(scores)
+
+    def _apply_code_merge_actions_to_consolidated_codes(
+        self,
+        consolidated_codes: list[ConsolidatedCode],
+        applied_actions: list[dict[str, object]],
+    ) -> list[ConsolidatedCode]:
+        merge_actions = [
+            action for action in applied_actions
+            if action.get("applied")
+            and action.get("action") == "merge"
+            and action.get("artifact_type") == "code"
+            and action.get("source_labels")
+            and (action.get("replacement") or action.get("target"))
+        ]
+        current = list(consolidated_codes)
+        for action in merge_actions:
+            source_keys = {
+                self._label_key(str(label))
+                for label in action.get("source_labels", [])
+            }
+            replacement = self._truncate_label(
+                self._normalize_label(str(action.get("replacement") or action.get("target") or ""))
+            )
+            if not source_keys or not replacement:
+                continue
+            matching = [code for code in current if self._label_key(code.label) in source_keys]
+            if not matching:
+                continue
+            remaining = [code for code in current if self._label_key(code.label) not in source_keys]
+            candidate_ids: list[str] = []
+            quote_ids: list[str] = []
+            descriptions: list[str] = []
+            for code in matching:
+                candidate_ids.extend(code.candidate_ids)
+                for quote_id in code.quote_ids:
+                    if quote_id not in quote_ids:
+                        quote_ids.append(quote_id)
+                if code.description and code.description not in descriptions:
+                    descriptions.append(code.description)
+            remaining.append(
+                ConsolidatedCode(
+                    label=replacement,
+                    description=self._clean_optional_text(" / ".join(descriptions)),
+                    candidate_ids=candidate_ids,
+                    quote_ids=quote_ids,
+                )
+            )
+            current = remaining
+        return current
 
     async def _refine_codebook(
         self,
@@ -1394,7 +1447,13 @@ class TraceableAnalysisService:
             if action.action == "revise":
                 current = self._apply_revise_action(current, action.target, action.replacement)
             elif action.action == "merge":
-                current = self._apply_merge_action(current, action.source_labels, action.replacement or action.target)
+                current = self._apply_merge_action(
+                    current,
+                    action.source_labels,
+                    action.replacement or action.target,
+                    action.artifact_type,
+                    action.new_parent_path,
+                )
             elif action.action == "move":
                 current = self._apply_move_action(current, action.target, action.new_parent_path)
             elif action.action == "delete":
@@ -1455,11 +1514,20 @@ class TraceableAnalysisService:
         synthesis: CodebookSynthesisResult,
         source_labels: list[str],
         replacement: str | None,
+        artifact_type: str | None = None,
+        new_parent_path: list[str] | None = None,
     ) -> CodebookSynthesisResult:
         if not source_labels or not replacement:
             return synthesis
         replacement = self._truncate_label(self._normalize_label(replacement))
         source_keys = {self._label_key(label) for label in source_labels}
+        if artifact_type == "code":
+            return self._apply_code_merge_action(
+                synthesis,
+                source_keys=source_keys,
+                replacement=replacement,
+                new_parent_path=new_parent_path or [],
+            )
         themes = []
         seen_paths: set[tuple[str, ...]] = set()
         for theme in synthesis.themes:
@@ -1487,6 +1555,66 @@ class TraceableAnalysisService:
             for code in synthesis.codes
         ]
         return CodebookSynthesisResult(themes=themes, codes=codes)
+
+    def _apply_code_merge_action(
+        self,
+        synthesis: CodebookSynthesisResult,
+        *,
+        source_keys: set[str],
+        replacement: str,
+        new_parent_path: list[str],
+    ) -> CodebookSynthesisResult:
+        replacement_key = self._label_key(replacement)
+        cleaned_parent = [
+            self._truncate_label(self._normalize_label(label))
+            for label in new_parent_path
+            if label.strip()
+        ]
+        matching_codes = [
+            code for code in synthesis.codes
+            if self._label_key(code.code_label) in source_keys
+        ]
+        if not matching_codes:
+            return synthesis
+        target_path = cleaned_parent or matching_codes[0].theme_path
+        descriptions = [
+            code.code_description
+            for code in matching_codes
+            if code.code_description
+        ]
+        merged_description = self._clean_optional_text(" / ".join(dict.fromkeys(descriptions)))
+        codes_by_key: dict[str, SynthesizedCode] = {}
+        for code in synthesis.codes:
+            key = self._label_key(code.code_label)
+            if key in source_keys:
+                key = replacement_key
+                candidate = SynthesizedCode(
+                    code_label=replacement,
+                    code_description=merged_description or code.code_description,
+                    theme_path=target_path,
+                )
+            else:
+                candidate = code
+            existing = codes_by_key.get(key)
+            if existing is None:
+                codes_by_key[key] = candidate
+            elif not existing.code_description and candidate.code_description:
+                codes_by_key[key] = existing.model_copy(update={"code_description": candidate.code_description})
+
+        themes = self._dedupe_theme_paths(list(synthesis.themes))
+        if target_path:
+            existing_paths = {tuple(node.label for node in theme.path) for theme in themes}
+            target_tuple = tuple(target_path)
+            if target_tuple not in existing_paths:
+                themes.append(
+                    SynthesizedThemePath(
+                        path=[SynthesizedThemeNode(label=label, description=None) for label in target_path]
+                    )
+                )
+        return CodebookSynthesisResult(
+            themes=themes,
+            codes=list(codes_by_key.values()),
+        )
 
     def _apply_move_action(
         self,
@@ -1516,7 +1644,7 @@ class TraceableAnalysisService:
                         path=[SynthesizedThemeNode(label=label, description=None) for label in cleaned_parent]
                     )
                 )
-        return CodebookSynthesisResult(themes=themes, codes=codes)
+        return CodebookSynthesisResult(themes=self._dedupe_theme_paths(themes), codes=codes)
 
     def _apply_delete_action(
         self,
@@ -1532,7 +1660,7 @@ class TraceableAnalysisService:
             for theme in synthesis.themes
             if all(self._label_key(node.label) != target_key for node in theme.path)
         ]
-        return CodebookSynthesisResult(themes=themes, codes=codes)
+        return CodebookSynthesisResult(themes=self._dedupe_theme_paths(themes), codes=codes)
 
     def _apply_generate_action(
         self,
@@ -1549,7 +1677,19 @@ class TraceableAnalysisService:
         if artifact_type == "subtheme" and themes:
             path = [themes[0].path[0], SynthesizedThemeNode(label=label, description=None)]
         themes.append(SynthesizedThemePath(path=path))
-        return CodebookSynthesisResult(themes=themes, codes=list(synthesis.codes))
+        return CodebookSynthesisResult(themes=self._dedupe_theme_paths(themes), codes=list(synthesis.codes))
+
+    @staticmethod
+    def _dedupe_theme_paths(themes: list[SynthesizedThemePath]) -> list[SynthesizedThemePath]:
+        deduped: list[SynthesizedThemePath] = []
+        seen: set[tuple[str, ...]] = set()
+        for theme in themes:
+            key = tuple(node.label for node in theme.path)
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            deduped.append(theme)
+        return deduped
 
     async def _persist_codebook(
         self,
@@ -1975,23 +2115,31 @@ class TraceableAnalysisService:
                 continue
             root = theme.path[0]
             root_id = TraceableAnalysisService._artifact_id("theme", root.label)
-            theme_artifacts[root_id] = {
-                "theme_id": root_id,
-                "label": root.label,
-                "description": root.description,
-                "subtheme_ids": [],
-            }
+            if root_id not in theme_artifacts:
+                theme_artifacts[root_id] = {
+                    "theme_id": root_id,
+                    "label": root.label,
+                    "description": root.description,
+                    "subtheme_ids": [],
+                }
+            elif not theme_artifacts[root_id].get("description") and root.description:
+                theme_artifacts[root_id]["description"] = root.description
             if len(theme.path) > 1:
                 child = theme.path[-1]
                 child_id = TraceableAnalysisService._artifact_id("subtheme", child.label)
-                subtheme_artifacts[child_id] = {
-                    "subtheme_id": child_id,
-                    "label": child.label,
-                    "description": child.description,
-                    "theme_id": root_id,
-                    "code_ids": [],
-                }
-                theme_artifacts[root_id]["subtheme_ids"].append(child_id)  # type: ignore[index,union-attr]
+                if child_id not in subtheme_artifacts:
+                    subtheme_artifacts[child_id] = {
+                        "subtheme_id": child_id,
+                        "label": child.label,
+                        "description": child.description,
+                        "theme_id": root_id,
+                        "code_ids": [],
+                    }
+                elif not subtheme_artifacts[child_id].get("description") and child.description:
+                    subtheme_artifacts[child_id]["description"] = child.description
+                subtheme_ids = theme_artifacts[root_id]["subtheme_ids"]
+                if isinstance(subtheme_ids, list) and child_id not in subtheme_ids:
+                    subtheme_ids.append(child_id)
 
         code_artifacts = []
         subtheme_id_by_code: dict[str, str | None] = {}
@@ -2004,7 +2152,9 @@ class TraceableAnalysisService:
             )
             subtheme_id_by_code[TraceableAnalysisService._label_key(code.code_label)] = subtheme_id
             if subtheme_id and subtheme_id in subtheme_artifacts:
-                subtheme_artifacts[subtheme_id]["code_ids"].append(code_id)  # type: ignore[index,union-attr]
+                code_ids = subtheme_artifacts[subtheme_id]["code_ids"]
+                if isinstance(code_ids, list) and code_id not in code_ids:
+                    code_ids.append(code_id)
             source = next(
                 (
                     consolidated
