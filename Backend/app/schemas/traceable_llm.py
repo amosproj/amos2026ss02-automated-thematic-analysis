@@ -84,12 +84,19 @@ class CodebookSynthesisResult(BaseModel):
 ReviewActionType = Literal["generate", "merge", "split", "revise", "move", "delete"]
 
 
+class CodebookSplitChild(BaseModel):
+    code_label: str
+    code_description: str | None = None
+    source_quote_ids: list[str] = Field(default_factory=list)
+
+
 class CodebookReviewAction(BaseModel):
     action: ReviewActionType
     target: str | None = None
     replacement: str | None = None
     source_labels: list[str] = Field(default_factory=list)
     new_parent_path: list[str] = Field(default_factory=list)
+    split_children: list[CodebookSplitChild] = Field(default_factory=list)
     artifact_type: Literal["theme", "subtheme", "code"] | None = None
     reason: str | None = None
 
@@ -107,6 +114,26 @@ class MissingCodeSuggestion(BaseModel):
 
 class MissingCodeGenerationResult(BaseModel):
     codes: list[MissingCodeSuggestion] = Field(default_factory=list)
+
+
+class CodebookMissingConcept(BaseModel):
+    label: str
+    description: str | None = None
+    evidence_quotes: list[str] = Field(default_factory=list)
+
+
+class CodebookOverbroadCode(BaseModel):
+    code_label: str
+    reason: str | None = None
+    suggested_split_labels: list[str] = Field(default_factory=list)
+
+
+class CodebookQualityEvaluationResult(BaseModel):
+    fitness_score: float = 0.75
+    coverage_score: float = 0.75
+    missing_concepts: list[CodebookMissingConcept] = Field(default_factory=list)
+    overbroad_codes: list[CodebookOverbroadCode] = Field(default_factory=list)
+    notes: str | None = None
 
 
 class TraceableAppliedCodeAssignment(BaseModel):

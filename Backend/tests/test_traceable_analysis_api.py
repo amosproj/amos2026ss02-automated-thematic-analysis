@@ -4,6 +4,7 @@ import asyncio
 import time
 
 from app.schemas.traceable_llm import (
+    CodebookQualityEvaluationResult,
     CodebookSynthesisResult,
     SynthesizedCode,
     SynthesizedThemeNode,
@@ -135,6 +136,13 @@ async def test_traceable_analysis_job_creates_codebook_and_application_run(clien
             failed_document_ids=[],
         )
 
+    async def _fake_evaluate_codebook_quality(self, **_kwargs):
+        return CodebookQualityEvaluationResult(
+            fitness_score=0.95,
+            coverage_score=0.95,
+            notes="Offline test evaluator.",
+        )
+
     monkeypatch.setattr(
         "app.services.traceable_analysis.TraceableAnalysisService._extract_quote_codes",
         _fake_extract_quote_codes,
@@ -150,6 +158,10 @@ async def test_traceable_analysis_job_creates_codebook_and_application_run(clien
     monkeypatch.setattr(
         "app.services.traceable_analysis.TraceableAnalysisService._apply_codebook_to_documents",
         _fake_apply_codebook_to_documents,
+    )
+    monkeypatch.setattr(
+        "app.services.traceable_analysis.TraceableAnalysisService._evaluate_codebook_quality",
+        _fake_evaluate_codebook_quality,
     )
 
     create_response = await client.post(

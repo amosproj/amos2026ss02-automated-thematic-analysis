@@ -4,13 +4,15 @@ from app.config import Settings
 from app.schemas.traceable_llm import (
     CodebookReviewAction,
     CodebookReviewResult,
+    CodebookSplitChild,
     CodebookSynthesisResult,
+    CodebookQualityEvaluationResult,
     CodeRelationshipResult,
     SynthesizedCode,
     SynthesizedThemeNode,
     SynthesizedThemePath,
 )
-from app.services.traceable_analysis import TraceableAnalysisService
+from app.services.traceable_analysis import TraceableAnalysisService, _AppliedEvidence, _DocumentText
 from app.services.traceable_code_consolidation import (
     CodeCandidate,
     ConsolidatedCode,
@@ -208,6 +210,174 @@ def test_reviewer_code_merge_combines_source_codes() -> None:
     ]
     merged = next(code for code in refined.codes if code.code_label == "Privacy and transparency safeguards")
     assert merged.theme_path == ["AI Governance", "Privacy"]
+
+
+def test_reviewer_code_split_creates_grounded_child_codes() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(
+                path=[
+                    SynthesizedThemeNode(label="AI Governance"),
+                    SynthesizedThemeNode(label="Policy Responses"),
+                ]
+            )
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label="Policy and governance recommendations for AI",
+                code_description="Funding, labeling, company policy, and consumer protection proposals.",
+                theme_path=["AI Governance", "Policy Responses"],
+            )
+        ],
+    )
+    review = CodebookReviewResult(
+        actions=[
+            CodebookReviewAction(
+                action="split",
+                target="Policy and governance recommendations for AI",
+                artifact_type="code",
+                split_children=[
+                    CodebookSplitChild(
+                        code_label="AI content labeling and disclosure",
+                        code_description="Mandates visible disclosures for AI-generated content.",
+                        source_quote_ids=["q-label"],
+                    ),
+                    CodebookSplitChild(
+                        code_label="Company-level AI usage policies",
+                        code_description="Calls for workplace policies governing AI use.",
+                        source_quote_ids=["q-policy"],
+                    ),
+                ],
+                reason="The parent combines distinct policy mechanisms.",
+            )
+        ]
+    )
+    consolidated = [
+        ConsolidatedCode(
+            label="Policy and governance recommendations for AI",
+            description="Funding, labeling, company policy, and consumer protection proposals.",
+            candidate_ids=["parent"],
+            quote_ids=["q-label", "q-policy"],
+        )
+    ]
+
+    refined, action_log = service._apply_review_actions(synthesis, review, round_index=1)
+    refined_codes = service._apply_code_split_actions_to_consolidated_codes(consolidated, action_log)
+
+    assert action_log[0]["applied"] is True
+    assert sorted(code.code_label for code in refined.codes) == [
+        "AI content labeling and disclosure",
+        "Company-level AI usage policies",
+    ]
+    assert sorted(code.label for code in refined_codes) == [
+        "AI content labeling and disclosure",
+        "Company-level AI usage policies",
+    ]
+    assert {tuple(code.quote_ids) for code in refined_codes} == {("q-label",), ("q-policy",)}
+
+
+def test_reviewer_rejects_broad_cross_theme_code_merge() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(path=[SynthesizedThemeNode(label="Employment"), SynthesizedThemeNode(label="Job Loss")]),
+            SynthesizedThemePath(path=[SynthesizedThemeNode(label="Privacy"), SynthesizedThemeNode(label="Data Risk")]),
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label="Concern about AI-driven job loss",
+                code_description="Participant worries that AI will eliminate work.",
+                theme_path=["Employment", "Job Loss"],
+            ),
+            SynthesizedCode(
+                code_label="Fear of personal data misuse",
+                code_description="Participant worries AI tools may expose private data.",
+                theme_path=["Privacy", "Data Risk"],
+            ),
+        ],
+    )
+    review = CodebookReviewResult(
+        actions=[
+            CodebookReviewAction(
+                action="merge",
+                source_labels=[
+                    "Concern about AI-driven job loss",
+                    "Fear of personal data misuse",
+                ],
+                replacement="AI concerns",
+                artifact_type="code",
+                reason="Both are concerns about AI.",
+            )
+        ]
+    )
+
+    refined, action_log = service._apply_review_actions(synthesis, review, round_index=1)
+
+    assert [code.code_label for code in refined.codes] == [
+        "Concern about AI-driven job loss",
+        "Fear of personal data misuse",
+    ]
+    assert action_log[0]["applied"] is False
+    assert "Rejected broad code merge" in action_log[0]["rejected_reason"]
+
+
+def test_iteration_metrics_include_descriptive_quality_scores() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    synthesis = CodebookSynthesisResult(
+        themes=[SynthesizedThemePath(path=[SynthesizedThemeNode(label="Workflow")])],
+        codes=[
+            SynthesizedCode(
+                code_label="Manual handoffs slow work",
+                code_description="Manual handoffs slow review.",
+                theme_path=["Workflow"],
+            )
+        ],
+    )
+    consolidated = [
+        ConsolidatedCode(
+            label="Manual handoffs slow work",
+            description="Manual handoffs slow review.",
+            candidate_ids=["candidate-1"],
+            quote_ids=["quote-1"],
+        )
+    ]
+    document_id = "00000000-0000-0000-0000-000000000001"
+    metrics = service._compute_iteration_metrics(
+        synthesis=synthesis,
+        consolidated_codes=consolidated,
+        quote_evidence=[],
+        evaluation_documents=[
+            _DocumentText(
+                id=document_id,  # type: ignore[arg-type]
+                title="Doc",
+                content="manual handoffs slow",
+            )
+        ],
+        evaluation_evidence=[
+            _AppliedEvidence(
+                document_id=document_id,  # type: ignore[arg-type]
+                code_label="Manual handoffs slow work",
+                theme_label="Workflow",
+                quote="manual handoffs slow",
+                start_char=0,
+                end_char=20,
+                quote_match_status="exact",
+                confidence=0.9,
+                rationale=None,
+            )
+        ],
+        used_heldout=True,
+        quality_evaluation=CodebookQualityEvaluationResult(
+            fitness_score=0.88,
+            coverage_score=0.77,
+        ),
+    )
+
+    assert metrics["descriptive_fitness_score"] == 0.88
+    assert metrics["descriptive_coverage_score"] == 0.77
+    assert metrics["missing_concept_count"] == 0
+    assert 0.0 < metrics["composite_score"] <= 1.0
 
 
 def test_provenance_payload_links_theme_to_quote_and_application() -> None:

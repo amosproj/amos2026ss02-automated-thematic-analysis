@@ -152,8 +152,11 @@ Check for duplicated concepts, inconsistent granularity, orphan codes/subthemes,
 Use any supplied metrics and diagnostics to prefer conservative edits:
 - Low reusability means the codebook may be too granular.
 - Low parsimony means the code count is outside the target range.
-- High merge-risk codes may contain unrelated concepts and should be split only if grounded labels are already present.
+- Low descriptive_fitness_score means assignments may be inaccurate or overgeneralized.
+- Low descriptive_coverage_score means important heldout concepts may be missing.
+- High merge-risk or overbroad codes may contain unrelated concepts and should be split into evidence-backed children.
 - Do not merge codes merely because they share a broad topic; merge only duplicated or near-equivalent concepts.
+- For split actions on codes, include split_children with concise child code labels and source_quote_ids from the supplied code payload.
 Allowed actions: generate, merge, split, revise, move, delete.
 Return valid JSON only:
 {{
@@ -164,6 +167,7 @@ Return valid JSON only:
       "replacement": "Improved label",
       "source_labels": [],
       "new_parent_path": [],
+      "split_children": [],
       "artifact_type": "theme",
       "reason": "Brief reason"
     }}
@@ -209,9 +213,60 @@ MISSING_CODE_GENERATION_USER_PROMPT = """Find missing grounded codes for this co
 {codebook}
 --- CURRENT CODEBOOK END ---
 
+--- COVERAGE GAP HINTS START ---
+{coverage_gaps}
+--- COVERAGE GAP HINTS END ---
+
 --- QUOTE EVIDENCE START ---
 {quote_evidence}
 --- QUOTE EVIDENCE END ---"""
+
+
+CODEBOOK_QUALITY_EVALUATION_SYSTEM_PROMPT = """You are evaluating a qualitative codebook against heldout transcripts.
+Score how well the assigned codes describe the transcript evidence.
+
+Definitions:
+- fitness_score: assigned codes are accurate, specific, and supported by their quotes.
+- coverage_score: assigned codes cover the important research-relevant ideas in the heldout transcripts.
+
+Rules:
+- Use only the supplied heldout transcripts, assigned codes, and exact quotes.
+- Penalize broad codes that mix distinct mechanisms, actors, or outcomes.
+- List missing concepts only when they are important and not represented by the current codebook.
+- Every score MUST be a valid JSON number between 0.0 and 1.0.
+- Return valid JSON only. Do not wrap JSON in markdown.
+
+Return this exact shape:
+{{
+  "fitness_score": 0.85,
+  "coverage_score": 0.80,
+  "missing_concepts": [
+    {{
+      "label": "Missing concept label",
+      "description": "Why this concept is missing",
+      "evidence_quotes": ["Exact quote from a heldout transcript"]
+    }}
+  ],
+  "overbroad_codes": [
+    {{
+      "code_label": "Existing broad code label",
+      "reason": "Why it mixes distinct ideas",
+      "suggested_split_labels": ["Specific child code"]
+    }}
+  ],
+  "notes": "Brief quality assessment"
+}}"""
+
+
+CODEBOOK_QUALITY_EVALUATION_USER_PROMPT = """Evaluate this codebook application.
+
+--- CODEBOOK START ---
+{codebook}
+--- CODEBOOK END ---
+
+--- HELDOUT APPLICATIONS START ---
+{applications}
+--- HELDOUT APPLICATIONS END ---"""
 
 
 TRACEABLE_APPLICATION_SYSTEM_PROMPT = """You are applying a fixed qualitative codebook to one transcript.
@@ -337,6 +392,15 @@ def build_missing_code_generation_prompt() -> ChatPromptTemplate:
         [
             ("system", MISSING_CODE_GENERATION_SYSTEM_PROMPT),
             ("user", MISSING_CODE_GENERATION_USER_PROMPT),
+        ]
+    )
+
+
+def build_codebook_quality_evaluation_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", CODEBOOK_QUALITY_EVALUATION_SYSTEM_PROMPT),
+            ("user", CODEBOOK_QUALITY_EVALUATION_USER_PROMPT),
         ]
     )
 
