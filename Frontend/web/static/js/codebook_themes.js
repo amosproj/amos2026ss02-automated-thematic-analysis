@@ -487,9 +487,8 @@
 
         try {
             const response = await fetch(quotesUrl(themeId, page));
-            if (!response.ok) throw new Error("HTTP " + response.status);
             const data = await response.json();
-            if (data.error) throw new Error(data.error);
+            if (!response.ok || data.error) throw new Error(data.error || "HTTP " + response.status);
             renderQuotes(data, themeName);
         } catch (err) {
             quotesLoading.classList.add("d-none");

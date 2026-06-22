@@ -298,7 +298,6 @@ def theme_quotes_json(corpus_id: str, codebook_id: str, theme_id: str):
     except BackendError as exc:
         return jsonify({"error": exc.user_message}), 502
     except Exception:
-        current_app.logger.exception("Unexpected error fetching theme quotes")
         return jsonify({"error": "An unexpected error occurred."}), 500
 
 
