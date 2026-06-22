@@ -3,9 +3,11 @@
     if (!appRoot) return;
 
     // Data is embedded server-side as JSON — no extra HTTP requests needed.
-    const frequencies = JSON.parse(appRoot.dataset.frequencies || "[]");
-    const tree        = JSON.parse(appRoot.dataset.tree        || "[]");
-    const codes       = JSON.parse(appRoot.dataset.codes       || "[]");
+    const frequencies       = JSON.parse(appRoot.dataset.frequencies || "[]");
+    const tree              = JSON.parse(appRoot.dataset.tree        || "[]");
+    const codes             = JSON.parse(appRoot.dataset.codes       || "[]");
+    const quotesUrlTemplate = appRoot.dataset.quotesUrlTemplate || "";
+    const readUrlTemplate   = appRoot.dataset.readUrlTemplate   || "";
 
     // Topics the researcher asked the AI to focus on.
     const researcherTopics = (() => {
@@ -375,4 +377,141 @@
     // Auto-select the top theme by frequency on load.
     const top = sortByFrequency(frequencies)[0];
     if (top) showThemeDetails(top.theme_id);
+
+    // ------------------------------------------------------------------
+    // Quotes modal
+    // ------------------------------------------------------------------
+
+    const quotesModal      = document.getElementById("quotes-modal");
+    const quotesLoading    = document.getElementById("quotes-loading");
+    const quotesError      = document.getElementById("quotes-error");
+    const quotesList       = document.getElementById("quotes-list");
+    const quotesEmpty      = document.getElementById("quotes-empty");
+    const quotesTotal      = document.getElementById("quotes-modal-total");
+    const quotesLabel      = document.getElementById("quotes-modal-label");
+    const quotesPagination = document.getElementById("quotes-pagination");
+    const quotesPageInfo   = document.getElementById("quotes-page-info");
+    const quotesPrev       = document.getElementById("quotes-prev");
+    const quotesNext       = document.getElementById("quotes-next");
+    const viewQuotesBtn    = document.getElementById("theme-details-view-quotes");
+
+    if (!quotesModal || !viewQuotesBtn) return;
+
+    const bsModal = new bootstrap.Modal(quotesModal);
+
+    let activeQuoteThemeId = null;
+    let activeQuotePage    = 1;
+    const PAGE_SIZE        = 20;
+
+    function quotesUrl(themeId, page) {
+        return quotesUrlTemplate.replace("__THEME__", themeId)
+            + "?page=" + page + "&page_size=" + PAGE_SIZE;
+    }
+
+    function interviewUrl(documentId) {
+        return readUrlTemplate.replace("__DOC__", documentId);
+    }
+
+    function setQuotesLoading() {
+        quotesLoading.classList.remove("d-none");
+        quotesError.classList.add("d-none");
+        quotesList.classList.add("d-none");
+        quotesEmpty.classList.add("d-none");
+        quotesPagination.classList.add("d-none");
+    }
+
+    function renderQuotes(data, themeName) {
+        quotesLoading.classList.add("d-none");
+
+        const items = data.items || [];
+        const meta  = data.meta  || {};
+        const total = meta.total  ?? 0;
+        const page  = meta.page   ?? 1;
+        const pages = meta.pages  ?? 0;
+
+        quotesLabel.textContent = "Quotes for: " + (themeName || "Theme");
+        quotesTotal.textContent = total === 1 ? "1 quote across corpus" : total + " quotes across corpus";
+
+        if (items.length === 0) {
+            quotesEmpty.classList.remove("d-none");
+            quotesPagination.classList.add("d-none");
+            return;
+        }
+
+        quotesList.replaceChildren();
+
+        for (const item of items) {
+            const card = document.createElement("div");
+            card.className = "border rounded-2 p-3 mb-2";
+
+            // Quote text — textContent prevents XSS on any user-supplied content.
+            const quoteEl = document.createElement("blockquote");
+            quoteEl.className = "mb-2 fst-italic text-body";
+            quoteEl.textContent = "“" + item.quote + "”";
+            card.appendChild(quoteEl);
+
+            const meta = document.createElement("div");
+            meta.className = "d-flex align-items-center justify-content-between flex-wrap gap-2";
+
+            const interviewee = document.createElement("span");
+            interviewee.className = "text-secondary small";
+            interviewee.textContent = "Interviewee: " + (item.interviewee_id || "Unknown");
+            meta.appendChild(interviewee);
+
+            const link = document.createElement("a");
+            link.href      = interviewUrl(item.document_id);
+            link.className = "btn btn-sm btn-outline-secondary";
+            link.textContent = "View Interview";
+            meta.appendChild(link);
+
+            card.appendChild(meta);
+            quotesList.appendChild(card);
+        }
+
+        quotesList.classList.remove("d-none");
+
+        // Pagination
+        activeQuotePage = page;
+        quotesPageInfo.textContent = "Page " + page + " of " + pages;
+        quotesPrev.disabled = page <= 1;
+        quotesNext.disabled = page >= pages;
+        quotesPagination.classList.toggle("d-none", pages <= 1);
+    }
+
+    async function loadQuotes(themeId, page) {
+        activeQuoteThemeId = themeId;
+        activeQuotePage    = page;
+        setQuotesLoading();
+
+        const themeName = (currentThemeInfoById[themeId] || {}).theme_name || "";
+
+        try {
+            const response = await fetch(quotesUrl(themeId, page));
+            const data = await response.json();
+            if (!response.ok || data.error) throw new Error(data.error || "HTTP " + response.status);
+            renderQuotes(data, themeName);
+        } catch (err) {
+            quotesLoading.classList.add("d-none");
+            quotesError.textContent = "Could not load quotes: " + err.message;
+            quotesError.classList.remove("d-none");
+        }
+    }
+
+    viewQuotesBtn.addEventListener("click", () => {
+        if (!selectedThemeId) return;
+        bsModal.show();
+        loadQuotes(selectedThemeId, 1);
+    });
+
+    quotesPrev.addEventListener("click", () => {
+        if (activeQuoteThemeId && activeQuotePage > 1) {
+            loadQuotes(activeQuoteThemeId, activeQuotePage - 1);
+        }
+    });
+
+    quotesNext.addEventListener("click", () => {
+        if (activeQuoteThemeId) {
+            loadQuotes(activeQuoteThemeId, activeQuotePage + 1);
+        }
+    });
 })();
