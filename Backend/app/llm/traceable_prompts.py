@@ -314,7 +314,7 @@ TRACEABLE_APPLICATION_SYSTEM_PROMPT = """You are applying a fixed qualitative co
 Rules:
 - Use only exact code labels and theme labels from the provided codebook.
 - Do not invent, rename, merge, or split codes.
-- Select at most 20 existing codes that are actually supported by the transcript.
+- Select at most 20 existing codes that are actually supported by the transcript. Prefer fewer, stronger assignments over marginal matches.
 - Every assignment MUST include one short exact quote copied from the transcript.
 - Every confidence MUST be a valid JSON number such as 0.9. Never write words inside numbers, such as 0. nine.
 - Stay close to participant wording and avoid over-claiming.

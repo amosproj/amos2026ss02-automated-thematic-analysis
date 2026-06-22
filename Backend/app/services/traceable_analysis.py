@@ -1073,6 +1073,16 @@ class TraceableAnalysisService:
                 current_codes,
                 applied_actions,
             )
+            current, current_codes, quality_split_actions = self._apply_quality_overbroad_splits(
+                synthesis=current,
+                consolidated_codes=current_codes,
+                quote_evidence=current_quote_evidence,
+                quality_evaluation=quality_evaluation,
+                round_index=iteration,
+            )
+            if quality_split_actions:
+                artifact.action_log.extend(quality_split_actions)
+                action_log.extend(quality_split_actions)
 
             should_generate_from_gaps = bool(quality_evaluation.missing_concepts)
             if any(action.action == "generate" for action in review.actions) or should_generate_from_gaps:
@@ -1118,6 +1128,13 @@ class TraceableAnalysisService:
                         action_log.extend(generated_actions)
                         added_codes_for_resynthesis = True
                 if added_codes_for_resynthesis:
+                    current_codes, reconsolidation_actions = await self._reconsolidate_current_codes(
+                        consolidated_codes=current_codes,
+                        round_index=iteration,
+                    )
+                    if reconsolidation_actions:
+                        artifact.action_log.extend(reconsolidation_actions)
+                        action_log.extend(reconsolidation_actions)
                     current = await self._synthesize_codebook(
                         consolidated_codes=current_codes,
                         quote_evidence=current_quote_evidence,
@@ -1616,12 +1633,24 @@ class TraceableAnalysisService:
         missing_concepts = quality_evaluation.missing_concepts if quality_evaluation is not None else []
         overbroad_codes = quality_evaluation.overbroad_codes if quality_evaluation is not None else []
         code_count = len(synthesis.codes)
+        quote_count = max(1, len(quote_evidence))
+        singleton_code_count = sum(1 for code in consolidated_codes if code.frequency <= 1)
+        low_frequency_code_count = sum(1 for code in consolidated_codes if code.frequency <= 2)
+        codes_per_quote = code_count / quote_count
+        over_target_by = max(0, code_count - target_max)
         bloat_ratio = max(0.0, (code_count - target_max) / max(1, target_max))
         bloat_penalty = 1.0
         if bloat_ratio > 0.0:
-            bloat_penalty = max(0.45, 1.0 - min(0.55, bloat_ratio * 0.75))
-            if code_reusability < 0.20:
+            # The paper-style loop should prefer reusable, compact concepts.
+            # High one-code-per-quote ratios are a strong signal of codebook
+            # bloat, even when the heldout application can reuse every code.
+            bloat_penalty = max(0.25, 1.0 - min(0.75, bloat_ratio * 1.15))
+            if over_target_by >= 10:
                 bloat_penalty *= 0.80
+            if codes_per_quote > 0.65:
+                bloat_penalty *= 0.85
+            if code_reusability < 0.25:
+                bloat_penalty *= 0.85
         weighted_total = (
             1.30 * descriptive_fitness
             + 1.30 * descriptive_coverage
@@ -1650,6 +1679,10 @@ class TraceableAnalysisService:
             "parsimony_score": parsimony_score,
             "overmerge_balance": overmerge_balance,
             "bloat_penalty": bloat_penalty,
+            "codes_per_quote": codes_per_quote,
+            "over_target_by": over_target_by,
+            "singleton_code_count": singleton_code_count,
+            "low_frequency_code_count": low_frequency_code_count,
             "missing_concept_count": len(missing_concepts),
             "overbroad_code_count": len(overbroad_codes),
             "code_count": code_count,
@@ -1798,6 +1831,186 @@ class TraceableAnalysisService:
             current = remaining + children
         return current
 
+    def _apply_quality_overbroad_splits(
+        self,
+        *,
+        synthesis: CodebookSynthesisResult,
+        consolidated_codes: list[ConsolidatedCode],
+        quote_evidence: list[_QuoteEvidence],
+        quality_evaluation: CodebookQualityEvaluationResult | None,
+        round_index: int,
+    ) -> tuple[CodebookSynthesisResult, list[ConsolidatedCode], list[dict[str, object]]]:
+        if quality_evaluation is None or not quality_evaluation.overbroad_codes:
+            return synthesis, consolidated_codes, []
+
+        current = synthesis
+        current_codes = list(consolidated_codes)
+        quote_by_id = {quote.quote_id: quote for quote in quote_evidence}
+        action_log: list[dict[str, object]] = []
+        for broad_code in quality_evaluation.overbroad_codes:
+            target_label = self._truncate_label(self._normalize_label(broad_code.code_label))
+            target_key = self._label_key(target_label)
+            target = next((code for code in current_codes if self._label_key(code.label) == target_key), None)
+            if target is None or len(target.quote_ids) < 2:
+                continue
+
+            child_labels = []
+            seen_child_keys: set[str] = set()
+            for raw_label in broad_code.suggested_split_labels[:4]:
+                label = self._truncate_label(self._normalize_label(raw_label))
+                key = self._label_key(label)
+                if not label or key == target_key or key in seen_child_keys:
+                    continue
+                child_labels.append(label)
+                seen_child_keys.add(key)
+
+            child_quote_ids: dict[str, list[str]] = {label: [] for label in child_labels}
+            for quote_id in target.quote_ids:
+                quote = quote_by_id.get(quote_id)
+                if quote is None:
+                    continue
+                quote_tokens = self._meaningful_tokens(
+                    " ".join(
+                        [
+                            quote.quote,
+                            quote.code_label,
+                            quote.code_description or "",
+                            quote.rationale or "",
+                        ]
+                    )
+                )
+                best_label = ""
+                best_score = 0.0
+                for label in child_labels:
+                    label_tokens = self._meaningful_tokens(label)
+                    if not label_tokens or not quote_tokens:
+                        continue
+                    shared = len(label_tokens & quote_tokens)
+                    overlap = self._token_overlap(label_tokens, quote_tokens)
+                    containment = shared / min(len(label_tokens), len(quote_tokens))
+                    score = shared + overlap + containment
+                    if score > best_score:
+                        best_score = score
+                        best_label = label
+                if best_label and best_score >= 1.05:
+                    child_quote_ids[best_label].append(quote_id)
+
+            children = [
+                CodebookSplitChild(
+                    code_label=label,
+                    code_description=self._clean_optional_text(
+                        f"Split from overbroad code. {broad_code.reason or ''}"
+                    ),
+                    source_quote_ids=ids,
+                )
+                for label, ids in child_quote_ids.items()
+                if ids
+            ]
+            if len(children) < 2:
+                action_log.append(
+                    {
+                        "action": "quality_overbroad_split_skipped",
+                        "round": round_index,
+                        "target": target_label,
+                        "artifact_type": "code",
+                        "reason": broad_code.reason,
+                        "suggested_split_labels": child_labels,
+                        "applied": False,
+                        "rejected_reason": "Suggested split labels were not grounded in at least two source quote groups.",
+                    }
+                )
+                continue
+
+            parent_path = next(
+                (
+                    code.theme_path
+                    for code in current.codes
+                    if self._label_key(code.code_label) == target_key
+                ),
+                [],
+            )
+            before = current.model_dump(mode="json")
+            current = self._apply_split_action(
+                current,
+                target=target_label,
+                split_children=children,
+                artifact_type="code",
+                new_parent_path=parent_path,
+            )
+            split_action = {
+                "action": "split",
+                "round": round_index,
+                "target": target_label,
+                "replacement": None,
+                "source_labels": [],
+                "new_parent_path": parent_path,
+                "split_children": [child.model_dump(mode="json") for child in children],
+                "artifact_type": "code",
+                "reason": broad_code.reason or "Quality evaluator identified an overbroad code.",
+                "applied": before != current.model_dump(mode="json"),
+                "rejected_reason": None,
+            }
+            if split_action["applied"]:
+                current_codes = self._apply_code_split_actions_to_consolidated_codes(
+                    current_codes,
+                    [split_action],
+                )
+                action_log.append({**split_action, "action": "quality_overbroad_split"})
+
+        if action_log:
+            current = self._ensure_synthesis_covers_codes(current, current_codes)
+        return current, current_codes, action_log
+
+    async def _reconsolidate_current_codes(
+        self,
+        *,
+        consolidated_codes: list[ConsolidatedCode],
+        round_index: int,
+    ) -> tuple[list[ConsolidatedCode], list[dict[str, object]]]:
+        candidates = [
+            CodeCandidate(
+                candidate_id="|".join(code.candidate_ids) or self._label_key(code.label),
+                label=code.label,
+                description=code.description,
+                quote_ids=code.quote_ids,
+            )
+            for code in consolidated_codes
+        ]
+        if len(candidates) < 2:
+            return consolidated_codes, []
+
+        reconsolidated, raw_actions = await consolidate_code_candidates(
+            candidates,
+            classifier=self._classify_code_pair,
+            batch_classifier=self._classify_code_pairs,
+        )
+        actions = [
+            {
+                **action,
+                "action": f"post_refinement_{action.get('action', 'consolidation')}",
+                "round": round_index,
+            }
+            for action in raw_actions
+        ]
+        if len(reconsolidated) != len(consolidated_codes):
+            actions.append(
+                {
+                    "action": "post_refinement_consolidation",
+                    "round": round_index,
+                    "input_codes": len(consolidated_codes),
+                    "output_codes": len(reconsolidated),
+                    "removed_codes": len(consolidated_codes) - len(reconsolidated),
+                }
+            )
+        logger.info(
+            "Traceable post-refinement consolidation complete: round={}, input_codes={}, output_codes={}, actions={}",
+            round_index,
+            len(consolidated_codes),
+            len(reconsolidated),
+            len(raw_actions),
+        )
+        return reconsolidated, actions
+
     def _compact_codebook_before_evaluation(
         self,
         *,
@@ -1839,7 +2052,7 @@ class TraceableAnalysisService:
                     if right_key in used:
                         continue
                     right_tokens = self._meaningful_tokens(f"{right.code_label} {right.code_description or ''}")
-                    if self._token_overlap(left_tokens, right_tokens) >= 0.42:
+                    if self._token_overlap(left_tokens, right_tokens) >= 0.28:
                         siblings.append(right)
                         used.add(right_key)
                 if len(siblings) < 2:
@@ -1891,7 +2104,7 @@ class TraceableAnalysisService:
                     if len(chunk) < 3:
                         continue
                     compaction_groups = [chunk]
-                    if not self._is_cohesive_synthesized_code_group(chunk, min_average_overlap=0.16):
+                    if not self._is_cohesive_synthesized_code_group(chunk, min_average_overlap=0.10):
                         compaction_groups = self._cohesive_synthesized_subgroups(chunk)
                     if not compaction_groups:
                         action_log.append(
@@ -1995,6 +2208,7 @@ class TraceableAnalysisService:
         self,
         codes: list[SynthesizedCode],
     ) -> list[list[SynthesizedCode]]:
+        max_group_size = 4
         token_by_key = {
             self._label_key(code.code_label): self._meaningful_tokens(
                 f"{code.code_label} {code.code_description or ''}"
@@ -2038,9 +2252,51 @@ class TraceableAnalysisService:
                 continue
             group = [code_by_key[item] for item in component_keys if item in code_by_key]
             if self._is_cohesive_synthesized_code_group(group, min_average_overlap=0.08):
-                groups.append(group)
+                groups.extend(self._split_large_cohesive_group(group, max_group_size=max_group_size))
         groups.sort(key=len, reverse=True)
         return groups
+
+    def _split_large_cohesive_group(
+        self,
+        group: list[SynthesizedCode],
+        *,
+        max_group_size: int,
+    ) -> list[list[SynthesizedCode]]:
+        if len(group) <= max_group_size:
+            return [group]
+
+        remaining = list(group)
+        chunks: list[list[SynthesizedCode]] = []
+        while len(remaining) >= 2:
+            seed = max(
+                remaining,
+                key=lambda code: sum(
+                    self._token_overlap(
+                        self._meaningful_tokens(f"{code.code_label} {code.code_description or ''}"),
+                        self._meaningful_tokens(f"{other.code_label} {other.code_description or ''}"),
+                    )
+                    for other in remaining
+                    if other is not code
+                ),
+            )
+            seed_tokens = self._meaningful_tokens(f"{seed.code_label} {seed.code_description or ''}")
+            scored = []
+            for candidate in remaining:
+                if candidate is seed:
+                    continue
+                candidate_tokens = self._meaningful_tokens(
+                    f"{candidate.code_label} {candidate.code_description or ''}"
+                )
+                scored.append((self._token_overlap(seed_tokens, candidate_tokens), candidate))
+            scored.sort(key=lambda item: item[0], reverse=True)
+            chunk = [seed] + [candidate for score, candidate in scored[: max_group_size - 1] if score >= 0.08]
+            if len(chunk) < 2:
+                remaining.remove(seed)
+                continue
+            chunks.append(chunk)
+            used_keys = {self._label_key(code.code_label) for code in chunk}
+            remaining = [code for code in remaining if self._label_key(code.code_label) not in used_keys]
+        return chunks
 
     def _dedupe_synthesized_codes(self, synthesis: CodebookSynthesisResult) -> CodebookSynthesisResult:
         codes_by_key: dict[str, SynthesizedCode] = {}
@@ -2100,18 +2356,69 @@ class TraceableAnalysisService:
     ) -> str:
         token_counts: dict[str, int] = defaultdict(int)
         for code in codes:
-            for token in self._meaningful_tokens(code.code_label):
+            for token in self._compact_label_tokens(code.code_label):
                 token_counts[token] += 1
         common_tokens = [
             token for token, count in sorted(token_counts.items(), key=lambda item: (-item[1], item[0]))
             if count >= 2
         ][:5]
         if common_tokens:
-            label = " ".join(common_tokens).title()
+            family_label = self._known_compaction_family_label(set(common_tokens))
+            label = family_label or " ".join(common_tokens[:4]).title()
             return self._truncate_label(label)
         if path:
             return self._truncate_label(str(path[-1]))
         return self._truncate_label(codes[0].code_label)
+
+    @staticmethod
+    def _compact_label_tokens(value: str) -> set[str]:
+        generic_tokens = {
+            "adaptation",
+            "against",
+            "ai",
+            "artificial",
+            "attitude",
+            "belief",
+            "believes",
+            "concern",
+            "concerns",
+            "effect",
+            "effects",
+            "experience",
+            "impact",
+            "impacts",
+            "intelligence",
+            "participants",
+            "participant",
+            "perceived",
+            "perception",
+            "pattern",
+            "patterns",
+            "specific",
+            "toward",
+            "use",
+            "uses",
+            "using",
+            "view",
+            "views",
+        }
+        return TraceableAnalysisService._meaningful_tokens(value) - generic_tokens
+
+    @staticmethod
+    def _known_compaction_family_label(tokens: set[str]) -> str | None:
+        if {"resume", "screening"} <= tokens or {"recruiter", "resume"} <= tokens:
+            return "AI Resume Screening Adaptation"
+        if tokens & {"financial", "finance"} and tokens & {"strain", "pressure", "stress"}:
+            return "Financial Strain and Pressure"
+        if tokens & {"regulation", "policy", "regulated"} and tokens & {"job", "employment", "workers"}:
+            return "AI Regulation for Job Protection"
+        if tokens & {"privacy", "data"} and tokens & {"protection", "security", "consent"}:
+            return "AI Privacy and Data Protection Concerns"
+        if tokens & {"prompt", "prompts"} and tokens & {"quality", "output", "answers", "responses"}:
+            return "Prompt Quality and AI Output Improvement"
+        if tokens & {"creative", "creativity"} and tokens & {"work", "jobs", "career"}:
+            return "AI Effects on Creative Work"
+        return None
 
     def _subtheme_compaction_label(self, path: tuple[str, ...]) -> str:
         subtheme = str(path[-1]) if path else "Grounded evidence"
@@ -3753,6 +4060,14 @@ class TraceableAnalysisService:
             for code in synthesis.codes
             if applied_counts.get(TraceableAnalysisService._label_key(code.code_label), 0) == 0
         ]
+        singleton_code_count = sum(1 for code in consolidated_codes if code.frequency <= 1)
+        low_frequency_code_count = sum(1 for code in consolidated_codes if code.frequency <= 2)
+        quote_count = sum(code.frequency for code in consolidated_codes)
+        codes_per_quote = len(synthesis.codes) / max(1, quote_count)
+        subtheme_code_counts: dict[str, int] = defaultdict(int)
+        for code in synthesis.codes:
+            subtheme = code.theme_path[-1] if code.theme_path else "Ungrouped"
+            subtheme_code_counts[subtheme] += 1
         potentially_broad_codes = []
         for code in synthesis.codes:
             source = consolidated_by_key.get(TraceableAnalysisService._label_key(code.code_label))
@@ -3799,6 +4114,20 @@ class TraceableAnalysisService:
             "unused_codes": unused_codes,
             "potentially_broad_codes": potentially_broad_codes,
             "remaining_high_overlap_pairs": overlapping_pairs[:20],
+            "codebook_size_diagnostics": {
+                "code_count": len(synthesis.codes),
+                "quote_count": quote_count,
+                "codes_per_quote": round(codes_per_quote, 3),
+                "singleton_code_count": singleton_code_count,
+                "low_frequency_code_count": low_frequency_code_count,
+                "largest_subthemes": [
+                    {"subtheme": label, "code_count": count}
+                    for label, count in sorted(
+                        subtheme_code_counts.items(),
+                        key=lambda item: (-item[1], item[0]),
+                    )[:10]
+                ],
+            },
             "best_iteration": best_iteration.iteration if best_iteration else None,
             "best_iteration_metrics": best_iteration.metrics if best_iteration else {},
         }

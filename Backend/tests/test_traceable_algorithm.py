@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.config import Settings
 from app.schemas.traceable_llm import (
     CodebookMissingConcept,
+    CodebookOverbroadCode,
     CodebookPolishResult,
     CodebookQualityEvaluationResult,
     CodebookReviewAction,
@@ -663,8 +664,93 @@ def test_iteration_metrics_penalize_bloated_low_reuse_codebooks() -> None:
     )
 
     assert metrics["target_max_codes"] == 36
+    assert metrics["over_target_by"] == 30
+    assert metrics["codes_per_quote"] > 0.9
+    assert metrics["singleton_code_count"] == 66
     assert metrics["bloat_penalty"] < 0.5
     assert metrics["composite_score"] < 0.4
+
+
+def test_quality_overbroad_split_requires_grounded_child_evidence() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    synthesis = CodebookSynthesisResult(
+        themes=[SynthesizedThemePath(path=[SynthesizedThemeNode(label="AI Governance")])],
+        codes=[
+            SynthesizedCode(
+                code_label="AI policy and economic protection concerns",
+                code_description="Combines employment regulation and privacy protection.",
+                theme_path=["AI Governance"],
+            )
+        ],
+    )
+    consolidated = [
+        ConsolidatedCode(
+            label="AI policy and economic protection concerns",
+            description="Combines employment regulation and privacy protection.",
+            candidate_ids=["parent"],
+            quote_ids=["q-job", "q-privacy"],
+        )
+    ]
+    quote_evidence = [
+        _QuoteEvidence(
+            quote_id="q-job",
+            document_id="00000000-0000-0000-0000-000000000001",  # type: ignore[arg-type]
+            quote="AI should be regulated to keep people employed.",
+            start_char=0,
+            end_char=45,
+            quote_match_status="exact",
+            candidate_id="candidate-job",
+            code_label="Job protection regulation",
+            code_description="Regulation protects employment.",
+            confidence=0.9,
+            rationale="Job and employment protection.",
+        ),
+        _QuoteEvidence(
+            quote_id="q-privacy",
+            document_id="00000000-0000-0000-0000-000000000002",  # type: ignore[arg-type]
+            quote="Companies need rules for private data and consent.",
+            start_char=0,
+            end_char=48,
+            quote_match_status="exact",
+            candidate_id="candidate-privacy",
+            code_label="Privacy and data consent",
+            code_description="Data privacy protection and consent.",
+            confidence=0.9,
+            rationale="Privacy and data protection.",
+        ),
+    ]
+
+    refined, refined_codes, actions = service._apply_quality_overbroad_splits(
+        synthesis=synthesis,
+        consolidated_codes=consolidated,
+        quote_evidence=quote_evidence,
+        quality_evaluation=CodebookQualityEvaluationResult(
+            fitness_score=0.8,
+            coverage_score=0.8,
+            overbroad_codes=[
+                CodebookOverbroadCode(
+                    code_label="AI policy and economic protection concerns",
+                    reason="Combines distinct governance ideas.",
+                    suggested_split_labels=[
+                        "Job protection regulation",
+                        "Privacy and data consent",
+                    ],
+                )
+            ],
+        ),
+        round_index=2,
+    )
+
+    assert actions[0]["action"] == "quality_overbroad_split"
+    assert sorted(code.code_label for code in refined.codes) == [
+        "Job protection regulation",
+        "Privacy and data consent",
+    ]
+    assert sorted(code.label for code in refined_codes) == [
+        "Job protection regulation",
+        "Privacy and data consent",
+    ]
+    assert {tuple(code.quote_ids) for code in refined_codes} == {("q-job",), ("q-privacy",)}
 
 
 def test_ensure_synthesis_covers_codes_removes_duplicate_labels() -> None:
@@ -847,6 +933,49 @@ def test_compaction_merges_cohesive_subgroups_inside_diverse_chunk() -> None:
         if action["action"] == "compact_near_duplicate_codes"
     ]
     assert any(len(source_labels) >= 2 for source_labels in merged_sources)
+
+
+def test_compaction_family_label_uses_domain_phrase_for_resume_screening() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    label = service._compact_replacement_label(
+        path=("AI work", "Hiring"),
+        codes=[
+            SynthesizedCode(
+                code_label="AI resume screening blocks applications",
+                code_description="Screening filters resumes.",
+                theme_path=["AI work", "Hiring"],
+            ),
+            SynthesizedCode(
+                code_label="Resume tweaking bypasses AI screening",
+                code_description="Resume wording helps pass screening.",
+                theme_path=["AI work", "Hiring"],
+            ),
+            SynthesizedCode(
+                code_label="Professional resume help for AI screening",
+                code_description="Career advice improves resumes.",
+                theme_path=["AI work", "Hiring"],
+            ),
+        ],
+    )
+
+    assert label == "AI Resume Screening Adaptation"
+
+
+def test_cohesive_subgroups_are_capped_to_avoid_broad_compaction() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    codes = [
+        SynthesizedCode(
+            code_label=f"AI resume screening adaptation detail {index}",
+            code_description="Resume screening and adaptation to automated hiring filters.",
+            theme_path=["AI work", "Hiring"],
+        )
+        for index in range(7)
+    ]
+
+    groups = service._cohesive_synthesized_subgroups(codes)
+
+    assert groups
+    assert all(2 <= len(group) <= 4 for group in groups)
 
 
 def test_application_recall_candidates_include_relevant_unassigned_code() -> None:
