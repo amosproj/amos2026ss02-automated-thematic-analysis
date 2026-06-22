@@ -127,6 +127,7 @@ class _AppliedEvidence:
 class _ApplicationPassResult:
     evidence: list[_AppliedEvidence]
     failed_document_ids: list[UUID]
+    action_log: list[dict[str, object]] | None = None
 
 
 @dataclass(frozen=True)
@@ -360,6 +361,8 @@ class TraceableAnalysisService:
             should_cancel=should_cancel,
         )
         applied_evidence = application_result.evidence
+        if application_result.action_log:
+            action_log.extend(application_result.action_log)
         action_log.append(
             {
                 "action": "apply_final_codebook",
@@ -1080,12 +1083,13 @@ class TraceableAnalysisService:
                     existing_codes=current_codes,
                     round_index=iteration,
                 )
-                if gap_codes:
-                    current_codes.extend(gap_codes)
+                if gap_quote_evidence:
                     current_quote_evidence.extend(gap_quote_evidence)
                     artifact.action_log.extend(gap_actions)
                     action_log.extend(gap_actions)
                     added_codes_for_resynthesis = True
+                if gap_codes:
+                    current_codes.extend(gap_codes)
                 missing_codes = await self._generate_missing_codes(
                     synthesis=current,
                     quote_evidence=current_quote_evidence,
@@ -1809,7 +1813,6 @@ class TraceableAnalysisService:
         if len(current.codes) <= max(1, target_max):
             return current, current_codes, action_log
 
-        code_by_key = {self._label_key(code.code_label): code for code in current.codes}
         consolidated_by_key = {self._label_key(code.label): code for code in current_codes}
         groups_by_path: dict[tuple[str, ...], list[SynthesizedCode]] = defaultdict(list)
         for code in current.codes:
@@ -1887,34 +1890,54 @@ class TraceableAnalysisService:
                     chunk = singleton_codes[chunk_start:chunk_start + chunk_size]
                     if len(chunk) < 3:
                         continue
-                    replacement = self._subtheme_compaction_label(path)
-                    suffix = 2
-                    existing_replacements = {
-                        self._label_key(str(action.get("replacement", "")))
-                        for action in merge_actions
-                    } | {self._label_key(code.code_label) for code in current.codes}
-                    base_replacement = replacement
-                    while self._label_key(replacement) in existing_replacements:
-                        replacement = self._truncate_label(f"{base_replacement} {suffix}")
-                        suffix += 1
-                    source_labels = [code.code_label for code in chunk]
-                    merge_actions.append(
-                        {
-                            "action": "merge",
-                            "round": round_index,
-                            "target": replacement,
-                            "replacement": replacement,
-                            "source_labels": source_labels,
-                            "new_parent_path": list(path),
-                            "split_children": [],
-                            "artifact_type": "code",
-                            "reason": "Deterministic target-size compaction of low-frequency sibling codes within one subtheme.",
-                            "applied": True,
-                            "rejected_reason": None,
-                        }
-                    )
-                    already_merged.update(self._label_key(label) for label in source_labels)
-                    projected_count -= len(chunk) - 1
+                    compaction_groups = [chunk]
+                    if not self._is_cohesive_synthesized_code_group(chunk, min_average_overlap=0.16):
+                        compaction_groups = self._cohesive_synthesized_subgroups(chunk)
+                    if not compaction_groups:
+                        action_log.append(
+                            {
+                                "action": "skip_broad_compaction",
+                                "round": round_index,
+                                "source_labels": [code.code_label for code in chunk],
+                                "reason": "Skipped target-size compaction because sibling codes were too semantically diverse.",
+                                "artifact_type": "code",
+                                "applied": False,
+                            }
+                        )
+                        continue
+                    for group in compaction_groups:
+                        if projected_count <= target_max or len(group) < 2:
+                            break
+                        replacement = self._compact_replacement_label(path=path, codes=group)
+                        if self._label_key(replacement) == self._label_key(path[-1] if path else ""):
+                            replacement = self._subtheme_compaction_label(path)
+                        suffix = 2
+                        existing_replacements = {
+                            self._label_key(str(action.get("replacement", "")))
+                            for action in merge_actions
+                        } | {self._label_key(code.code_label) for code in current.codes}
+                        base_replacement = replacement
+                        while self._label_key(replacement) in existing_replacements:
+                            replacement = self._truncate_label(f"{base_replacement} {suffix}")
+                            suffix += 1
+                        source_labels = [code.code_label for code in group]
+                        merge_actions.append(
+                            {
+                                "action": "merge",
+                                "round": round_index,
+                                "target": replacement,
+                                "replacement": replacement,
+                                "source_labels": source_labels,
+                                "new_parent_path": list(path),
+                                "split_children": [],
+                                "artifact_type": "code",
+                                "reason": "Deterministic target-size compaction of a cohesive low-frequency subgroup.",
+                                "applied": True,
+                                "rejected_reason": None,
+                            }
+                        )
+                        already_merged.update(self._label_key(label) for label in source_labels)
+                        projected_count -= len(group) - 1
 
         if not merge_actions:
             return current, current_codes, action_log
@@ -1947,6 +1970,77 @@ class TraceableAnalysisService:
             target_max,
         )
         return current, current_codes, action_log
+
+    def _is_cohesive_synthesized_code_group(
+        self,
+        codes: list[SynthesizedCode],
+        *,
+        min_average_overlap: float,
+    ) -> bool:
+        if len(codes) < 3:
+            return True
+        overlaps = []
+        for left_index, left in enumerate(codes):
+            left_tokens = self._meaningful_tokens(f"{left.code_label} {left.code_description or ''}")
+            for right in codes[left_index + 1:]:
+                right_tokens = self._meaningful_tokens(f"{right.code_label} {right.code_description or ''}")
+                overlaps.append(self._token_overlap(left_tokens, right_tokens))
+        if not overlaps:
+            return False
+        average_overlap = sum(overlaps) / len(overlaps)
+        strongest_overlap = max(overlaps)
+        return average_overlap >= min_average_overlap or strongest_overlap >= 0.38
+
+    def _cohesive_synthesized_subgroups(
+        self,
+        codes: list[SynthesizedCode],
+    ) -> list[list[SynthesizedCode]]:
+        token_by_key = {
+            self._label_key(code.code_label): self._meaningful_tokens(
+                f"{code.code_label} {code.code_description or ''}"
+            )
+            for code in codes
+        }
+        neighbors: dict[str, set[str]] = defaultdict(set)
+        code_by_key = {self._label_key(code.code_label): code for code in codes}
+        for left_index, left in enumerate(codes):
+            left_key = self._label_key(left.code_label)
+            left_tokens = token_by_key[left_key]
+            for right in codes[left_index + 1:]:
+                right_key = self._label_key(right.code_label)
+                right_tokens = token_by_key[right_key]
+                if not left_tokens or not right_tokens:
+                    continue
+                overlap = self._token_overlap(left_tokens, right_tokens)
+                containment = len(left_tokens & right_tokens) / min(len(left_tokens), len(right_tokens))
+                if overlap >= 0.14 or containment >= 0.32:
+                    neighbors[left_key].add(right_key)
+                    neighbors[right_key].add(left_key)
+
+        visited: set[str] = set()
+        groups: list[list[SynthesizedCode]] = []
+        for code in codes:
+            key = self._label_key(code.code_label)
+            if key in visited:
+                continue
+            stack = [key]
+            component_keys: list[str] = []
+            visited.add(key)
+            while stack:
+                current_key = stack.pop()
+                component_keys.append(current_key)
+                for next_key in neighbors.get(current_key, set()):
+                    if next_key in visited:
+                        continue
+                    visited.add(next_key)
+                    stack.append(next_key)
+            if len(component_keys) < 2:
+                continue
+            group = [code_by_key[item] for item in component_keys if item in code_by_key]
+            if self._is_cohesive_synthesized_code_group(group, min_average_overlap=0.08):
+                groups.append(group)
+        groups.sort(key=len, reverse=True)
+        return groups
 
     def _dedupe_synthesized_codes(self, synthesis: CodebookSynthesisResult) -> CodebookSynthesisResult:
         codes_by_key: dict[str, SynthesizedCode] = {}
@@ -2163,8 +2257,19 @@ class TraceableAnalysisService:
         for gap_index, gap in enumerate(coverage_gaps, start=1):
             label = self._truncate_label(self._normalize_label(gap.label))
             label_key = self._label_key(label)
-            if not label or label_key in existing_keys:
+            if not label:
                 continue
+            duplicate_code = self._find_existing_code_for_gap(
+                existing_codes=existing_codes,
+                label=label,
+                description=gap.description,
+                evidence_quotes=gap.evidence_quotes,
+            )
+            if label_key in existing_keys:
+                duplicate_code = duplicate_code or next(
+                    (code for code in existing_codes if self._label_key(code.label) == label_key),
+                    None,
+                )
 
             quote_ids: list[str] = []
             for quote_index, raw_quote in enumerate(gap.evidence_quotes, start=1):
@@ -2187,7 +2292,8 @@ class TraceableAnalysisService:
                     continue
 
                 quote_id = f"{best_document.id}:heldout-gap:{round_index}:{gap_index}:{quote_index}:{uuid.uuid4()}"
-                candidate_id = f"heldout-gap:{round_index}:{gap_index}:{label_key}"
+                target_label = duplicate_code.label if duplicate_code is not None else label
+                candidate_id = f"heldout-gap:{round_index}:{gap_index}:{self._label_key(target_label)}"
                 quote_ids.append(quote_id)
                 evidence_additions.append(
                     _QuoteEvidence(
@@ -2198,7 +2304,7 @@ class TraceableAnalysisService:
                         end_char=best_match.end_char,
                         quote_match_status=best_match.quote_match_status,
                         candidate_id=candidate_id,
-                        code_label=label,
+                        code_label=target_label,
                         code_description=self._clean_optional_text(gap.description),
                         confidence=0.82,
                         rationale="Generated from heldout coverage gap evaluator.",
@@ -2206,6 +2312,26 @@ class TraceableAnalysisService:
                 )
 
             if not quote_ids:
+                continue
+            if duplicate_code is not None:
+                for quote_id in quote_ids:
+                    if quote_id not in duplicate_code.quote_ids:
+                        duplicate_code.quote_ids.append(quote_id)
+                candidate_id = f"heldout-gap:{round_index}:{gap_index}:{self._label_key(duplicate_code.label)}"
+                if candidate_id not in duplicate_code.candidate_ids:
+                    duplicate_code.candidate_ids.append(candidate_id)
+                if not duplicate_code.description and gap.description:
+                    duplicate_code.description = self._clean_optional_text(gap.description)
+                action_log.append(
+                    {
+                        "action": "attach_heldout_gap_evidence",
+                        "round": round_index,
+                        "target": duplicate_code.label,
+                        "proposed_label": label,
+                        "reason": gap.description,
+                        "outputs": {"quote_ids": quote_ids},
+                    }
+                )
                 continue
             existing_keys.add(label_key)
             additions.append(
@@ -2234,6 +2360,35 @@ class TraceableAnalysisService:
                 len(evidence_additions),
             )
         return additions, evidence_additions, action_log
+
+    def _find_existing_code_for_gap(
+        self,
+        *,
+        existing_codes: list[ConsolidatedCode],
+        label: str,
+        description: str | None,
+        evidence_quotes: list[str],
+    ) -> ConsolidatedCode | None:
+        gap_tokens = self._meaningful_tokens(
+            " ".join([label, description or "", *evidence_quotes])
+        )
+        if not gap_tokens:
+            return None
+        best_code: ConsolidatedCode | None = None
+        best_score = 0.0
+        for code in existing_codes:
+            code_tokens = self._meaningful_tokens(f"{code.label} {code.description or ''}")
+            if not code_tokens:
+                continue
+            overlap = len(gap_tokens & code_tokens) / len(gap_tokens | code_tokens)
+            containment = len(gap_tokens & code_tokens) / min(len(gap_tokens), len(code_tokens))
+            score = max(overlap, containment * 0.72)
+            if score > best_score:
+                best_score = score
+                best_code = code
+        if best_code is None or best_score < 0.34:
+            return None
+        return best_code
 
     async def _generate_missing_codes(
         self,
@@ -2721,6 +2876,14 @@ class TraceableAnalysisService:
                 False,
                 "Rejected broad code merge across multiple subthemes; use split or narrower merges first.",
             )
+        if len(matching) >= 3 and not self._is_cohesive_synthesized_code_group(
+            matching,
+            min_average_overlap=0.13,
+        ):
+            return (
+                False,
+                "Rejected broad low-cohesion code merge; source codes describe too many distinct concepts.",
+            )
         return True, None
 
     def _apply_split_action(
@@ -3106,6 +3269,7 @@ class TraceableAnalysisService:
             for node in theme.path
         }
         applied: list[_AppliedEvidence] = []
+        action_log: list[dict[str, object]] = []
         failed_document_ids: list[UUID] = []
         for document in documents:
             await self._raise_if_cancelled(should_cancel)
@@ -3139,54 +3303,218 @@ class TraceableAnalysisService:
             if result is None:
                 continue
             document_assignments_before = len(applied)
-            for assignment in result.codes:
-                canonical_code = allowed_codes.get(self._label_key(assignment.code_label))
-                if canonical_code is None or not assignment.quote.strip():
-                    continue
-                canonical_theme = None
-                if assignment.theme_label:
-                    canonical_theme = allowed_themes.get(self._label_key(assignment.theme_label))
-                match = locate_quote_span(document.content, assignment.quote)
-                applied.append(
-                    _AppliedEvidence(
-                        document_id=document.id,
-                        code_label=canonical_code,
-                        theme_label=canonical_theme,
-                        quote=match.quote,
-                        start_char=match.start_char,
-                        end_char=match.end_char,
-                        quote_match_status=match.quote_match_status,
-                        confidence=self._clamp_confidence(assignment.confidence),
-                        rationale=self._clean_optional_text(assignment.rationale),
-                        summary=self._clean_optional_text(result.summary),
-                        researcher_notes=self._clean_optional_text(result.researcher_notes),
-                    )
-                )
+            document_assignment_keys: set[tuple[str, int | None, int | None, str]] = set()
+            self._append_application_assignments(
+                document=document,
+                result=result,
+                allowed_codes=allowed_codes,
+                allowed_themes=allowed_themes,
+                applied=applied,
+                document_assignment_keys=document_assignment_keys,
+                exact_only=False,
+            )
+            assigned_code_keys = {
+                self._label_key(evidence.code_label)
+                for evidence in applied[document_assignments_before:]
+                if evidence.document_id == document.id
+            }
+            recall_candidates = self._application_recall_candidate_codes(
+                synthesis=synthesis,
+                transcript=document.content,
+                assigned_code_keys=assigned_code_keys,
+                limit=12,
+            )
+            if recall_candidates:
+                recall_payload = {
+                    "codebook": self._build_application_codebook_context(
+                        synthesis,
+                        code_labels={code.code_label for code in recall_candidates},
+                    ),
+                    "transcript": document.content,
+                }
+                for attempt in range(1, _APPLICATION_MAX_ATTEMPTS + 1):
+                    try:
+                        raw_recall = await chain.ainvoke(recall_payload)
+                        recall_result = TraceableApplicationResult(**raw_recall)
+                        recalled = self._append_application_assignments(
+                            document=document,
+                            result=recall_result,
+                            allowed_codes=allowed_codes,
+                            allowed_themes=allowed_themes,
+                            applied=applied,
+                            document_assignment_keys=document_assignment_keys,
+                            exact_only=True,
+                        )
+                        if recalled:
+                            action_log.append(
+                                {
+                                    "action": "application_recall_repair",
+                                    "document_id": str(document.id),
+                                    "assignments": recalled,
+                                    "candidate_codes": [code.code_label for code in recall_candidates],
+                                    "quote_match_policy": "exact_only",
+                                    "attempts": attempt,
+                                }
+                            )
+                            logger.info(
+                                "Traceable application recall repair added assignments: "
+                                "document_id={}, assignments={}, candidate_codes={}, attempts={}",
+                                document.id,
+                                recalled,
+                                len(recall_candidates),
+                                attempt,
+                            )
+                        break
+                    except Exception as exc:
+                        if attempt >= _APPLICATION_MAX_ATTEMPTS:
+                            logger.warning(
+                                "Traceable application recall repair skipped after retries: "
+                                "document_id={}, candidate_codes={}, attempts={}, error={}",
+                                document.id,
+                                len(recall_candidates),
+                                attempt,
+                                exc,
+                            )
+                            action_log.append(
+                                {
+                                    "action": "application_recall_repair_skipped",
+                                    "document_id": str(document.id),
+                                    "candidate_codes": [code.code_label for code in recall_candidates],
+                                    "attempts": attempt,
+                                    "error": str(exc),
+                                }
+                            )
+                            break
+                        logger.warning(
+                            "Traceable application recall repair retry: "
+                            "document_id={}, candidate_codes={}, attempt={}, error={}",
+                            document.id,
+                            len(recall_candidates),
+                            attempt,
+                            exc,
+                        )
+                        await asyncio.sleep(0.5 * attempt)
             logger.info(
                 "Traceable application document complete: document_id={}, assignments={}",
                 document.id,
                 len(applied) - document_assignments_before,
             )
-        return _ApplicationPassResult(evidence=applied, failed_document_ids=failed_document_ids)
+        return _ApplicationPassResult(
+            evidence=applied,
+            failed_document_ids=failed_document_ids,
+            action_log=action_log,
+        )
 
     @staticmethod
-    def _build_application_codebook_context(synthesis: CodebookSynthesisResult) -> str:
+    def _build_application_codebook_context(
+        synthesis: CodebookSynthesisResult,
+        code_labels: set[str] | None = None,
+    ) -> str:
         lines = ["Use only the exact theme and code labels listed below.", "", "THEMES AND CODES:"]
         codes_by_path: dict[tuple[str, ...], list[SynthesizedCode]] = defaultdict(list)
+        allowed_label_keys = {
+            TraceableAnalysisService._label_key(label)
+            for label in code_labels or set()
+        }
         for code in synthesis.codes:
+            if allowed_label_keys and TraceableAnalysisService._label_key(code.code_label) not in allowed_label_keys:
+                continue
             codes_by_path[tuple(code.theme_path)].append(code)
         for theme in synthesis.themes:
             path = [node.label for node in theme.path]
+            codes_for_path = sorted(codes_by_path.get(tuple(path), []), key=lambda item: item.code_label.lower())
+            if allowed_label_keys and not codes_for_path:
+                continue
             lines.append(f"- Theme path: {' > '.join(path)}")
             for node in theme.path:
                 if node.description:
                     lines.append(f"  {node.label} definition: {node.description}")
-            for code in sorted(codes_by_path.get(tuple(path), []), key=lambda item: item.code_label.lower()):
+            for code in codes_for_path:
                 lines.append(f"  - Code label: {code.code_label}")
                 if code.code_description:
                     lines.append(f"    Code definition: {code.code_description}")
             lines.append("")
         return "\n".join(lines).strip()
+
+    def _append_application_assignments(
+        self,
+        *,
+        document: _DocumentText,
+        result: TraceableApplicationResult,
+        allowed_codes: dict[str, str],
+        allowed_themes: dict[str, str],
+        applied: list[_AppliedEvidence],
+        document_assignment_keys: set[tuple[str, int | None, int | None, str]],
+        exact_only: bool = False,
+    ) -> int:
+        added = 0
+        for assignment in result.codes:
+            canonical_code = allowed_codes.get(self._label_key(assignment.code_label))
+            if canonical_code is None or not assignment.quote.strip():
+                continue
+            canonical_theme = None
+            if assignment.theme_label:
+                canonical_theme = allowed_themes.get(self._label_key(assignment.theme_label))
+            match = locate_quote_span(document.content, assignment.quote)
+            assignment_key = (
+                self._label_key(canonical_code),
+                match.start_char,
+                match.end_char,
+                match.quote,
+            )
+            if assignment_key in document_assignment_keys:
+                continue
+            if exact_only and match.quote_match_status != "exact":
+                continue
+            document_assignment_keys.add(assignment_key)
+            applied.append(
+                _AppliedEvidence(
+                    document_id=document.id,
+                    code_label=canonical_code,
+                    theme_label=canonical_theme,
+                    quote=match.quote,
+                    start_char=match.start_char,
+                    end_char=match.end_char,
+                    quote_match_status=match.quote_match_status,
+                    confidence=self._clamp_confidence(assignment.confidence),
+                    rationale=self._clean_optional_text(assignment.rationale),
+                    summary=self._clean_optional_text(result.summary),
+                    researcher_notes=self._clean_optional_text(result.researcher_notes),
+                )
+            )
+            added += 1
+        return added
+
+    def _application_recall_candidate_codes(
+        self,
+        *,
+        synthesis: CodebookSynthesisResult,
+        transcript: str,
+        assigned_code_keys: set[str],
+        limit: int,
+    ) -> list[SynthesizedCode]:
+        transcript_tokens = self._meaningful_tokens(transcript)
+        if not transcript_tokens:
+            return []
+        scored: list[tuple[float, SynthesizedCode]] = []
+        for code in synthesis.codes:
+            code_key = self._label_key(code.code_label)
+            if code_key in assigned_code_keys:
+                continue
+            code_tokens = self._meaningful_tokens(
+                " ".join([code.code_label, code.code_description or "", *code.theme_path])
+            )
+            if not code_tokens:
+                continue
+            shared = transcript_tokens & code_tokens
+            if not shared:
+                continue
+            overlap = len(shared) / len(code_tokens | transcript_tokens)
+            containment = len(shared) / min(len(code_tokens), len(transcript_tokens))
+            score = len(shared) + (2.0 * containment) + overlap
+            scored.append((score, code))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [code for score, code in scored[:limit] if score >= 1.60]
 
     @staticmethod
     def _canonical_code_by_quote_id(consolidated_codes: list[ConsolidatedCode]) -> dict[str, str]:

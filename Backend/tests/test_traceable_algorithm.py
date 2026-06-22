@@ -4,17 +4,23 @@ from app.config import Settings
 from app.schemas.traceable_llm import (
     CodebookMissingConcept,
     CodebookPolishResult,
+    CodebookQualityEvaluationResult,
     CodebookReviewAction,
     CodebookReviewResult,
     CodebookSplitChild,
     CodebookSynthesisResult,
-    CodebookQualityEvaluationResult,
     CodeRelationshipResult,
     SynthesizedCode,
     SynthesizedThemeNode,
     SynthesizedThemePath,
+    TraceableApplicationResult,
 )
-from app.services.traceable_analysis import TraceableAnalysisService, _AppliedEvidence, _DocumentText, _QuoteEvidence
+from app.services.traceable_analysis import (
+    TraceableAnalysisService,
+    _AppliedEvidence,
+    _DocumentText,
+    _QuoteEvidence,
+)
 from app.services.traceable_code_consolidation import (
     CodeCandidate,
     ConsolidatedCode,
@@ -407,6 +413,44 @@ def test_heldout_coverage_gaps_become_grounded_codes() -> None:
     assert actions[0]["action"] == "generate_heldout_gap_code"
 
 
+def test_heldout_coverage_gap_attaches_to_duplicate_existing_code() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    document_id = "00000000-0000-0000-0000-000000000001"
+    existing = [
+        ConsolidatedCode(
+            label="High-paying job yet ongoing financial pressure",
+            description="Participant has a high-paying job but still reports ongoing financial pressure.",
+            candidate_ids=["candidate-1"],
+            quote_ids=["quote-1"],
+        )
+    ]
+
+    codes, evidence, actions = service._ground_coverage_gap_codes(
+        coverage_gaps=[
+            CodebookMissingConcept(
+                label="Ongoing financial pressure despite high-paying job",
+                description="The participant still faces financial pressure despite high-paying work.",
+                evidence_quotes=["I still face financial pressure all the time."],
+            )
+        ],
+        evaluation_documents=[
+            _DocumentText(
+                id=document_id,  # type: ignore[arg-type]
+                title="Doc",
+                content="Although it pays well, I still face financial pressure all the time.",
+            )
+        ],
+        existing_codes=existing,
+        round_index=3,
+    )
+
+    assert codes == []
+    assert len(evidence) == 1
+    assert evidence[0].code_label == "High-paying job yet ongoing financial pressure"
+    assert len(existing[0].quote_ids) == 2
+    assert actions[0]["action"] == "attach_heldout_gap_evidence"
+
+
 def test_reviewer_rejects_broad_cross_theme_code_merge() -> None:
     service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
     synthesis = CodebookSynthesisResult(
@@ -450,6 +494,55 @@ def test_reviewer_rejects_broad_cross_theme_code_merge() -> None:
     ]
     assert action_log[0]["applied"] is False
     assert "Rejected broad code merge" in action_log[0]["rejected_reason"]
+
+
+def test_reviewer_rejects_low_cohesion_same_subtheme_code_merge() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(
+                path=[SynthesizedThemeNode(label="AI Adoption"), SynthesizedThemeNode(label="Mixed Effects")]
+            )
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label="AI improves customer support wait times",
+                code_description="Customer support is faster.",
+                theme_path=["AI Adoption", "Mixed Effects"],
+            ),
+            SynthesizedCode(
+                code_label="Uses AI to track personal finances",
+                code_description="AI helps with personal budgeting.",
+                theme_path=["AI Adoption", "Mixed Effects"],
+            ),
+            SynthesizedCode(
+                code_label="Gaming hobby motivates AI tool use",
+                code_description="AI is used for gaming-related tasks.",
+                theme_path=["AI Adoption", "Mixed Effects"],
+            ),
+            SynthesizedCode(
+                code_label="Clear prompts improve AI answers",
+                code_description="Prompt quality changes output usefulness.",
+                theme_path=["AI Adoption", "Mixed Effects"],
+            ),
+        ],
+    )
+    review = CodebookReviewResult(
+        actions=[
+            CodebookReviewAction(
+                action="merge",
+                source_labels=[code.code_label for code in synthesis.codes],
+                replacement="AI adoption practices",
+                artifact_type="code",
+            )
+        ]
+    )
+
+    refined, action_log = service._apply_review_actions(synthesis, review, round_index=1)
+
+    assert len(refined.codes) == 4
+    assert action_log[0]["applied"] is False
+    assert "low-cohesion" in action_log[0]["rejected_reason"]
 
 
 def test_iteration_metrics_include_descriptive_quality_scores() -> None:
@@ -649,6 +742,181 @@ def test_compaction_merges_low_frequency_sibling_codes_toward_target() -> None:
     assert len(compacted_codes) <= 6
     assert any(action["action"] == "compact_near_duplicate_codes" for action in actions)
     assert sum(len(code.quote_ids) for code in compacted_codes) == 12
+
+
+def test_compaction_skips_low_cohesion_target_size_chunk() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    items = [
+        ("AI supports customer service speed", "Support queues move faster with automated triage."),
+        ("Personal finance tracking with AI", "Budget spreadsheets are monitored with software help."),
+        ("Gaming hobby uses generative tools", "Game-related creative activity motivates tool use."),
+        ("Prompt wording changes output quality", "Careful phrasing improves response usefulness."),
+        ("Oil accounting revenue management", "Revenue duties happen in petroleum property accounting."),
+        ("Privacy fears about personal data", "Private information misuse creates concern."),
+    ]
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(
+                path=[
+                    SynthesizedThemeNode(label="AI use"),
+                    SynthesizedThemeNode(label="Mixed one-off examples"),
+                ]
+            )
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label=label,
+                code_description=description,
+                theme_path=["AI use", "Mixed one-off examples"],
+            )
+            for label, description in items
+        ],
+    )
+    consolidated = [
+        ConsolidatedCode(
+            label=code.code_label,
+            description=code.code_description,
+            candidate_ids=[f"candidate-{index}"],
+            quote_ids=[f"quote-{index}"],
+        )
+        for index, code in enumerate(synthesis.codes)
+    ]
+
+    compacted, compacted_codes, actions = service._compact_codebook_before_evaluation(
+        synthesis=synthesis,
+        consolidated_codes=consolidated,
+        target_max=2,
+        round_index=1,
+    )
+
+    assert len(compacted.codes) == 6
+    assert len(compacted_codes) == 6
+    assert any(action["action"] == "skip_broad_compaction" for action in actions)
+
+
+def test_compaction_merges_cohesive_subgroups_inside_diverse_chunk() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    items = [
+        ("AI resume screening blocks applications", "AI screening filters job applications."),
+        ("Resume tweaking bypasses AI screening", "Changing resume wording helps pass AI screening."),
+        ("Professional resume help for AI screening", "Expert advice improves resumes for AI filters."),
+        ("Mortgage repayment adds strain", "Mortgage obligations create financial pressure."),
+        ("Parents face greater financial strain", "Parents experience additional household cost pressure."),
+        ("Privacy fears about personal data", "Private information misuse creates concern."),
+    ]
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(
+                path=[
+                    SynthesizedThemeNode(label="AI work"),
+                    SynthesizedThemeNode(label="Mixed adaptation and pressure"),
+                ]
+            )
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label=label,
+                code_description=description,
+                theme_path=["AI work", "Mixed adaptation and pressure"],
+            )
+            for label, description in items
+        ],
+    )
+    consolidated = [
+        ConsolidatedCode(
+            label=code.code_label,
+            description=code.code_description,
+            candidate_ids=[f"candidate-{index}"],
+            quote_ids=[f"quote-{index}"],
+        )
+        for index, code in enumerate(synthesis.codes)
+    ]
+
+    compacted, compacted_codes, actions = service._compact_codebook_before_evaluation(
+        synthesis=synthesis,
+        consolidated_codes=consolidated,
+        target_max=3,
+        round_index=1,
+    )
+
+    assert len(compacted.codes) < 6
+    assert len(compacted_codes) < 6
+    merged_sources = [
+        action["source_labels"]
+        for action in actions
+        if action["action"] == "compact_near_duplicate_codes"
+    ]
+    assert any(len(source_labels) >= 2 for source_labels in merged_sources)
+
+
+def test_application_recall_candidates_include_relevant_unassigned_code() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(path=[SynthesizedThemeNode(label="AI Attitudes")])
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label="Skeptical Attitude Toward AI Necessity",
+                code_description="Expresses dismissive stance that AI is unnecessary in everyday lives.",
+                theme_path=["AI Attitudes"],
+            ),
+            SynthesizedCode(
+                code_label="Mortgage repayment adds financial strain",
+                code_description="Mortgage obligations create financial pressure.",
+                theme_path=["AI Attitudes"],
+            ),
+        ],
+    )
+
+    candidates = service._application_recall_candidate_codes(
+        synthesis=synthesis,
+        transcript="No because AI isn't needed in peoples everyday lives.",
+        assigned_code_keys=set(),
+        limit=5,
+    )
+
+    assert [code.code_label for code in candidates][:1] == [
+        "Skeptical Attitude Toward AI Necessity"
+    ]
+
+
+def test_recall_assignment_append_keeps_only_exact_quote_matches() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    document_id = "00000000-0000-0000-0000-000000000001"
+    applied: list[_AppliedEvidence] = []
+
+    added = service._append_application_assignments(
+        document=_DocumentText(
+            id=document_id,  # type: ignore[arg-type]
+            title="Doc",
+            content="No because AI isn't needed in peoples everyday lives.",
+        ),
+        result=TraceableApplicationResult(
+            codes=[
+                {
+                    "code_label": "Skeptical Attitude Toward AI Necessity",
+                    "theme_label": "AI Attitudes",
+                    "quote": "AI is not needed in everyday lives",
+                    "confidence": 0.9,
+                },
+                {
+                    "code_label": "Skeptical Attitude Toward AI Necessity",
+                    "theme_label": "AI Attitudes",
+                    "quote": "AI isn't needed in peoples everyday lives",
+                    "confidence": 0.9,
+                },
+            ]
+        ),
+        allowed_codes={"skeptical attitude toward ai necessity": "Skeptical Attitude Toward AI Necessity"},
+        allowed_themes={"ai attitudes": "AI Attitudes"},
+        applied=applied,
+        document_assignment_keys=set(),
+        exact_only=True,
+    )
+
+    assert added == 1
+    assert applied[0].quote_match_status == "exact"
 
 
 def test_final_polish_renames_mechanical_labels_without_changing_evidence_links() -> None:
