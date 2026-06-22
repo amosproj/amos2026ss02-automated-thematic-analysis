@@ -131,6 +131,11 @@
                 <p class="td-stat-label mb-0">Interview Coverage</p>
               </div>
             </div>
+            <div class="mt-3">
+              <button id="theme-details-view-quotes" class="btn btn-sm btn-outline-primary">
+                View Quotes
+              </button>
+            </div>
           </div>
 
         </div>
@@ -171,6 +176,36 @@
     <p class="text-secondary">No themes found for this codebook.</p>
   {% endif %}
 
+</div>
+
+{# Quotes modal #}
+<div class="modal fade" id="quotes-modal" tabindex="-1" aria-labelledby="quotes-modal-label" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0" id="quotes-modal-label">Quotes</h5>
+          <p class="text-secondary small mb-0" id="quotes-modal-total"></p>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="quotes-modal-body">
+        <div id="quotes-loading" class="text-center py-5">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading quotes…</span>
+          </div>
+        </div>
+        <div id="quotes-error" class="d-none alert alert-danger"></div>
+        <div id="quotes-list" class="d-none"></div>
+        <p id="quotes-empty" class="d-none text-secondary text-center py-4">No quotes found for this theme.</p>
+      </div>
+      <div class="modal-footer d-none" id="quotes-pagination">
+        <button class="btn btn-sm btn-outline-secondary" id="quotes-prev">&#8592; Previous</button>
+        <span class="text-secondary small" id="quotes-page-info"></span>
+        <button class="btn btn-sm btn-outline-secondary" id="quotes-next">Next &#8594;</button>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
