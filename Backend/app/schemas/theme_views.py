@@ -23,3 +23,13 @@ class ThemeFrequencyItem(BaseSchema):
     theme_name: str
     occurrence_count: int = Field(ge=0)
     interview_coverage_percentage: float = Field(ge=0.0, le=100.0)
+
+
+class ThemeQuoteItem(BaseSchema):
+    """One quote assigned to a theme, with its source document and interviewee."""
+
+    quote: str
+    confidence: float
+    document_id: UUID
+    document_title: str
+    interviewee_id: str | None
