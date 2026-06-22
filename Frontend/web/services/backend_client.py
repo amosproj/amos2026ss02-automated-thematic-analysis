@@ -192,6 +192,14 @@ class BackendClient:
     def get_theme_tree(self, codebook_id: str) -> list[dict]:
         return self._get(f"/codebooks/{codebook_id}/themes/tree")
 
+    def get_theme_quotes(
+        self, codebook_id: str, theme_id: str, page: int = 1, page_size: int = 20
+    ) -> dict:
+        return self._get(
+            f"/codebooks/{codebook_id}/themes/{theme_id}/quotes",
+            params={"page": page, "page_size": page_size},
+        )
+
     # ---- Demographic --------------------------------------------------------
 
     def upload_demographic(
