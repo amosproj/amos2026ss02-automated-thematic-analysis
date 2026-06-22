@@ -6,7 +6,11 @@
      data-frequencies='{{ frequencies | tojson }}'
      data-tree='{{ tree | tojson }}'
      data-codes='{{ codes | tojson }}'
-     data-researcher-topics='{{ researcher_topics | tojson }}'>
+     data-researcher-topics='{{ researcher_topics | tojson }}'
+     data-codebook-id="{{ codebook_id }}"
+     data-corpus-id="{{ corpus_id }}"
+     data-quotes-url-template="{{ url_for('codebooks.theme_quotes_json', corpus_id=corpus_id, codebook_id=codebook_id, theme_id='__THEME__') }}"
+     data-read-url-template="{{ url_for('ingestion.read_transcript', corpus_id=corpus_id, document_id='__DOC__') }}">
 
   {% if corpus_id and corpus_options %}
     {% set active_corpus_id = corpus_id %}
