@@ -296,7 +296,10 @@ def theme_quotes_json(corpus_id: str, codebook_id: str, theme_id: str):
         result = _backend().get_theme_quotes(codebook_id, theme_id, page, page_size)
         return jsonify(result)
     except BackendError as exc:
-        return jsonify({"error": exc.user_message})
+        return jsonify({"error": exc.user_message}), 502
+    except Exception:
+        current_app.logger.exception("Unexpected error fetching theme quotes")
+        return jsonify({"error": "An unexpected error occurred."}), 500
 
 
 @bp.get("/<corpus_id>/<codebook_id>/export")
