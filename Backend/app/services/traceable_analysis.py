@@ -139,6 +139,7 @@ class _IterationArtifact:
     iteration: int
     synthesis: CodebookSynthesisResult
     consolidated_codes: list[ConsolidatedCode]
+    quote_evidence: list[_QuoteEvidence]
     evaluation_evidence: list[_AppliedEvidence]
     metrics: dict[str, object]
     action_log: list[dict[str, object]]
@@ -308,6 +309,7 @@ class TraceableAnalysisService:
         )
         synthesis = selected_iteration.synthesis
         consolidated_codes = selected_iteration.consolidated_codes
+        quote_evidence = selected_iteration.quote_evidence
         action_log.extend(iteration_log)
         logger.info(
             "Traceable iteration selection complete: selected_iteration={}, composite_score={:.3f}, "
@@ -741,7 +743,10 @@ class TraceableAnalysisService:
             canonical = canonical_by_key.get(self._label_key(synthesized_code.code_label))
             if canonical is None:
                 continue
-            returned.add(self._label_key(canonical.label))
+            canonical_key = self._label_key(canonical.label)
+            if canonical_key in returned:
+                continue
+            returned.add(canonical_key)
             codes.append(
                 SynthesizedCode(
                     code_label=canonical.label,
@@ -892,6 +897,7 @@ class TraceableAnalysisService:
                 )
 
         synthesized_codes: list[SynthesizedCode] = []
+        seen_code_keys: set[str] = set()
         for subtheme in subthemes.subthemes:
             theme_label, _theme_description = theme_for_subtheme.get(
                 self._label_key(subtheme.subtheme_label),
@@ -901,6 +907,10 @@ class TraceableAnalysisService:
                 code = code_by_key.get(self._label_key(raw_code_label))
                 if code is None:
                     continue
+                code_key = self._label_key(code.label)
+                if code_key in seen_code_keys:
+                    continue
+                seen_code_keys.add(code_key)
                 synthesized_codes.append(
                     SynthesizedCode(
                         code_label=code.label,
@@ -928,12 +938,25 @@ class TraceableAnalysisService:
         max_iterations = max(1, min(cfg.TRACEABLE_MAX_ITERATIONS, max_refinement_rounds + 1))
         current = synthesis
         current_codes = list(consolidated_codes)
+        current_quote_evidence = list(quote_evidence)
         best: _IterationArtifact | None = None
         artifacts: list[_IterationArtifact] = []
         action_log: list[dict[str, object]] = []
 
         for iteration in range(1, max_iterations + 1):
             await self._raise_if_cancelled(should_cancel)
+            parsimony_preview = self._parsimony_score(
+                code_count=len(current.codes),
+                quote_count=len(current_quote_evidence),
+            )
+            current, current_codes, compaction_actions = self._compact_codebook_before_evaluation(
+                synthesis=current,
+                consolidated_codes=current_codes,
+                target_max=parsimony_preview[2],
+                round_index=iteration,
+            )
+            if compaction_actions:
+                action_log.extend(compaction_actions)
             evaluation_result = await self._apply_codebook_to_documents(
                 documents=evaluation_documents,
                 synthesis=current,
@@ -949,7 +972,7 @@ class TraceableAnalysisService:
             metrics = self._compute_iteration_metrics(
                 synthesis=current,
                 consolidated_codes=current_codes,
-                quote_evidence=quote_evidence,
+                quote_evidence=current_quote_evidence,
                 evaluation_documents=evaluation_documents,
                 evaluation_evidence=evaluation_evidence,
                 used_heldout=used_heldout,
@@ -960,6 +983,7 @@ class TraceableAnalysisService:
                 iteration=iteration,
                 synthesis=current,
                 consolidated_codes=list(current_codes),
+                quote_evidence=list(current_quote_evidence),
                 evaluation_evidence=evaluation_evidence,
                 metrics=metrics,
                 action_log=[],
@@ -975,7 +999,8 @@ class TraceableAnalysisService:
             logger.info(
                 "Traceable iteration evaluated: iteration={}, composite={:.3f}, reusability={:.3f}, "
                 "coverage={:.3f}, fitness={:.3f}, descriptive_coverage={:.3f}, "
-                "parsimony={:.3f}, consistency={:.3f}, codes={}, missing_concepts={}, overbroad_codes={}",
+                "parsimony={:.3f}, bloat_penalty={:.3f}, consistency={:.3f}, "
+                "codes={}, missing_concepts={}, overbroad_codes={}",
                 iteration,
                 float(metrics["composite_score"]),
                 float(metrics["code_reusability"]),
@@ -983,6 +1008,7 @@ class TraceableAnalysisService:
                 float(metrics["descriptive_fitness_score"]),
                 float(metrics["descriptive_coverage_score"]),
                 float(metrics["parsimony_score"]),
+                float(metrics["bloat_penalty"]),
                 float(metrics["train_eval_consistency"]),
                 int(metrics["code_count"]),
                 int(metrics["missing_concept_count"]),
@@ -997,7 +1023,7 @@ class TraceableAnalysisService:
             before_labels = self._codebook_label_set(current)
             review = await self._review_codebook(
                 synthesis=current,
-                quote_evidence=quote_evidence,
+                quote_evidence=current_quote_evidence,
                 consolidated_codes=current_codes,
                 round_index=iteration,
                 metrics=metrics,
@@ -1037,9 +1063,22 @@ class TraceableAnalysisService:
 
             should_generate_from_gaps = bool(quality_evaluation.missing_concepts)
             if any(action.action == "generate" for action in review.actions) or should_generate_from_gaps:
+                added_codes_for_resynthesis = False
+                gap_codes, gap_quote_evidence, gap_actions = self._ground_coverage_gap_codes(
+                    coverage_gaps=quality_evaluation.missing_concepts,
+                    evaluation_documents=evaluation_documents,
+                    existing_codes=current_codes,
+                    round_index=iteration,
+                )
+                if gap_codes:
+                    current_codes.extend(gap_codes)
+                    current_quote_evidence.extend(gap_quote_evidence)
+                    artifact.action_log.extend(gap_actions)
+                    action_log.extend(gap_actions)
+                    added_codes_for_resynthesis = True
                 missing_codes = await self._generate_missing_codes(
                     synthesis=current,
-                    quote_evidence=quote_evidence,
+                    quote_evidence=current_quote_evidence,
                     existing_codes=current_codes,
                     round_index=iteration,
                     coverage_gaps=quality_evaluation.missing_concepts,
@@ -1063,12 +1102,14 @@ class TraceableAnalysisService:
                         ]
                         artifact.action_log.extend(generated_actions)
                         action_log.extend(generated_actions)
-                        current = await self._synthesize_codebook(
-                            consolidated_codes=current_codes,
-                            quote_evidence=quote_evidence,
-                            research_query=research_query,
-                            researcher_topics=researcher_topics,
-                        )
+                        added_codes_for_resynthesis = True
+                if added_codes_for_resynthesis:
+                    current = await self._synthesize_codebook(
+                        consolidated_codes=current_codes,
+                        quote_evidence=current_quote_evidence,
+                        research_query=research_query,
+                        researcher_topics=researcher_topics,
+                    )
 
             current = self._ensure_synthesis_covers_codes(current, current_codes)
             after_labels = self._codebook_label_set(current)
@@ -1254,18 +1295,25 @@ class TraceableAnalysisService:
         )
         missing_concepts = quality_evaluation.missing_concepts if quality_evaluation is not None else []
         overbroad_codes = quality_evaluation.overbroad_codes if quality_evaluation is not None else []
+        code_count = len(synthesis.codes)
+        bloat_ratio = max(0.0, (code_count - target_max) / max(1, target_max))
+        bloat_penalty = 1.0
+        if bloat_ratio > 0.0:
+            bloat_penalty = max(0.45, 1.0 - min(0.55, bloat_ratio * 0.75))
+            if code_reusability < 0.20:
+                bloat_penalty *= 0.80
         weighted_total = (
-            1.35 * descriptive_fitness
-            + 1.35 * descriptive_coverage
-            + 0.95 * code_reusability
-            + 0.90 * parsimony_score
+            1.30 * descriptive_fitness
+            + 1.30 * descriptive_coverage
+            + 1.20 * code_reusability
+            + 1.15 * parsimony_score
             + 0.85 * train_eval_consistency
             + 0.80 * quote_exact_match_rate
             + 0.70 * document_coverage
-            + 0.60 * average_confidence
+            + 0.55 * average_confidence
             + 0.70 * overmerge_balance
         )
-        composite = weighted_total / 8.2
+        composite = (weighted_total / 8.55) * bloat_penalty
         if quote_exact_match_rate < 0.95:
             composite *= max(0.0, quote_exact_match_rate / 0.95)
         if evaluation_documents and failed_document_count:
@@ -1281,9 +1329,10 @@ class TraceableAnalysisService:
             "train_eval_consistency": train_eval_consistency,
             "parsimony_score": parsimony_score,
             "overmerge_balance": overmerge_balance,
+            "bloat_penalty": bloat_penalty,
             "missing_concept_count": len(missing_concepts),
             "overbroad_code_count": len(overbroad_codes),
-            "code_count": len(synthesis.codes),
+            "code_count": code_count,
             "assignment_count": len(evaluation_evidence),
             "failed_document_count": failed_document_count,
             "target_min_codes": target_min,
@@ -1429,6 +1478,247 @@ class TraceableAnalysisService:
             current = remaining + children
         return current
 
+    def _compact_codebook_before_evaluation(
+        self,
+        *,
+        synthesis: CodebookSynthesisResult,
+        consolidated_codes: list[ConsolidatedCode],
+        target_max: int,
+        round_index: int,
+    ) -> tuple[CodebookSynthesisResult, list[ConsolidatedCode], list[dict[str, object]]]:
+        current = self._dedupe_synthesized_codes(synthesis)
+        current_codes = self._dedupe_consolidated_codes(consolidated_codes)
+        action_log: list[dict[str, object]] = []
+
+        if len(current.codes) <= max(1, target_max):
+            return current, current_codes, action_log
+
+        code_by_key = {self._label_key(code.code_label): code for code in current.codes}
+        consolidated_by_key = {self._label_key(code.label): code for code in current_codes}
+        groups_by_path: dict[tuple[str, ...], list[SynthesizedCode]] = defaultdict(list)
+        for code in current.codes:
+            groups_by_path[tuple(code.theme_path)].append(code)
+
+        merge_actions: list[dict[str, object]] = []
+        for path, codes in groups_by_path.items():
+            if len(current.codes) - len(merge_actions) <= target_max:
+                break
+            singleton_codes = [
+                code for code in codes
+                if consolidated_by_key.get(self._label_key(code.code_label), None) is not None
+                and consolidated_by_key[self._label_key(code.code_label)].frequency <= 1
+            ]
+            used: set[str] = set()
+            for left_index, left in enumerate(singleton_codes):
+                left_key = self._label_key(left.code_label)
+                if left_key in used:
+                    continue
+                left_tokens = self._meaningful_tokens(f"{left.code_label} {left.code_description or ''}")
+                siblings = [left]
+                for right in singleton_codes[left_index + 1:]:
+                    right_key = self._label_key(right.code_label)
+                    if right_key in used:
+                        continue
+                    right_tokens = self._meaningful_tokens(f"{right.code_label} {right.code_description or ''}")
+                    if self._token_overlap(left_tokens, right_tokens) >= 0.42:
+                        siblings.append(right)
+                        used.add(right_key)
+                if len(siblings) < 2:
+                    continue
+                used.add(left_key)
+                replacement = self._compact_replacement_label(path=path, codes=siblings)
+                source_labels = [code.code_label for code in siblings]
+                merge_actions.append(
+                    {
+                        "action": "merge",
+                        "round": round_index,
+                        "target": replacement,
+                        "replacement": replacement,
+                        "source_labels": source_labels,
+                        "new_parent_path": list(path),
+                        "split_children": [],
+                        "artifact_type": "code",
+                        "reason": "Deterministic pre-evaluation compaction of near-duplicate one-quote sibling codes.",
+                        "applied": True,
+                        "rejected_reason": None,
+                    }
+                )
+                if len(current.codes) - len(merge_actions) <= target_max:
+                    break
+
+        projected_count = len(current.codes) - len(merge_actions)
+        if projected_count > max(target_max, int(target_max * 1.25)):
+            already_merged = {
+                self._label_key(str(label))
+                for action in merge_actions
+                for label in action.get("source_labels", [])
+            }
+            for path, codes in sorted(groups_by_path.items(), key=lambda item: len(item[1]), reverse=True):
+                if projected_count <= target_max:
+                    break
+                singleton_codes = [
+                    code for code in codes
+                    if self._label_key(code.code_label) not in already_merged
+                    and consolidated_by_key.get(self._label_key(code.code_label), None) is not None
+                    and consolidated_by_key[self._label_key(code.code_label)].frequency <= 1
+                ]
+                if len(singleton_codes) < 4:
+                    continue
+                chunk_size = min(5, max(3, len(singleton_codes) // 2))
+                for chunk_start in range(0, len(singleton_codes), chunk_size):
+                    if projected_count <= target_max:
+                        break
+                    chunk = singleton_codes[chunk_start:chunk_start + chunk_size]
+                    if len(chunk) < 3:
+                        continue
+                    replacement = self._subtheme_compaction_label(path)
+                    suffix = 2
+                    existing_replacements = {
+                        self._label_key(str(action.get("replacement", "")))
+                        for action in merge_actions
+                    } | {self._label_key(code.code_label) for code in current.codes}
+                    base_replacement = replacement
+                    while self._label_key(replacement) in existing_replacements:
+                        replacement = self._truncate_label(f"{base_replacement} {suffix}")
+                        suffix += 1
+                    source_labels = [code.code_label for code in chunk]
+                    merge_actions.append(
+                        {
+                            "action": "merge",
+                            "round": round_index,
+                            "target": replacement,
+                            "replacement": replacement,
+                            "source_labels": source_labels,
+                            "new_parent_path": list(path),
+                            "split_children": [],
+                            "artifact_type": "code",
+                            "reason": "Deterministic target-size compaction of low-frequency sibling codes within one subtheme.",
+                            "applied": True,
+                            "rejected_reason": None,
+                        }
+                    )
+                    already_merged.update(self._label_key(label) for label in source_labels)
+                    projected_count -= len(chunk) - 1
+
+        if not merge_actions:
+            return current, current_codes, action_log
+
+        for action in merge_actions:
+            current = self._apply_merge_action(
+                current,
+                [str(label) for label in action["source_labels"]],
+                str(action["replacement"]),
+                "code",
+                [str(label) for label in action["new_parent_path"]],
+            )
+        current_codes = self._apply_code_merge_actions_to_consolidated_codes(
+            current_codes,
+            merge_actions,
+        )
+        current = self._ensure_synthesis_covers_codes(current, current_codes)
+        action_log.extend(
+            {
+                **action,
+                "action": "compact_near_duplicate_codes",
+            }
+            for action in merge_actions
+        )
+        logger.info(
+            "Traceable pre-evaluation compaction complete: round={}, merges={}, codes_after={}, target_max={}",
+            round_index,
+            len(merge_actions),
+            len(current.codes),
+            target_max,
+        )
+        return current, current_codes, action_log
+
+    def _dedupe_synthesized_codes(self, synthesis: CodebookSynthesisResult) -> CodebookSynthesisResult:
+        codes_by_key: dict[str, SynthesizedCode] = {}
+        for code in synthesis.codes:
+            key = self._label_key(code.code_label)
+            existing = codes_by_key.get(key)
+            if existing is None:
+                codes_by_key[key] = code
+                continue
+            description = existing.code_description or code.code_description
+            path = existing.theme_path or code.theme_path
+            codes_by_key[key] = SynthesizedCode(
+                code_label=existing.code_label,
+                code_description=description,
+                theme_path=path,
+            )
+        return CodebookSynthesisResult(
+            themes=self._dedupe_theme_paths(list(synthesis.themes)),
+            codes=list(codes_by_key.values()),
+        )
+
+    def _dedupe_consolidated_codes(self, consolidated_codes: list[ConsolidatedCode]) -> list[ConsolidatedCode]:
+        grouped: dict[str, list[ConsolidatedCode]] = defaultdict(list)
+        for code in consolidated_codes:
+            grouped[self._label_key(code.label)].append(code)
+        deduped = []
+        for group in grouped.values():
+            if len(group) == 1:
+                deduped.append(group[0])
+                continue
+            preferred = max(group, key=lambda code: len(code.description or ""))
+            candidate_ids: list[str] = []
+            quote_ids: list[str] = []
+            descriptions: list[str] = []
+            for code in group:
+                candidate_ids.extend(code.candidate_ids)
+                for quote_id in code.quote_ids:
+                    if quote_id not in quote_ids:
+                        quote_ids.append(quote_id)
+                if code.description and code.description not in descriptions:
+                    descriptions.append(code.description)
+            deduped.append(
+                ConsolidatedCode(
+                    label=preferred.label,
+                    description=self._clean_optional_text(" / ".join(descriptions)),
+                    candidate_ids=candidate_ids,
+                    quote_ids=quote_ids,
+                )
+            )
+        return deduped
+
+    def _compact_replacement_label(
+        self,
+        *,
+        path: tuple[str, ...],
+        codes: list[SynthesizedCode],
+    ) -> str:
+        token_counts: dict[str, int] = defaultdict(int)
+        for code in codes:
+            for token in self._meaningful_tokens(code.code_label):
+                token_counts[token] += 1
+        common_tokens = [
+            token for token, count in sorted(token_counts.items(), key=lambda item: (-item[1], item[0]))
+            if count >= 2
+        ][:5]
+        if common_tokens:
+            label = " ".join(common_tokens).title()
+            return self._truncate_label(label)
+        if path:
+            return self._truncate_label(str(path[-1]))
+        return self._truncate_label(codes[0].code_label)
+
+    def _subtheme_compaction_label(self, path: tuple[str, ...]) -> str:
+        subtheme = str(path[-1]) if path else "Grounded evidence"
+        cleaned = subtheme
+        prefixes = [
+            "personal ",
+            "perceived ",
+            "specific ",
+            "grounded ",
+        ]
+        lowered = cleaned.lower()
+        for prefix in prefixes:
+            if lowered.startswith(prefix):
+                cleaned = cleaned[len(prefix):]
+                break
+        return self._truncate_label(f"Specific {cleaned} patterns")
+
     async def _refine_codebook(
         self,
         *,
@@ -1541,6 +1831,94 @@ class TraceableAnalysisService:
                 break
         return current, current_codes, action_log
 
+    def _ground_coverage_gap_codes(
+        self,
+        *,
+        coverage_gaps: list[CodebookMissingConcept],
+        evaluation_documents: list[_DocumentText],
+        existing_codes: list[ConsolidatedCode],
+        round_index: int,
+    ) -> tuple[list[ConsolidatedCode], list[_QuoteEvidence], list[dict[str, object]]]:
+        existing_keys = {self._label_key(code.label) for code in existing_codes}
+        additions: list[ConsolidatedCode] = []
+        evidence_additions: list[_QuoteEvidence] = []
+        action_log: list[dict[str, object]] = []
+
+        for gap_index, gap in enumerate(coverage_gaps, start=1):
+            label = self._truncate_label(self._normalize_label(gap.label))
+            label_key = self._label_key(label)
+            if not label or label_key in existing_keys:
+                continue
+
+            quote_ids: list[str] = []
+            for quote_index, raw_quote in enumerate(gap.evidence_quotes, start=1):
+                quote = raw_quote.strip()
+                if not quote:
+                    continue
+                best_document: _DocumentText | None = None
+                best_match = None
+                for document in evaluation_documents:
+                    match = locate_quote_span(document.content, quote)
+                    if best_match is None or (
+                        best_match.quote_match_status != "exact"
+                        and match.quote_match_status == "exact"
+                    ):
+                        best_document = document
+                        best_match = match
+                    if match.quote_match_status == "exact":
+                        break
+                if best_document is None or best_match is None or best_match.quote_match_status == "not_found":
+                    continue
+
+                quote_id = f"{best_document.id}:heldout-gap:{round_index}:{gap_index}:{quote_index}:{uuid.uuid4()}"
+                candidate_id = f"heldout-gap:{round_index}:{gap_index}:{label_key}"
+                quote_ids.append(quote_id)
+                evidence_additions.append(
+                    _QuoteEvidence(
+                        quote_id=quote_id,
+                        document_id=best_document.id,
+                        quote=best_match.quote,
+                        start_char=best_match.start_char,
+                        end_char=best_match.end_char,
+                        quote_match_status=best_match.quote_match_status,
+                        candidate_id=candidate_id,
+                        code_label=label,
+                        code_description=self._clean_optional_text(gap.description),
+                        confidence=0.82,
+                        rationale="Generated from heldout coverage gap evaluator.",
+                    )
+                )
+
+            if not quote_ids:
+                continue
+            existing_keys.add(label_key)
+            additions.append(
+                ConsolidatedCode(
+                    label=label,
+                    description=self._clean_optional_text(gap.description),
+                    candidate_ids=[f"heldout-gap:{round_index}:{gap_index}:{label_key}"],
+                    quote_ids=quote_ids,
+                )
+            )
+            action_log.append(
+                {
+                    "action": "generate_heldout_gap_code",
+                    "round": round_index,
+                    "target": label,
+                    "reason": gap.description,
+                    "outputs": {"quote_ids": quote_ids},
+                }
+            )
+
+        if additions:
+            logger.info(
+                "Traceable heldout coverage gaps grounded: round={}, generated_codes={}, generated_quotes={}",
+                round_index,
+                len(additions),
+                len(evidence_additions),
+            )
+        return additions, evidence_additions, action_log
+
     async def _generate_missing_codes(
         self,
         *,
@@ -1623,6 +2001,17 @@ class TraceableAnalysisService:
             self._label_key(code.label): code
             for code in consolidated_codes
         }
+        singleton_codes_by_subtheme: dict[str, list[str]] = defaultdict(list)
+        for code in synthesis.codes:
+            key = self._label_key(code.code_label)
+            if quote_count_by_code.get(key, 0) == 1 and candidate_count_by_code.get(key, 0) == 1:
+                subtheme = code.theme_path[-1] if code.theme_path else "Ungrouped"
+                singleton_codes_by_subtheme[subtheme].append(code.code_label)
+        singleton_groups = [
+            {"subtheme": subtheme, "code_labels": labels[:12], "count": len(labels)}
+            for subtheme, labels in singleton_codes_by_subtheme.items()
+            if len(labels) >= 3
+        ]
         payload = {
             "round": round_index,
             "metrics": metrics or {},
@@ -1641,6 +2030,12 @@ class TraceableAnalysisService:
                     metrics.get("target_min_codes", 0) if metrics else 0,
                     metrics.get("target_max_codes", 0) if metrics else 0,
                 ],
+                "over_target_by": (
+                    max(0, int(metrics.get("code_count", 0)) - int(metrics.get("target_max_codes", 0)))
+                    if metrics
+                    else 0
+                ),
+                "singleton_code_groups": singleton_groups[:8],
                 "missing_concepts": [
                     item.model_dump(mode="json")
                     for item in (quality_evaluation.missing_concepts if quality_evaluation else [])
@@ -1732,6 +2127,8 @@ class TraceableAnalysisService:
                 if child_payload.get("code_label"):
                     split_children.append(child_payload)
             action_payload["split_children"] = split_children
+            if action_payload.get("action") == "split" and split_children:
+                action_payload["artifact_type"] = "code"
             try:
                 normalized_actions.append(CodebookReviewAction(**action_payload))
             except Exception as exc:
@@ -1742,6 +2139,10 @@ class TraceableAnalysisService:
                     exc,
                 )
         return CodebookReviewResult(actions=normalized_actions)
+
+    def _code_exists(self, synthesis: CodebookSynthesisResult, label: str) -> bool:
+        label_key = self._label_key(label)
+        return any(self._label_key(code.code_label) == label_key for code in synthesis.codes)
 
     def _apply_review_actions(
         self,
@@ -1755,20 +2156,28 @@ class TraceableAnalysisService:
         for action in review.actions:
             before = current.model_dump(mode="json")
             rejected_reason: str | None = None
+            artifact_type = action.artifact_type
+            if (
+                action.action == "split"
+                and action.split_children
+                and action.target
+                and self._code_exists(current, action.target)
+            ):
+                artifact_type = "code"
             if action.action == "revise":
                 current = self._apply_revise_action(current, action.target, action.replacement)
             elif action.action == "merge":
                 allowed, rejected_reason = self._merge_scope_gate(
                     current,
                     source_labels=action.source_labels,
-                    artifact_type=action.artifact_type,
+                    artifact_type=artifact_type,
                 )
                 if allowed:
                     current = self._apply_merge_action(
                         current,
                         action.source_labels,
                         action.replacement or action.target,
-                        action.artifact_type,
+                        artifact_type,
                         action.new_parent_path,
                     )
             elif action.action == "move":
@@ -1782,7 +2191,7 @@ class TraceableAnalysisService:
                     current,
                     target=action.target,
                     split_children=action.split_children,
-                    artifact_type=action.artifact_type,
+                    artifact_type=artifact_type,
                     new_parent_path=action.new_parent_path,
                 )
             after = current.model_dump(mode="json")
@@ -1798,7 +2207,7 @@ class TraceableAnalysisService:
                         child.model_dump(mode="json")
                         for child in action.split_children
                     ],
-                    "artifact_type": action.artifact_type,
+                    "artifact_type": artifact_type,
                     "reason": action.reason,
                     "applied": before != after and rejected_reason is None,
                     "rejected_reason": rejected_reason,
@@ -2824,6 +3233,12 @@ class TraceableAnalysisService:
             for token in normalized.split()
             if len(token) > 2 and token not in stopwords
         }
+
+    @staticmethod
+    def _token_overlap(left_tokens: set[str], right_tokens: set[str]) -> float:
+        if not left_tokens or not right_tokens:
+            return 0.0
+        return len(left_tokens & right_tokens) / len(left_tokens | right_tokens)
 
     @staticmethod
     def _truncate_label(value: str) -> str:

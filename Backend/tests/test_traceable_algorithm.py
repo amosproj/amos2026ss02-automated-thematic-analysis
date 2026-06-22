@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.config import Settings
 from app.schemas.traceable_llm import (
+    CodebookMissingConcept,
     CodebookReviewAction,
     CodebookReviewResult,
     CodebookSplitChild,
@@ -309,7 +310,7 @@ def test_review_result_coercion_skips_malformed_actions_without_crashing() -> No
                 {
                     "action": "split",
                     "target": "Policy and governance recommendations for AI",
-                    "artifact_type": "code",
+                    "artifact_type": "theme",
                     "split_children": [
                         {
                             "label": "AI content labeling and disclosure",
@@ -328,8 +329,81 @@ def test_review_result_coercion_skips_malformed_actions_without_crashing() -> No
 
     assert len(review.actions) == 1
     assert review.actions[0].action == "split"
+    assert review.actions[0].artifact_type == "code"
     assert len(review.actions[0].split_children) == 1
     assert review.actions[0].split_children[0].code_label == "AI content labeling and disclosure"
+
+
+def test_reviewer_applies_code_split_even_when_llm_marks_theme() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(
+                path=[
+                    SynthesizedThemeNode(label="AI Governance"),
+                    SynthesizedThemeNode(label="Policy Responses"),
+                ]
+            )
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label="Advocates increased AI regulation",
+                code_description="General regulation code.",
+                theme_path=["AI Governance", "Policy Responses"],
+            )
+        ],
+    )
+    review = CodebookReviewResult(
+        actions=[
+            CodebookReviewAction(
+                action="split",
+                target="Advocates increased AI regulation",
+                artifact_type="theme",
+                split_children=[
+                    CodebookSplitChild(code_label="Regulation to protect employment", source_quote_ids=["q1"]),
+                    CodebookSplitChild(code_label="Regulation to mitigate AI environmental impact", source_quote_ids=["q2"]),
+                ],
+            )
+        ]
+    )
+
+    refined, action_log = service._apply_review_actions(synthesis, review, round_index=1)
+
+    assert action_log[0]["applied"] is True
+    assert action_log[0]["artifact_type"] == "code"
+    assert sorted(code.code_label for code in refined.codes) == [
+        "Regulation to mitigate AI environmental impact",
+        "Regulation to protect employment",
+    ]
+
+
+def test_heldout_coverage_gaps_become_grounded_codes() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    document_id = "00000000-0000-0000-0000-000000000001"
+    codes, evidence, actions = service._ground_coverage_gap_codes(
+        coverage_gaps=[
+            CodebookMissingConcept(
+                label="Environmental impact concerns of AI",
+                description="Participant mentions AI server pollution.",
+                evidence_quotes=["AI servers cause so much pollution"],
+            )
+        ],
+        evaluation_documents=[
+            _DocumentText(
+                id=document_id,  # type: ignore[arg-type]
+                title="Doc",
+                content="AI servers cause so much pollution and that needs regulation.",
+            )
+        ],
+        existing_codes=[],
+        round_index=2,
+    )
+
+    assert [code.label for code in codes] == ["Environmental impact concerns of AI"]
+    assert len(evidence) == 1
+    assert evidence[0].quote_match_status == "exact"
+    assert evidence[0].document_id == document_id  # type: ignore[comparison-overlap]
+    assert actions[0]["action"] == "generate_heldout_gap_code"
 
 
 def test_reviewer_rejects_broad_cross_theme_code_merge() -> None:
@@ -433,6 +507,147 @@ def test_iteration_metrics_include_descriptive_quality_scores() -> None:
     assert metrics["descriptive_coverage_score"] == 0.77
     assert metrics["missing_concept_count"] == 0
     assert 0.0 < metrics["composite_score"] <= 1.0
+
+
+def test_iteration_metrics_penalize_bloated_low_reuse_codebooks() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    codes = [
+        SynthesizedCode(
+            code_label=f"Single quote code {index}",
+            code_description="Narrow one-off code.",
+            theme_path=["Theme", "Subtheme"],
+        )
+        for index in range(66)
+    ]
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(
+                path=[SynthesizedThemeNode(label="Theme"), SynthesizedThemeNode(label="Subtheme")]
+            )
+        ],
+        codes=codes,
+    )
+    consolidated = [
+        ConsolidatedCode(
+            label=code.code_label,
+            description=code.code_description,
+            candidate_ids=[f"candidate-{index}"],
+            quote_ids=[f"quote-{index}"],
+        )
+        for index, code in enumerate(codes)
+    ]
+    document_id = "00000000-0000-0000-0000-000000000001"
+    metrics = service._compute_iteration_metrics(
+        synthesis=synthesis,
+        consolidated_codes=consolidated,
+        quote_evidence=[object() for _ in range(71)],  # type: ignore[list-item]
+        evaluation_documents=[
+            _DocumentText(
+                id=document_id,  # type: ignore[arg-type]
+                title="Doc",
+                content="important quote",
+            )
+        ],
+        evaluation_evidence=[
+            _AppliedEvidence(
+                document_id=document_id,  # type: ignore[arg-type]
+                code_label="Single quote code 1",
+                theme_label="Subtheme",
+                quote="important quote",
+                start_char=0,
+                end_char=15,
+                quote_match_status="exact",
+                confidence=0.95,
+                rationale=None,
+            )
+        ],
+        used_heldout=True,
+        quality_evaluation=CodebookQualityEvaluationResult(
+            fitness_score=0.92,
+            coverage_score=0.75,
+        ),
+    )
+
+    assert metrics["target_max_codes"] == 36
+    assert metrics["bloat_penalty"] < 0.5
+    assert metrics["composite_score"] < 0.4
+
+
+def test_ensure_synthesis_covers_codes_removes_duplicate_labels() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(path=[SynthesizedThemeNode(label="Theme A")]),
+            SynthesizedThemePath(path=[SynthesizedThemeNode(label="Theme B")]),
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label="Repeated code",
+                code_description="First path.",
+                theme_path=["Theme A"],
+            ),
+            SynthesizedCode(
+                code_label="Repeated code",
+                code_description="Second path.",
+                theme_path=["Theme B"],
+            ),
+        ],
+    )
+    consolidated = [
+        ConsolidatedCode(
+            label="Repeated code",
+            description="Canonical description.",
+            candidate_ids=["candidate-1"],
+            quote_ids=["quote-1"],
+        )
+    ]
+
+    repaired = service._ensure_synthesis_covers_codes(synthesis, consolidated)
+
+    assert [code.code_label for code in repaired.codes] == ["Repeated code"]
+
+
+def test_compaction_merges_low_frequency_sibling_codes_toward_target() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(
+                path=[
+                    SynthesizedThemeNode(label="AI use"),
+                    SynthesizedThemeNode(label="Productivity and task automation"),
+                ]
+            )
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label=f"One-off productivity example {index}",
+                code_description="Narrow productivity detail.",
+                theme_path=["AI use", "Productivity and task automation"],
+            )
+            for index in range(12)
+        ],
+    )
+    consolidated = [
+        ConsolidatedCode(
+            label=code.code_label,
+            description=code.code_description,
+            candidate_ids=[f"candidate-{index}"],
+            quote_ids=[f"quote-{index}"],
+        )
+        for index, code in enumerate(synthesis.codes)
+    ]
+
+    compacted, compacted_codes, actions = service._compact_codebook_before_evaluation(
+        synthesis=synthesis,
+        consolidated_codes=consolidated,
+        target_max=6,
+        round_index=1,
+    )
+
+    assert len(compacted.codes) <= 6
+    assert len(compacted_codes) <= 6
+    assert any(action["action"] == "compact_near_duplicate_codes" for action in actions)
+    assert sum(len(code.quote_ids) for code in compacted_codes) == 12
 
 
 def test_provenance_payload_links_theme_to_quote_and_application() -> None:

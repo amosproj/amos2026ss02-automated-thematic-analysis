@@ -155,6 +155,7 @@ Use any supplied metrics and diagnostics to prefer conservative edits:
 - Low descriptive_fitness_score means assignments may be inaccurate or overgeneralized.
 - Low descriptive_coverage_score means important heldout concepts may be missing.
 - High merge-risk or overbroad codes may contain unrelated concepts and should be split into evidence-backed children.
+- If code_count is above target_max_codes, prioritize merging duplicate or narrowly overlapping one-quote sibling codes before adding new labels.
 - Do not merge codes merely because they share a broad topic; merge only duplicated or near-equivalent concepts.
 - For split actions on codes, include split_children with concise child code labels and source_quote_ids from the supplied code payload.
 Allowed actions: generate, merge, split, revise, move, delete.
