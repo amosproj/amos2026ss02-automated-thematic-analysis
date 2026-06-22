@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.config import Settings
 from app.schemas.traceable_llm import (
     CodebookMissingConcept,
+    CodebookPolishResult,
     CodebookReviewAction,
     CodebookReviewResult,
     CodebookSplitChild,
@@ -13,7 +14,7 @@ from app.schemas.traceable_llm import (
     SynthesizedThemeNode,
     SynthesizedThemePath,
 )
-from app.services.traceable_analysis import TraceableAnalysisService, _AppliedEvidence, _DocumentText
+from app.services.traceable_analysis import TraceableAnalysisService, _AppliedEvidence, _DocumentText, _QuoteEvidence
 from app.services.traceable_code_consolidation import (
     CodeCandidate,
     ConsolidatedCode,
@@ -648,6 +649,148 @@ def test_compaction_merges_low_frequency_sibling_codes_toward_target() -> None:
     assert len(compacted_codes) <= 6
     assert any(action["action"] == "compact_near_duplicate_codes" for action in actions)
     assert sum(len(code.quote_ids) for code in compacted_codes) == 12
+
+
+def test_final_polish_renames_mechanical_labels_without_changing_evidence_links() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    document_id = "00000000-0000-0000-0000-000000000001"
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(
+                path=[
+                    SynthesizedThemeNode(label="Trust, safety, privacy and regulatory concerns"),
+                    SynthesizedThemeNode(label="Grounded Evidence Patterns"),
+                ]
+            )
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label="Specific Trust, safety, privacy and regulatory concerns patterns 2",
+                code_description="AI server pollution / consumer fraud protection / expert oversight",
+                theme_path=["Trust, safety, privacy and regulatory concerns", "Grounded Evidence Patterns"],
+            ),
+            SynthesizedCode(
+                code_label="Community-wide negative attitude toward AI",
+                code_description="Participants report broad local skepticism toward AI.",
+                theme_path=["Trust, safety, privacy and regulatory concerns", "Grounded Evidence Patterns"],
+            ),
+        ],
+    )
+    consolidated = [
+        ConsolidatedCode(
+            label="Specific Trust, safety, privacy and regulatory concerns patterns 2",
+            description="AI server pollution / consumer fraud protection / expert oversight",
+            candidate_ids=["c1", "c2"],
+            quote_ids=["q1", "q2"],
+        ),
+        ConsolidatedCode(
+            label="Community-wide negative attitude toward AI",
+            description="Participants report broad local skepticism toward AI.",
+            candidate_ids=["c3"],
+            quote_ids=["q3"],
+        ),
+    ]
+    quote_evidence = [
+        _QuoteEvidence(
+            quote_id="q1",
+            document_id=document_id,  # type: ignore[arg-type]
+            quote="AI servers cause so much pollution",
+            start_char=None,
+            end_char=None,
+            quote_match_status="exact",
+            candidate_id="c1",
+            code_label="Specific Trust, safety, privacy and regulatory concerns patterns 2",
+            code_description="AI server pollution / consumer fraud protection / expert oversight",
+            confidence=0.9,
+            rationale=None,
+        )
+    ]
+    polish = CodebookPolishResult(
+        codes=[
+            {
+                "original_label": "Specific Trust, safety, privacy and regulatory concerns patterns 2",
+                "polished_label": "AI governance risks and safeguards",
+                "polished_description": "Concerns about AI harms and safeguards, including environmental impact, consumer protection, and oversight.",
+            }
+        ],
+        themes=[
+            {
+                "original_label": "Grounded Evidence Patterns",
+                "polished_label": "AI governance concerns",
+                "polished_description": "Evidence about AI risks, safeguards, and public trust.",
+            }
+        ],
+    )
+
+    polished, polished_codes, polished_evidence, actions = service._apply_codebook_polish(
+        synthesis=synthesis,
+        consolidated_codes=consolidated,
+        quote_evidence=quote_evidence,  # type: ignore[list-item]
+        polish=polish,
+    )
+
+    assert len(polished.codes) == 2
+    assert polished.codes[0].code_label == "AI governance risks and safeguards"
+    assert polished.codes[0].theme_path[-1] == "AI governance concerns"
+    assert polished_codes[0].label == "AI governance risks and safeguards"
+    assert polished_codes[0].quote_ids == ["q1", "q2"]
+    assert polished_evidence[0].code_label == "AI governance risks and safeguards"
+    assert any(action["artifact_type"] == "code" for action in actions)
+    assert any(action["artifact_type"] == "subtheme" for action in actions)
+
+
+def test_final_polish_rejects_duplicate_code_label_merge() -> None:
+    service = TraceableAnalysisService(session=None)  # type: ignore[arg-type]
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(
+                path=[
+                    SynthesizedThemeNode(label="AI Work"),
+                    SynthesizedThemeNode(label="Skills"),
+                ]
+            )
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label="Seeks skill beyond AI capabilities",
+                code_description=None,
+                theme_path=["AI Work", "Skills"],
+            ),
+            SynthesizedCode(
+                code_label="Community-wide negative attitude toward AI",
+                code_description=None,
+                theme_path=["AI Work", "Skills"],
+            ),
+        ],
+    )
+    consolidated = [
+        ConsolidatedCode(label=code.code_label, description=None, candidate_ids=[code.code_label], quote_ids=[])
+        for code in synthesis.codes
+    ]
+    polish = CodebookPolishResult(
+        codes=[
+            {
+                "original_label": "Seeks skill beyond AI capabilities",
+                "polished_label": "Community-wide negative attitude toward AI",
+            }
+        ]
+    )
+
+    polished, polished_codes, _polished_evidence, _actions = service._apply_codebook_polish(
+        synthesis=synthesis,
+        consolidated_codes=consolidated,
+        quote_evidence=[],
+        polish=polish,
+    )
+
+    assert [code.code_label for code in polished.codes] == [
+        "Seeks skill beyond AI capabilities",
+        "Community-wide negative attitude toward AI",
+    ]
+    assert [code.label for code in polished_codes] == [
+        "Seeks skill beyond AI capabilities",
+        "Community-wide negative attitude toward AI",
+    ]
 
 
 def test_provenance_payload_links_theme_to_quote_and_application() -> None:

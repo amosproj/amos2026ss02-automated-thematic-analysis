@@ -270,6 +270,45 @@ CODEBOOK_QUALITY_EVALUATION_USER_PROMPT = """Evaluate this codebook application.
 --- HELDOUT APPLICATIONS END ---"""
 
 
+CODEBOOK_POLISH_SYSTEM_PROMPT = """You are polishing a qualitative codebook after structural refinement.
+Improve labels and definitions only. Do not add, remove, merge, split, or move any code.
+
+Rules:
+- Preserve the exact number of codes and theme/subtheme nodes.
+- Each output item must reference an existing original_label.
+- Replace mechanical labels such as "Specific ... patterns" or "... patterns 2" with concise analytical labels.
+- Code labels should be 5-12 words, concrete, and grounded in the supplied examples.
+- Theme and subtheme labels should be concise analytical category names.
+- Descriptions should define scope without listing unrelated fragments.
+- Do not invent facts beyond the supplied descriptions and quote examples.
+- Return valid JSON only. Do not wrap JSON in markdown.
+
+Return this exact shape:
+{{
+  "codes": [
+    {{
+      "original_label": "Existing code label",
+      "polished_label": "Improved code label",
+      "polished_description": "Improved short scope definition"
+    }}
+  ],
+  "themes": [
+    {{
+      "original_label": "Existing theme or subtheme label",
+      "polished_label": "Improved theme or subtheme label",
+      "polished_description": "Improved short scope definition"
+    }}
+  ],
+  "notes": "Brief summary of polishing choices"
+}}"""
+
+CODEBOOK_POLISH_USER_PROMPT = """Polish this codebook while preserving its structure.
+
+--- CODEBOOK START ---
+{codebook}
+--- CODEBOOK END ---"""
+
+
 TRACEABLE_APPLICATION_SYSTEM_PROMPT = """You are applying a fixed qualitative codebook to one transcript.
 
 Rules:
@@ -402,6 +441,15 @@ def build_codebook_quality_evaluation_prompt() -> ChatPromptTemplate:
         [
             ("system", CODEBOOK_QUALITY_EVALUATION_SYSTEM_PROMPT),
             ("user", CODEBOOK_QUALITY_EVALUATION_USER_PROMPT),
+        ]
+    )
+
+
+def build_codebook_polish_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", CODEBOOK_POLISH_SYSTEM_PROMPT),
+            ("user", CODEBOOK_POLISH_USER_PROMPT),
         ]
     )
 

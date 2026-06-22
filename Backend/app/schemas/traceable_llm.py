@@ -153,6 +153,24 @@ class CodebookQualityEvaluationResult(BaseModel):
     notes: str | None = None
 
 
+class CodebookPolishCode(BaseModel):
+    original_label: str
+    polished_label: str
+    polished_description: str | None = None
+
+
+class CodebookPolishTheme(BaseModel):
+    original_label: str
+    polished_label: str
+    polished_description: str | None = None
+
+
+class CodebookPolishResult(BaseModel):
+    codes: list[CodebookPolishCode] = Field(default_factory=list)
+    themes: list[CodebookPolishTheme] = Field(default_factory=list)
+    notes: str | None = None
+
+
 class TraceableAppliedCodeAssignment(BaseModel):
     code_label: str
     theme_label: str | None = None

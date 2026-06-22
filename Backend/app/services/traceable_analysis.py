@@ -21,6 +21,7 @@ from app.llm.client import build_chat_model
 from app.llm.traceable_prompts import (
     build_batch_code_relationship_prompt,
     build_code_relationship_prompt,
+    build_codebook_polish_prompt,
     build_codebook_quality_evaluation_prompt,
     build_codebook_review_prompt,
     build_missing_code_generation_prompt,
@@ -50,6 +51,7 @@ from app.schemas.traceable_analysis import TraceableAnalysisResult
 from app.schemas.traceable_llm import (
     BatchCodeRelationshipResults,
     CodebookMissingConcept,
+    CodebookPolishResult,
     CodebookQualityEvaluationResult,
     CodebookReviewAction,
     CodebookReviewResult,
@@ -81,6 +83,7 @@ _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS = 3
 _APPLICATION_MAX_ATTEMPTS = 3
 _EVALUATION_MAX_ATTEMPTS = 2
 _REVIEW_MAX_ATTEMPTS = 2
+_POLISH_MAX_ATTEMPTS = 2
 
 
 @dataclass(frozen=True)
@@ -319,6 +322,13 @@ class TraceableAnalysisService:
             len(synthesis.themes),
             len(synthesis.codes),
         )
+
+        synthesis, consolidated_codes, quote_evidence, polish_log = await self._polish_final_codebook(
+            synthesis=synthesis,
+            consolidated_codes=consolidated_codes,
+            quote_evidence=quote_evidence,
+        )
+        action_log.extend(polish_log)
 
         if on_phase is not None:
             await on_phase("persisting_codebook")
@@ -1140,6 +1150,312 @@ class TraceableAnalysisService:
             }
         )
         return best, artifacts, action_log
+
+    async def _polish_final_codebook(
+        self,
+        *,
+        synthesis: CodebookSynthesisResult,
+        consolidated_codes: list[ConsolidatedCode],
+        quote_evidence: list[_QuoteEvidence],
+    ) -> tuple[CodebookSynthesisResult, list[ConsolidatedCode], list[_QuoteEvidence], list[dict[str, object]]]:
+        if not synthesis.codes:
+            return synthesis, consolidated_codes, quote_evidence, []
+
+        payload = self._build_codebook_polish_payload(
+            synthesis=synthesis,
+            consolidated_codes=consolidated_codes,
+            quote_evidence=quote_evidence,
+        )
+        parser = JsonOutputParser(pydantic_object=CodebookPolishResult)
+        chain_payload = {"codebook": json.dumps(payload, ensure_ascii=True, indent=2)}
+
+        for attempt in range(1, _POLISH_MAX_ATTEMPTS + 1):
+            try:
+                chain = build_codebook_polish_prompt() | build_chat_model(temperature=0.0) | parser
+                raw_result = await chain.ainvoke(chain_payload)
+                polish = (
+                    raw_result
+                    if isinstance(raw_result, CodebookPolishResult)
+                    else CodebookPolishResult(**raw_result)
+                )
+                polished, polished_codes, polished_evidence, applied_actions = self._apply_codebook_polish(
+                    synthesis=synthesis,
+                    consolidated_codes=consolidated_codes,
+                    quote_evidence=quote_evidence,
+                    polish=polish,
+                )
+                logger.info(
+                    "Traceable final codebook polish complete: code_renames={}, theme_renames={}",
+                    sum(1 for action in applied_actions if action.get("artifact_type") == "code"),
+                    sum(1 for action in applied_actions if action.get("artifact_type") in {"theme", "subtheme"}),
+                )
+                return (
+                    polished,
+                    polished_codes,
+                    polished_evidence,
+                    [
+                        {
+                            "action": "polish_final_codebook",
+                            "applied": bool(applied_actions),
+                            "code_count": len(polished.codes),
+                            "theme_path_count": len(polished.themes),
+                            "outputs": {
+                                "notes": polish.notes,
+                                "changes": applied_actions,
+                            },
+                        }
+                    ],
+                )
+            except Exception as exc:
+                if attempt >= _POLISH_MAX_ATTEMPTS:
+                    logger.warning(
+                        "Traceable final codebook polish failed after retries; keeping selected codebook: error={}",
+                        exc,
+                    )
+                    return (
+                        synthesis,
+                        consolidated_codes,
+                        quote_evidence,
+                        [
+                            {
+                                "action": "polish_final_codebook",
+                                "applied": False,
+                                "rejected_reason": str(exc),
+                            }
+                        ],
+                    )
+                logger.warning(
+                    "Traceable final codebook polish retry: attempt={}, error={}",
+                    attempt,
+                    exc,
+                )
+                await asyncio.sleep(0.5 * attempt)
+
+        return synthesis, consolidated_codes, quote_evidence, []
+
+    def _build_codebook_polish_payload(
+        self,
+        *,
+        synthesis: CodebookSynthesisResult,
+        consolidated_codes: list[ConsolidatedCode],
+        quote_evidence: list[_QuoteEvidence],
+    ) -> dict[str, object]:
+        quote_by_id = {quote.quote_id: quote for quote in quote_evidence}
+        consolidated_by_key = {
+            self._label_key(code.label): code
+            for code in consolidated_codes
+        }
+        theme_nodes: dict[str, dict[str, object]] = {}
+        for theme in synthesis.themes:
+            for depth, node in enumerate(theme.path):
+                key = self._label_key(node.label)
+                if not key:
+                    continue
+                theme_nodes.setdefault(
+                    key,
+                    {
+                        "label": node.label,
+                        "description": node.description,
+                        "level": "theme" if depth == 0 else "subtheme",
+                    },
+                )
+
+        return {
+            "task": "Polish labels and definitions only. Preserve all memberships and counts.",
+            "counts_to_preserve": {
+                "codes": len(synthesis.codes),
+                "theme_paths": len(synthesis.themes),
+                "theme_or_subtheme_nodes": len(theme_nodes),
+            },
+            "themes": list(theme_nodes.values()),
+            "codes": [
+                {
+                    "code_label": code.code_label,
+                    "code_description": code.code_description,
+                    "theme_path": code.theme_path,
+                    "quote_count": len(
+                        consolidated_by_key.get(
+                            self._label_key(code.code_label),
+                            ConsolidatedCode(label=code.code_label, description=None, candidate_ids=[], quote_ids=[]),
+                        ).quote_ids
+                    ),
+                    "candidate_count": len(
+                        consolidated_by_key.get(
+                            self._label_key(code.code_label),
+                            ConsolidatedCode(label=code.code_label, description=None, candidate_ids=[], quote_ids=[]),
+                        ).candidate_ids
+                    ),
+                    "example_quotes": [
+                        quote_by_id[quote_id].quote
+                        for quote_id in consolidated_by_key.get(
+                            self._label_key(code.code_label),
+                            ConsolidatedCode(label=code.code_label, description=None, candidate_ids=[], quote_ids=[]),
+                        ).quote_ids[:5]
+                        if quote_id in quote_by_id
+                    ],
+                }
+                for code in synthesis.codes
+            ],
+        }
+
+    def _apply_codebook_polish(
+        self,
+        *,
+        synthesis: CodebookSynthesisResult,
+        consolidated_codes: list[ConsolidatedCode],
+        quote_evidence: list[_QuoteEvidence],
+        polish: CodebookPolishResult,
+    ) -> tuple[CodebookSynthesisResult, list[ConsolidatedCode], list[_QuoteEvidence], list[dict[str, object]]]:
+        code_updates = {
+            self._label_key(item.original_label): item
+            for item in polish.codes
+            if item.original_label and item.polished_label
+        }
+        theme_updates = {
+            self._label_key(item.original_label): item
+            for item in polish.themes
+            if item.original_label and item.polished_label
+        }
+        code_label_map: dict[str, str] = {}
+        code_description_map: dict[str, str | None] = {}
+        action_log: list[dict[str, object]] = []
+
+        original_code_keys = {self._label_key(code.code_label) for code in synthesis.codes}
+        seen_code_keys: set[str] = set()
+        polished_codes: list[SynthesizedCode] = []
+        for code in synthesis.codes:
+            old_key = self._label_key(code.code_label)
+            update = code_updates.get(old_key)
+            new_label = code.code_label
+            if update is not None:
+                candidate_label = self._truncate_label(self._normalize_label(update.polished_label))
+                candidate_key = self._label_key(candidate_label)
+                if candidate_label and (
+                    candidate_key == old_key
+                    or (candidate_key not in original_code_keys and candidate_key not in seen_code_keys)
+                ):
+                    new_label = candidate_label
+            new_key = self._label_key(new_label)
+            if new_key in seen_code_keys:
+                new_label = code.code_label
+                new_key = old_key
+            seen_code_keys.add(new_key)
+            new_description = (
+                self._clean_optional_text(update.polished_description)
+                if update is not None and update.polished_description is not None
+                else code.code_description
+            )
+            code_label_map[old_key] = new_label
+            code_description_map[old_key] = new_description
+            polished_codes.append(
+                SynthesizedCode(
+                    code_label=new_label,
+                    code_description=new_description,
+                    theme_path=code.theme_path,
+                )
+            )
+            if update is not None and (new_label != code.code_label or new_description != code.code_description):
+                action_log.append(
+                    {
+                        "artifact_type": "code",
+                        "target": code.code_label,
+                        "replacement": new_label,
+                        "description_changed": new_description != code.code_description,
+                    }
+                )
+
+        theme_label_map: dict[str, str] = {}
+        theme_description_map: dict[str, str | None] = {}
+        original_theme_nodes: dict[str, SynthesizedThemeNode] = {}
+        for theme in synthesis.themes:
+            for node in theme.path:
+                original_theme_nodes.setdefault(self._label_key(node.label), node)
+        original_theme_keys = set(original_theme_nodes)
+        seen_theme_keys: set[str] = set()
+        for old_key, node in original_theme_nodes.items():
+            update = theme_updates.get(old_key)
+            new_label = node.label
+            if update is not None:
+                candidate_label = self._truncate_label(self._normalize_label(update.polished_label))
+                candidate_key = self._label_key(candidate_label)
+                if candidate_label and (
+                    candidate_key == old_key
+                    or (candidate_key not in original_theme_keys and candidate_key not in seen_theme_keys)
+                ):
+                    new_label = candidate_label
+            theme_label_map[old_key] = new_label
+            theme_description_map[old_key] = (
+                self._clean_optional_text(update.polished_description)
+                if update is not None and update.polished_description is not None
+                else node.description
+            )
+            seen_theme_keys.add(self._label_key(new_label))
+
+        polished_theme_paths: list[SynthesizedThemePath] = []
+        for theme in synthesis.themes:
+            path: list[SynthesizedThemeNode] = []
+            for node in theme.path:
+                old_key = self._label_key(node.label)
+                update = theme_updates.get(old_key)
+                new_label = theme_label_map.get(old_key, node.label)
+                new_description = theme_description_map.get(old_key, node.description)
+                path.append(SynthesizedThemeNode(label=new_label, description=new_description))
+                if update is not None and (new_label != node.label or new_description != node.description):
+                    action_log.append(
+                        {
+                            "artifact_type": "theme" if len(path) == 1 else "subtheme",
+                            "target": node.label,
+                            "replacement": new_label,
+                            "description_changed": new_description != node.description,
+                        }
+                    )
+            polished_theme_paths.append(SynthesizedThemePath(path=path))
+
+        rewritten_codes = [
+            SynthesizedCode(
+                code_label=code.code_label,
+                code_description=code.code_description,
+                theme_path=[
+                    theme_label_map.get(self._label_key(label), label)
+                    for label in code.theme_path
+                ],
+            )
+            for code in polished_codes
+        ]
+        polished_synthesis = CodebookSynthesisResult(
+            themes=self._dedupe_theme_paths(polished_theme_paths),
+            codes=rewritten_codes,
+        )
+
+        polished_consolidated = [
+            ConsolidatedCode(
+                label=code_label_map.get(self._label_key(code.label), code.label),
+                description=code_description_map.get(self._label_key(code.label), code.description),
+                candidate_ids=code.candidate_ids,
+                quote_ids=code.quote_ids,
+            )
+            for code in consolidated_codes
+        ]
+        polished_quote_evidence = [
+            _QuoteEvidence(
+                quote_id=evidence.quote_id,
+                document_id=evidence.document_id,
+                quote=evidence.quote,
+                start_char=evidence.start_char,
+                end_char=evidence.end_char,
+                quote_match_status=evidence.quote_match_status,
+                candidate_id=evidence.candidate_id,
+                code_label=code_label_map.get(self._label_key(evidence.code_label), evidence.code_label),
+                code_description=code_description_map.get(
+                    self._label_key(evidence.code_label),
+                    evidence.code_description,
+                ),
+                confidence=evidence.confidence,
+                rationale=evidence.rationale,
+            )
+            for evidence in quote_evidence
+        ]
+        return polished_synthesis, polished_consolidated, polished_quote_evidence, action_log
 
     async def _evaluate_codebook_quality(
         self,
