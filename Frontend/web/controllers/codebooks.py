@@ -285,6 +285,20 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         researcher_topics=researcher_topics,
     )
 
+@bp.get("/<corpus_id>/<codebook_id>/themes/<theme_id>/quotes.json")
+def theme_quotes_json(corpus_id: str, codebook_id: str, theme_id: str):
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+        page_size = max(1, min(100, int(request.args.get("page_size", 20))))
+    except (TypeError, ValueError):
+        page, page_size = 1, 20
+    try:
+        result = _backend().get_theme_quotes(codebook_id, theme_id, page, page_size)
+        return jsonify(result)
+    except BackendError as exc:
+        return jsonify({"error": exc.user_message})
+
+
 @bp.get("/<corpus_id>/<codebook_id>/export")
 def export_codebook(corpus_id: str, codebook_id: str) -> Response | str:
     """Export a codebook and its hierarchical themes as a CSV file."""
