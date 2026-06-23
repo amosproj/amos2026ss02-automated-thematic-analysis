@@ -40,10 +40,10 @@
       </div>
       <div>
         <p class="text-white-50 small mb-1 text-uppercase fw-semibold" style="letter-spacing:.07em">Total Themes</p>
-        <h2 class="h3 text-white mb-0" id="total-themes-value" class="metric-value">—</h2>
+        <h2 class="h3 text-white mb-0" id="total-themes-value">—</h2>
       </div>
       <div class="d-flex align-items-center gap-2">
-        {% if version is not none%}
+        {% if version is not none %}
           <span class="theme-version-badge">v{{ version }}</span>
         {% endif %}
         <a href="{{ url_for('codebooks.export_codebook', corpus_id=corpus_id, codebook_id=codebook_id) }}" class="btn btn-sm btn-outline-light ms-2">
