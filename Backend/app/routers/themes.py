@@ -7,11 +7,12 @@ from fastapi.responses import JSONResponse
 
 from app.dependencies import DbSession
 from app.exceptions import NotFoundError, UnprocessableError
-from app.schemas.common import ResponseEnvelope
+from app.schemas.common import Page, ResponseEnvelope
 from app.schemas.theme_graph import ThemeTreeNode
-from app.schemas.theme_views import ThemeFrequencyItem
+from app.schemas.theme_views import ThemeFrequencyItem, ThemeQuoteItem
 from app.services.theme_frequency import ThemeFrequencyService
 from app.services.theme_graph import ThemeGraphService, ThemeNotFoundError, ThemeValidationError
+from app.services.theme_quotes import ThemeQuotesService
 
 router = APIRouter(prefix="/codebooks/{codebook_id}/themes", tags=["themes"])
 
@@ -64,4 +65,24 @@ async def get_theme_tree(
         raise UnprocessableError(str(exc)) from exc
 
     # Wrap successful payloads in response envelope
+    return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))
+
+
+@router.get("/{theme_id}/quotes", response_model=ResponseEnvelope[Page[ThemeQuoteItem]])
+async def list_theme_quotes(
+    codebook_id: UUID,
+    theme_id: UUID,
+    session: DbSession,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    application_run_id: UUID | None = Query(default=None),
+) -> JSONResponse:
+    service = ThemeQuotesService(session)
+    payload = await service.list_theme_quotes(
+        codebook_id=codebook_id,
+        theme_id=theme_id,
+        page=page,
+        page_size=page_size,
+        application_run_id=application_run_id,
+    )
     return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))

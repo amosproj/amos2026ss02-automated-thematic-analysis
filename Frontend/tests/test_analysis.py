@@ -66,7 +66,10 @@ def test_trigger_analysis_success(client, fake_backend):
         
     resp = client.post("/analysis/trigger", data={
         "corpus_id": corpus_id,
-        "codebook_id": "cb1"
+        "codebook_id": "cb1",
+        "name": "Test Run",
+        "custom_id": "custom-123",
+        "transcript_document_ids": ["doc1"]
     })
     
     assert resp.status_code == 302

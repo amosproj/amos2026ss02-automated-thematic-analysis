@@ -13,7 +13,7 @@ Frontend/
 │   │   ├── main.py                    # / (home), /health
 │   │   ├── ingestion.py               # /transcripts, /transcripts/upload
 │   │   ├── codebooks.py               # /codebooks, /codebooks/<id>/themes
-│   │   └── analysis.py                # /analysis (placeholder)
+│   │   └── analysis.py                # /analysis
 │   ├── services/
 │   │   └── backend_client.py          # HTTP client wrapping all FastAPI calls
 │   ├── templates/
@@ -31,7 +31,8 @@ Frontend/
 │   │   │   ├── list.html              # Codebook listing table
 │   │   │   └── themes.html            # Theme browser (table + tree + detail panel)
 │   │   └── analysis/
-│   │       └── index.html             # Analysis page (placeholder)
+│   │       ├── index.html             # Trigger analysis form (transcript + codebook selection)
+│   │       └── wait.html              # Live progress page (polls job status)
 │   └── static/
 │       ├── css/main.css               # All custom styles
 │       ├── img/team-logo.svg          # NIM+AMOS team logo (navbar + footer + favicon)
@@ -41,6 +42,7 @@ Frontend/
 │   ├── test_smoke.py                  # Basic route smoke tests
 │   ├── test_ingestion.py              # Ingestion route tests (incl. typed-error paths)
 │   ├── test_codebooks.py              # Codebook route tests (incl. typed-error paths)
+│   ├── test_analysis.py               # Analysis trigger + wait page tests
 │   ├── test_backend_client.py         # Unit tests for BackendClient exception categorisation
 │   └── test_error_handlers.py         # Flask 404 / 413 / 500 handler tests
 ├── Dockerfile                         # Multi-stage build (runtime + test targets)
@@ -59,7 +61,10 @@ Frontend/
 | `POST /transcripts/upload` | Upload results | Submits files to the backend; shows per-file result |
 | `GET /codebooks/` | Codebook list | Table of all available codebooks |
 | `GET /codebooks/<id>/themes` | Theme browser | Full interactive theme browser for a codebook |
-| `GET /analysis/` | Analysis | Placeholder — ready for backend analysis routes |
+| `GET /analysis/` | Trigger Analysis | Select transcripts, codebook, and trigger a codebook application job |
+| `POST /analysis/trigger` | — | Submits the form; creates a backend apply-job and redirects to the wait page |
+| `GET /analysis/job/<job_id>` | Applying Codebook | Live progress page that polls job status until completion |
+| `GET /analysis/job/<job_id>/status` | — | JSON endpoint returning current job status (used by the wait page) |
 
 ## Theme browser
 

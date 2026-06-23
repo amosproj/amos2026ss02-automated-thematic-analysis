@@ -36,6 +36,10 @@ async def db_engine():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine
+    from app.services.codebook_application_jobs import codebook_application_job_runner
+    from app.services.codebook_generation_jobs import codebook_generation_job_runner
+    await codebook_application_job_runner.stop()
+    await codebook_generation_job_runner.stop()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
