@@ -551,13 +551,21 @@ def _parse_validation_detail(response: httpx.Response) -> str | None:
         return detail
 
     if not isinstance(detail, list):
-        # Our backend envelope for handled 422s is:
-        # {"success": false, "error": "...", "meta": {"detail": "..."}}
+        # Our backend envelope for handled 4xx errors is one of:
+        #   {"success": false, "error": "...", "meta": {"detail": "..."}}
+        #   {"success": false, "error": "...", "meta": null}   (e.g. validation
+        #     errors raised in services, where the message lives in `error`)
+        # Prefer the more specific meta.detail, then fall back to the top-level
+        # `error` so service-raised messages (e.g. "<provider> has no API key
+        # configured") reach the user instead of the generic default.
         meta = body.get("meta")
         if isinstance(meta, dict):
             meta_detail = meta.get("detail")
             if isinstance(meta_detail, str) and meta_detail.strip():
                 return meta_detail
+        error = body.get("error")
+        if isinstance(error, str) and error.strip():
+            return error
         return None
 
     messages: list[str] = []
