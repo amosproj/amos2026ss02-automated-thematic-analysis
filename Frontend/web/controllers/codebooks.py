@@ -792,39 +792,162 @@ def _flatten_codebook_for_preview(codebook: dict) -> list[dict]:
     return rows
 
 
+def _flatten_codebook_for_review(codebook: dict) -> list[dict]:
+    """Convert CodebookDetailSchema tree to positional nodes for review.html."""
+    nodes: list[dict] = []
+
+    def walk(node: dict, depth: int) -> None:
+        raw_type = (node.get("node_type") or "THEME").upper()
+        nodes.append({
+            "name": node.get("name") or node.get("label") or "",
+            "description": node.get("description") or "",
+            "indent": depth,
+            "is_code": raw_type == "CODE",
+        })
+        if raw_type == "CODE":
+            return
+        for child in node.get("children") or []:
+            walk(child, depth + 1)
+
+    for theme in codebook.get("themes") or []:
+        walk(theme, 0)
+    return nodes
+
+
+def _themes_to_review_nodes(themes: list[dict]) -> list[dict]:
+    """Convert relational flat themes (parent_name) to positional nodes for review.html.
+    Used when re-rendering the review page after a validation error."""
+    name_to_indent: dict[str, int] = {}
+    nodes = []
+    for t in themes:
+        parent = (t.get("parent_name") or "").strip()
+        indent = (name_to_indent.get(parent, 0) + 1) if parent else 0
+        is_code = (t.get("node_type") or "").upper() == "CODE"
+        name_to_indent[t.get("name") or ""] = indent
+        nodes.append({
+            "name": t.get("name") or "",
+            "description": t.get("description") or "",
+            "indent": indent,
+            "is_code": is_code,
+        })
+    return nodes
+
+
 @bp.get("/<codebook_id>/review")
 def codebook_review(codebook_id: str) -> str:
     try:
         codebook = _backend().get_codebook(codebook_id)
     except BackendNotFoundError:
         flash("That codebook couldn't be found. It may have been deleted.", "danger")
-        return render_template(
-            "codebooks/preview.html",
-            corpus_id="",
-            codebook_name="",
-            themes=[],
-            error="Codebook not found.",
-        )
+        return redirect(url_for("codebooks.list_codebooks"))
     except BackendError as exc:
         flash(exc.user_message, "danger")
-        return render_template(
-            "codebooks/preview.html",
-            corpus_id="",
-            codebook_name="",
-            themes=[],
-            error=exc.user_message,
-        )
+        return redirect(url_for("codebooks.list_codebooks"))
 
     corpus_id = str(codebook.get("corpus_id", ""))
     name = codebook.get("name") or "Generated Codebook"
     return render_template(
-        "codebooks/preview.html",
+        "codebooks/review.html",
         corpus_id=corpus_id,
+        codebook_id=codebook_id,
         codebook_name=name,
-        themes=_flatten_codebook_for_preview(codebook),
-        source_codebook_id=codebook_id,
+        nodes=_flatten_codebook_for_review(codebook),
         error=None,
     )
+
+
+@bp.post("/<codebook_id>/review")
+def codebook_review_submit(codebook_id: str) -> str:
+    """Save the reviewed codebook as a new version."""
+    corpus_id = (request.form.get("corpus_id") or "").strip()
+    codebook_name = (request.form.get("codebook_name") or "").strip()
+    row_names = request.form.getlist("row_names[]")
+    row_descriptions = request.form.getlist("row_descriptions[]")
+    row_parents = request.form.getlist("row_parents[]")
+    row_is_codes = request.form.getlist("row_is_codes[]")
+
+    # Derive relational themes from the positional form data.
+    # node_type: CODE if is_code, THEME if no parent, SUBTHEME otherwise.
+    themes = []
+    for name, desc, parent, is_code_flag in zip(
+        row_names, row_descriptions, row_parents, row_is_codes
+    ):
+        name = name.strip()
+        desc = desc.strip()
+        parent = parent.strip()
+        is_code = is_code_flag == "1"
+        if is_code:
+            node_type = "CODE"
+        elif parent:
+            node_type = "SUBTHEME"
+        else:
+            node_type = "THEME"
+        themes.append({
+            "node_type": node_type,
+            "name": name,
+            "description": desc,
+            "parent_name": parent or None,
+        })
+
+    def _re_render(error: str):
+        return render_template(
+            "codebooks/review.html",
+            corpus_id=corpus_id,
+            codebook_id=codebook_id,
+            codebook_name=codebook_name,
+            nodes=_themes_to_review_nodes(themes),
+            error=error,
+        )
+
+    # Validation
+    name_set = {t["name"] for t in themes if t["name"]}
+    code_names = {t["name"] for t in themes if t["node_type"] == "CODE" and t["name"]}
+    if not codebook_name:
+        return _re_render("Codebook name must not be blank.")
+    if not themes:
+        return _re_render("A codebook must contain at least one theme.")
+    if any(not t["name"] for t in themes):
+        return _re_render("All rows must have a name.")
+    for t in themes:
+        if t["parent_name"] and t["parent_name"] not in name_set:
+            return _re_render(
+                f"Parent '{t['parent_name']}' for '{t['name']}' does not exist in this codebook."
+            )
+        if t["node_type"] == "CODE" and not t["parent_name"]:
+            return _re_render(
+                f"'{t['name']}' is marked as a code but has no parent; "
+                "codes must sit under a theme or subtheme."
+            )
+        if t["parent_name"] in code_names:
+            return _re_render(
+                f"'{t['name']}' is nested under '{t['parent_name']}', which is a code; "
+                "codes must be leaf nodes and cannot have children."
+            )
+
+    # No-change detection: compare against the current version.
+    try:
+        original = _backend().get_codebook(codebook_id)
+        original_name = (original.get("name") or "").strip()
+        original_themes = _flatten_codebook_for_preview(original)
+
+        def _norm(rows):
+            return [{**r, "parent_name": r.get("parent_name") or ""} for r in rows]
+
+        if codebook_name == original_name and _norm(themes) == _norm(original_themes):
+            flash("No changes were made to the codebook.", "info")
+            return redirect(url_for("codebooks.success", corpus_id=corpus_id, codebook_id=codebook_id))
+    except BackendError:
+        pass
+
+    try:
+        res = _backend().create_codebook(
+            corpus_id=corpus_id, name=codebook_name, themes=themes
+        )
+        new_id = res["id"]
+    except BackendError as exc:
+        return _re_render(str(exc))
+
+    return redirect(url_for("codebooks.success", corpus_id=corpus_id, codebook_id=new_id))
 
 
 @bp.post("/<corpus_id>/<codebook_id>/delete")
