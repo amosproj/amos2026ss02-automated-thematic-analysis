@@ -1,30 +1,35 @@
 from langchain_openai import ChatOpenAI
 
 from app.config import Settings, get_settings
+from app.llm import providers
 
 
 def build_chat_model(
     settings: Settings | None = None,
     *,
+    provider: str | None = None,
     model: str | None = None,
     temperature: float | None = None,
 ) -> ChatOpenAI:
     cfg = settings or get_settings()
 
-    # Resolve credentials based on SELECTED_API
-    if cfg.SELECTED_API.upper() == "FAU":
-        api_key  = cfg.LLM_API_KEY_FAU
-        base_url = cfg.LLM_BASE_URL_FAU
-        default_model = cfg.LLM_MODEL_FAU
-    else:  # "ACADEMIC" or any other value falls back to the Academic Cloud config
-        api_key  = cfg.LLM_API_KEY
-        base_url = cfg.LLM_BASE_URL
-        default_model = cfg.LLM_MODEL
+    # Resolve which provider to use: an explicit argument (e.g. the active
+    # provider read from the DB at job-run start) wins; otherwise fall back to
+    # the env-configured SELECTED_API default so existing callers and scripts
+    # keep working with zero config.
+    provider_id = providers.normalize(provider) or providers.resolve_default(cfg)
+    spec = providers.get_provider(provider_id)
+    # resolve_default always returns a known id, so spec is never None here.
+    assert spec is not None  # noqa: S101 - registry invariant
+
+    api_key = getattr(cfg, spec.api_key_attr)
+    base_url = getattr(cfg, spec.base_url_attr)
+    default_model = getattr(cfg, spec.model_attr)
 
     if not api_key:
         raise RuntimeError(
-            f"No API key set for SELECTED_API='{cfg.SELECTED_API}'. "
-            "Set LLM_API_KEY_FAU (for FAU) or LLM_API_KEY (for ACADEMIC) in your .env file."
+            f"No API key set for LLM provider '{provider_id}' ({spec.label}). "
+            f"Set {spec.api_key_attr} in your .env file."
         )
     return ChatOpenAI(
         model=model or default_model,

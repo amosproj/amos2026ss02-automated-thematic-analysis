@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Must be set before any app module is imported so Settings() can validate.
@@ -40,8 +41,17 @@ async def db_engine():
     from app.services.codebook_generation_jobs import codebook_generation_job_runner
     await codebook_application_job_runner.stop()
     await codebook_generation_job_runner.stop()
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+    except OperationalError:
+        # Each test uses its own uniquely-named shared-cache in-memory DB that
+        # is discarded once all connections close on dispose() below, so this
+        # explicit drop is just tidy-up. A lingering background-job connection
+        # can briefly hold a shared-cache table lock and make drop_all raise
+        # "database table is locked"; that's harmless here, so don't fail
+        # teardown over it.
+        pass
     await engine.dispose()
 
 

@@ -149,18 +149,31 @@ class TestOverrides:
 
 
 # ---------------------------------------------------------------------------
-# Unknown / future providers fall back to ACADEMIC
+# Unknown / future providers fall back to the default provider (FAU)
 # ---------------------------------------------------------------------------
 
 class TestUnknownProvider:
-    def test_unknown_selected_api_falls_back_to_academic(self) -> None:
-        """Any unrecognised SELECTED_API value falls back to Academic Cloud credentials."""
+    def test_unknown_selected_api_falls_back_to_default(self) -> None:
+        """Any unrecognised SELECTED_API value falls back to the default provider (FAU)."""
         cfg = _settings(
             SELECTED_API="LITELLM",           # hypothetical future value
-            LLM_API_KEY="academic-fallback",
+            LLM_API_KEY_FAU="fau-fallback",
+            LLM_BASE_URL_FAU="https://hub.nhr.fau.de/api/llmgw/v1",
+            LLM_MODEL_FAU="gpt-oss-120b",
+        )
+        with patch("app.llm.client.ChatOpenAI") as mock_cls:
+            build_chat_model(settings=cfg)
+            assert mock_cls.call_args.kwargs["api_key"] == "fau-fallback"
+
+    def test_explicit_provider_overrides_selected_api(self) -> None:
+        """An explicit provider argument wins over the env SELECTED_API default."""
+        cfg = _settings(
+            SELECTED_API="FAU",
+            LLM_API_KEY_FAU="fau-key",
+            LLM_API_KEY="academic-key",
             LLM_BASE_URL="https://chat-ai.academiccloud.de/v1",
             LLM_MODEL="gemma-3-27b-it",
         )
         with patch("app.llm.client.ChatOpenAI") as mock_cls:
-            build_chat_model(settings=cfg)
-            assert mock_cls.call_args.kwargs["api_key"] == "academic-fallback"
+            build_chat_model(settings=cfg, provider="ACADEMIC")
+            assert mock_cls.call_args.kwargs["api_key"] == "academic-key"

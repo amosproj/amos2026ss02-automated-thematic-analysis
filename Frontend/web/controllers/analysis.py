@@ -27,6 +27,18 @@ def index() -> str:
     codebooks = []
     previous_runs = []
 
+    # Best-effort: show which LLM provider a run will use. Non-fatal if it fails.
+    active_provider_label = None
+    try:
+        provider_state = client.get_llm_provider()
+        active_provider_label = next(
+            (opt["label"] for opt in provider_state.get("available", [])
+             if opt["id"] == provider_state.get("active")),
+            provider_state.get("active"),
+        )
+    except BackendError:
+        active_provider_label = None
+
     if not active_corpus_id:
         disabled_reason = "No active corpus selected."
     else:
@@ -72,6 +84,7 @@ def index() -> str:
         previous_runs=previous_runs,
         active_corpus_id=active_corpus_id,
         corpus_options=corpus_options if active_corpus_id else [],
+        active_provider_label=active_provider_label,
     )
 
 @bp.post("/trigger")

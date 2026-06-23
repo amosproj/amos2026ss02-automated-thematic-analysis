@@ -114,7 +114,7 @@ The full list of variables is documented in [`Backend/.env.example`](../Backend/
 |---|---|---|---|
 | `LLM_API_KEY_FAU` | yes (if `SELECTED_API=FAU`) | — | NHR@FAU gateway key |
 | `LLM_API_KEY` | yes (if `SELECTED_API=ACADEMIC`) | — | Academic Cloud key |
-| `SELECTED_API` | no | `FAU` | `FAU` or `ACADEMIC` |
+| `SELECTED_API` | no | `FAU` | **Default** provider (`FAU` or `ACADEMIC`). Used only when no provider has been selected in the UI — the active provider can be switched live from the Home page (**LLM Provider** card) and is stored server-side in the `app_settings` table. Any AI task (codebook generation / analysis) reads the active provider at run start. |
 | `LLM_MODEL_FAU` | no | `gpt-oss-120b` | Override to use a different FAU-hosted model |
 | `LLM_MODEL` | no | `gemma-3-27b-it` | Override for Academic Cloud |
 | `LLM_REQUEST_TIMEOUT_S` | no | `120.0` | Raise if you hit timeouts on large corpora |

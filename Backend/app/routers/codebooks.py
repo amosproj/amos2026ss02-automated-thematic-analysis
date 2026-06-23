@@ -23,6 +23,7 @@ from app.schemas.codebook import (
     NodeInput,
 )
 from app.schemas.common import ResponseEnvelope
+from app.services.app_settings import get_active_provider
 from app.services.codebook import CodebookService
 from app.services.codebook_generation import CodebookGenerationService
 from app.services.codebook_generation_jobs import codebook_generation_job_runner
@@ -118,6 +119,10 @@ async def generate_codebook(
     payload: CodebookGenerateRequest,
     session: DbSession,
 ) -> JSONResponse:
+    # Use the globally selected LLM provider, matching the async generate-jobs
+    # path, so this endpoint never silently runs on a different provider than
+    # the one chosen in the UI.
+    active_provider = await get_active_provider(session)
     service = CodebookGenerationService(session)
     generated_codebook = await service.generate_codebook(
         codebook_name=payload.codebook_name,
@@ -125,6 +130,7 @@ async def generate_codebook(
         transcript_document_ids=payload.transcript_document_ids,
         research_query=payload.research_query,
         researcher_topics=payload.researcher_topics,
+        provider=active_provider,
     )
     return JSONResponse(
         status_code=201,

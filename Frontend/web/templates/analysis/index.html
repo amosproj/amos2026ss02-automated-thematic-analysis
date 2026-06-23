@@ -27,6 +27,14 @@
         {% endif %}
       </li>
       <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+        <span>LLM Provider</span>
+        {% if active_provider_label %}
+          <span class="badge bg-secondary rounded-pill" title="Change this on the Home page.">{{ active_provider_label }}</span>
+        {% else %}
+          <span class="badge bg-light text-secondary rounded-pill">Unavailable</span>
+        {% endif %}
+      </li>
+      <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
         <span>Transcripts</span>
         {% if transcripts_count > 0 %}
           <span class="badge bg-success rounded-pill">✓ {{ transcripts_count }} ready</span>
