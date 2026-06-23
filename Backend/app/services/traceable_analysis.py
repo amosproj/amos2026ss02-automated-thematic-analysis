@@ -3509,7 +3509,11 @@ class TraceableAnalysisService:
             await self._session.rollback()
             raise UnprocessableError("Traceable analysis produced an empty codebook.")
 
-        validation = await ThemeGraphService(self._session).validate_theme_dag(codebook_id=codebook.id)
+        await self._session.flush()
+        validation = await ThemeGraphService(self._session).validate_theme_dag(
+            codebook_id=codebook.id,
+            ensure_codebook_exists=False,
+        )
         if not validation.is_valid:
             await self._session.rollback()
             violations = "; ".join(validation.violations)

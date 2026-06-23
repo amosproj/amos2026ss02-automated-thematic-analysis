@@ -143,6 +143,9 @@ async def test_traceable_analysis_job_creates_codebook_and_application_run(clien
             notes="Offline test evaluator.",
         )
 
+    async def _fake_polish_final_codebook(self, *, synthesis, consolidated_codes, quote_evidence):
+        return synthesis, consolidated_codes, quote_evidence, []
+
     monkeypatch.setattr(
         "app.services.traceable_analysis.TraceableAnalysisService._extract_quote_codes",
         _fake_extract_quote_codes,
@@ -162,6 +165,10 @@ async def test_traceable_analysis_job_creates_codebook_and_application_run(clien
     monkeypatch.setattr(
         "app.services.traceable_analysis.TraceableAnalysisService._evaluate_codebook_quality",
         _fake_evaluate_codebook_quality,
+    )
+    monkeypatch.setattr(
+        "app.services.traceable_analysis.TraceableAnalysisService._polish_final_codebook",
+        _fake_polish_final_codebook,
     )
 
     create_response = await client.post(
