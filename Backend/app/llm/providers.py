@@ -70,7 +70,7 @@ def available_providers() -> tuple[ProviderSpec, ...]:
 
 def is_known_provider(value: str | None) -> bool:
     """True when ``value`` (case-insensitive) names a registered provider."""
-    return bool(value) and value.strip().upper() in _PROVIDERS_BY_ID
+    return value is not None and value.strip().upper() in _PROVIDERS_BY_ID
 
 
 def normalize(value: str | None) -> str | None:

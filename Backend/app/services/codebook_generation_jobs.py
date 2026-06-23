@@ -141,8 +141,11 @@ class CodebookGenerationJobRunner:
 
             transcript_document_ids = [UUID(raw) for raw in json.loads(job.transcript_document_ids_json)]
             # Bind the globally selected LLM provider at run start so the whole
-            # job uses one consistent provider even if the setting changes mid-run.
-            active_provider = await get_active_provider(session)
+            # job uses one consistent provider even if the setting changes
+            # mid-run. Read it via a short-lived session so this lookup doesn't
+            # leave a transaction open on the long-lived job session.
+            async with session_factory() as provider_session:
+                active_provider = await get_active_provider(provider_session)
             service = CodebookGenerationService(session)
 
             async def _on_progress(done: int, total: int) -> None:

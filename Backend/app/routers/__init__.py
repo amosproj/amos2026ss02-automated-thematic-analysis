@@ -7,8 +7,10 @@ from app.routers import (
     demographic,
     health,
     ingestion,
-    settings as settings_router,
     themes,
+)
+from app.routers import (
+    settings as settings_router,
 )
 
 
