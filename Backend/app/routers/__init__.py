@@ -1,7 +1,15 @@
 from fastapi import FastAPI
 
 from app.config import Settings
-from app.routers import codebook_applications, codebooks, demographic, health, ingestion, themes
+from app.routers import (
+    codebook_applications,
+    codebooks,
+    demographic,
+    health,
+    ingestion,
+    settings as settings_router,
+    themes,
+)
 
 
 def register_routers(app: FastAPI, settings: Settings) -> None:
@@ -12,3 +20,4 @@ def register_routers(app: FastAPI, settings: Settings) -> None:
     app.include_router(codebooks.router, prefix=prefix)
     app.include_router(codebook_applications.router, prefix=prefix)
     app.include_router(themes.router, prefix=prefix)
+    app.include_router(settings_router.router, prefix=prefix)

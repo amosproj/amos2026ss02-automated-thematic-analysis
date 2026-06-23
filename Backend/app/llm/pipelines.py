@@ -69,8 +69,9 @@ def apply_codebook_to_interview(
 def build_codebook_application_with_codes_chain(
     *,
     model: BaseChatModel | None = None,
+    provider: str | None = None,
 ) -> Runnable[dict[str, str], dict[str, Any]]:
-    chat_model = model or build_chat_model()
+    chat_model = model or build_chat_model(provider=provider)
     # The parser validates the model output shape but returns a dict, so callers
     # still instantiate CodebookApplicationResult explicitly after invocation.
     parser = JsonOutputParser(pydantic_object=CodebookApplicationResult)
@@ -149,8 +150,9 @@ async def apply_codebook_with_codes_to_transcripts(
 def build_codebook_generation_chain(
     *,
     model: BaseChatModel | None = None,
+    provider: str | None = None,
 ) -> Runnable[dict[str, str], dict[str, Any]]:
-    chat_model = model or build_chat_model()
+    chat_model = model or build_chat_model(provider=provider)
     # See build_codebook_application_with_codes_chain: this Runnable returns
     # parsed dictionaries that are converted to Pydantic models by callers.
     parser = JsonOutputParser(pydantic_object=PassageCodebookGeneration)

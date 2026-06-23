@@ -59,9 +59,37 @@ class FakeBackend:
         self.generation_jobs: dict[str, dict] = {}
         self.last_generation_job_request: dict | None = None
         self.last_create_codebook_request: dict | None = None
+        # LLM provider setting (Home page dropdown)
+        self.llm_provider_state: dict = {
+            "active": "FAU",
+            "default": "FAU",
+            "available": [
+                {"id": "FAU", "label": "FAU NHR",
+                 "description": "The university's NHR@FAU gateway (default).",
+                 "has_api_key": True},
+                {"id": "ACADEMIC", "label": "Academic Cloud",
+                 "description": "The GWDG Academic Cloud chat-ai endpoint.",
+                 "has_api_key": True},
+            ],
+        }
+        self.last_set_provider: str | None = None
         # Either a method-name string (generic BackendError) or a
         # (method-name, ExceptionClass) tuple (specific typed subclass).
         self.raise_on: str | tuple[str, type] | None = None
+
+    # ---- Settings -----------------------------------------------------------
+
+    def get_llm_provider(self) -> dict:
+        self._maybe_raise("get_llm_provider")
+        return self.llm_provider_state
+
+    def set_llm_provider(self, provider: str) -> dict:
+        self._maybe_raise("set_llm_provider")
+        self.last_set_provider = provider
+        new_state = dict(self.llm_provider_state)
+        new_state["active"] = provider.upper()
+        self.llm_provider_state = new_state
+        return new_state
 
     # ---- Corpora / documents ------------------------------------------------
 
@@ -312,6 +340,7 @@ def fake_backend(monkeypatch) -> FakeBackend:
     monkeypatch.setattr("web.controllers.codebooks._backend", lambda: fake)
     monkeypatch.setattr("web.controllers.demographic._backend", lambda: fake)
     monkeypatch.setattr("web.controllers.analysis._backend", lambda: fake)
+    monkeypatch.setattr("web.controllers.main._backend", lambda: fake)
     return fake
 
 

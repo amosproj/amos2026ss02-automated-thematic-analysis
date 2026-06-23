@@ -406,6 +406,20 @@ class BackendClient:
     def cancel_generation_job(self, job_id: str) -> dict:
         return self._post(f"/codebooks/generate-jobs/{job_id}/cancel")
 
+    # ---- Settings -----------------------------------------------------------
+
+    def get_llm_provider(self) -> dict:
+        """Return the active LLM provider plus available options and default.
+
+        Shape: {"active": str, "default": str, "available": [{id, label,
+        description, has_api_key}]}.
+        """
+        return self._get("/settings/llm-provider")
+
+    def set_llm_provider(self, provider: str) -> dict:
+        """Persist the active LLM provider; returns the updated provider state."""
+        return self._put("/settings/llm-provider", json={"provider": provider})
+
     # ---- Helpers ------------------------------------------------------------
 
     def _unwrap(self, response: httpx.Response, *, sub_key: str | None = None):

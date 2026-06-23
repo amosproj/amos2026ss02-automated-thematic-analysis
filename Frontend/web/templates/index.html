@@ -6,6 +6,64 @@
     <p class="text-secondary mb-0">Researcher workspace for corpus ingestion and thematic coding.</p>
   </div>
 
+  <div class="bg-white border rounded-2 p-3 mb-4">
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <h2 class="h6 mb-0">LLM Provider</h2>
+      <span class="text-secondary"
+            data-bs-toggle="tooltip"
+            title="Choose which third-party LLM service runs your AI tasks (codebook generation and analysis). This applies to every AI task across the app until you change it.">
+        &#9432;
+      </span>
+    </div>
+    <p class="text-secondary small mb-3">
+      Select the provider used whenever you run an AI task. &ldquo;FAU NHR&rdquo; is the default.
+    </p>
+
+    {% set active = provider_state.active %}
+    <form method="post"
+          action="{{ url_for('main.set_llm_provider') }}"
+          class="row g-2 align-items-end"
+          {% if not provider_available %}aria-disabled="true"{% endif %}>
+      <div class="col-12 col-sm-6 col-md-4">
+        <label for="llm-provider-select" class="form-label small mb-1">Provider</label>
+        <select id="llm-provider-select"
+                name="provider"
+                class="form-select form-select-sm"
+                required
+                {% if not provider_available %}disabled{% endif %}>
+          {% for opt in provider_state.available %}
+            <option value="{{ opt.id }}"
+                    {% if opt.id == active %}selected{% endif %}
+                    {% if not opt.has_api_key %}disabled{% endif %}
+                    data-bs-toggle="tooltip"
+                    title="{{ opt.description }}{% if not opt.has_api_key %} (No API key configured on the server.){% endif %}">
+              {{ opt.label }}{% if not opt.has_api_key %} — no key configured{% endif %}{% if opt.id == provider_state.default %} (default){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-sm-auto">
+        <button type="submit"
+                class="btn btn-sm btn-primary"
+                {% if not provider_available %}disabled{% endif %}>
+          Save provider
+        </button>
+      </div>
+    </form>
+
+    {% if not provider_available %}
+      <p class="text-warning small mb-0 mt-2">
+        The analysis service is unreachable, so the provider can't be changed right now.
+      </p>
+    {% endif %}
+
+    <ul class="list-unstyled small text-secondary mb-0 mt-2">
+      {% for opt in provider_state.available %}
+        <li><strong>{{ opt.label }}:</strong> {{ opt.description }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
   <div class="row g-3">
     <div class="col-12 col-md-3">
       <div class="bg-white border rounded-2 p-3 h-100">
@@ -36,4 +94,14 @@
       </div>
     </div>
   </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    // Enable Bootstrap tooltips so non-technical users get hover descriptions
+    // on the provider control. The bundle is loaded in base.html.
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
+      bootstrap.Tooltip.getOrCreateInstance(el);
+    });
+  </script>
 {% endblock %}

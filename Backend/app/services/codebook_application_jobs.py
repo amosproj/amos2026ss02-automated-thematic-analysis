@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database import get_session_factory
 from app.models import CodebookApplicationJob, CodebookApplicationRun
+from app.services.app_settings import get_active_provider
 from app.services.codebook_application import (
     CodebookApplicationCancelledError,
     CodebookApplicationService,
@@ -89,6 +90,9 @@ class CodebookApplicationJobRunner:
             await session.commit()
 
             transcript_document_ids = [UUID(raw) for raw in json.loads(job.transcript_document_ids_json)]
+            # Bind the globally selected LLM provider at run start so the whole
+            # job uses one consistent provider even if the setting changes mid-run.
+            active_provider = await get_active_provider(session)
             service = CodebookApplicationService(session)
 
             async def _on_progress(done: int, total: int) -> None:
@@ -128,6 +132,7 @@ class CodebookApplicationJobRunner:
                     corpus_id=job.corpus_id,
                     codebook_id=job.codebook_id,
                     transcript_document_ids=transcript_document_ids,
+                    provider=active_provider,
                     on_progress=_on_progress,
                     on_phase=_on_phase,
                     on_run_created=_on_run_created,
