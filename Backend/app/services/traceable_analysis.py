@@ -71,6 +71,7 @@ from app.schemas.traceable_llm import (
     TraceableApplicationResult,
 )
 from app.services.quote_matching import locate_quote_span
+from app.services.theme_graph import ThemeGraphService
 from app.services.traceable_code_consolidation import (
     CodeCandidate,
     ConsolidatedCode,
@@ -3505,7 +3506,15 @@ class TraceableAnalysisService:
             theme_id_by_code_label[self._label_key(label)] = theme.id if theme else None
 
         if not theme_by_label or not code_by_label:
+            await self._session.rollback()
             raise UnprocessableError("Traceable analysis produced an empty codebook.")
+
+        validation = await ThemeGraphService(self._session).validate_theme_dag(codebook_id=codebook.id)
+        if not validation.is_valid:
+            await self._session.rollback()
+            violations = "; ".join(validation.violations)
+            raise UnprocessableError(f"Traceable hierarchy is invalid: {violations}")
+
         await self._session.commit()
         await self._session.refresh(codebook)
         return _PersistedCodebookRefs(

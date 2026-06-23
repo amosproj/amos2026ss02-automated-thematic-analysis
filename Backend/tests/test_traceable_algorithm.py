@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+import uuid
+
+import pytest
+from sqlalchemy import select
+
 from app.config import Settings
+from app.exceptions import UnprocessableError
+from app.models import Codebook, Corpus
 from app.schemas.traceable_llm import (
     CodebookMissingConcept,
     CodebookOverbroadCode,
@@ -115,6 +122,47 @@ async def test_consolidation_falls_back_when_batch_relationship_classification_f
     assert len(consolidated) == 1
     assert set(consolidated[0].quote_ids) == {"q-a", "q-b"}
     assert any(action["action"] == "classify_code_pair" for action in action_log)
+
+
+async def test_traceable_persist_rejects_multi_parent_theme_dag(db_session) -> None:
+    corpus = Corpus(id=uuid.uuid4(), project_id=uuid.uuid4(), name="Corpus")
+    db_session.add(corpus)
+    await db_session.commit()
+
+    service = TraceableAnalysisService(db_session)
+    synthesis = CodebookSynthesisResult(
+        themes=[
+            SynthesizedThemePath(
+                path=[SynthesizedThemeNode(label="Theme A"), SynthesizedThemeNode(label="Shared Child")]
+            ),
+            SynthesizedThemePath(
+                path=[SynthesizedThemeNode(label="Theme B"), SynthesizedThemeNode(label="Shared Child")]
+            ),
+        ],
+        codes=[
+            SynthesizedCode(
+                code_label="Grounded code",
+                code_description="A grounded code.",
+                theme_path=["Theme A", "Shared Child"],
+            )
+        ],
+    )
+
+    with pytest.raises(UnprocessableError, match="Traceable hierarchy is invalid"):
+        await service._persist_codebook(
+            codebook_name="Invalid traceable codebook",
+            corpus_id=corpus.id,
+            research_query=None,
+            researcher_topics=None,
+            synthesis=synthesis,
+        )
+
+    persisted = (
+        await db_session.execute(
+            select(Codebook).where(Codebook.name == "Invalid traceable codebook")
+        )
+    ).scalar_one_or_none()
+    assert persisted is None
 
 
 def test_reviewer_actions_revise_and_move_code_paths() -> None:

@@ -10,8 +10,25 @@ from app.config import Settings, get_settings
 class RemoteEmbeddingClient:
     """OpenAI-compatible embeddings client for the FAU gateway."""
 
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
         self._settings = settings or get_settings()
+        self._client = client
+        self._owns_client = client is None
+
+    async def aclose(self) -> None:
+        if self._owns_client and self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
+    async def __aenter__(self) -> RemoteEmbeddingClient:
+        return self
+
+    async def __aexit__(self, *_exc_info: object) -> None:
+        await self.aclose()
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
@@ -20,21 +37,32 @@ class RemoteEmbeddingClient:
             raise RuntimeError("LLM_API_KEY_FAU is required for FAU embeddings.")
 
         base_url = self._settings.LLM_BASE_URL_FAU.rstrip("/")
-        payload = {
-            "model": self._settings.EMBEDDING_MODEL_FAU,
-            "input": texts,
-        }
         headers = {
             "Authorization": f"Bearer {self._settings.LLM_API_KEY_FAU}",
             "Content-Type": "application/json",
         }
-        async with httpx.AsyncClient(timeout=self._settings.LLM_REQUEST_TIMEOUT_S) as client:
+        client = self._client
+        if client is None:
+            client = httpx.AsyncClient(timeout=self._settings.LLM_REQUEST_TIMEOUT_S)
+            self._client = client
+
+        embeddings: list[list[float]] = []
+        for batch in self._chunked(texts, max(1, self._settings.EMBEDDING_BATCH_SIZE)):
+            payload = {
+                "model": self._settings.EMBEDDING_MODEL_FAU,
+                "input": batch,
+            }
             response = await client.post(f"{base_url}/embeddings", json=payload, headers=headers)
             response.raise_for_status()
             data = response.json()
 
-        rows = sorted(data.get("data", []), key=lambda item: item.get("index", 0))
-        return [list(map(float, row["embedding"])) for row in rows]
+            rows = sorted(data.get("data", []), key=lambda item: item.get("index", 0))
+            embeddings.extend(list(map(float, row["embedding"])) for row in rows)
+        return embeddings
+
+    @staticmethod
+    def _chunked(items: list[str], chunk_size: int) -> list[list[str]]:
+        return [items[index:index + chunk_size] for index in range(0, len(items), chunk_size)]
 
 
 def cosine_similarity(left: list[float], right: list[float]) -> float:

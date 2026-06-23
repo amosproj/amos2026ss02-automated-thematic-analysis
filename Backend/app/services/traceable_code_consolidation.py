@@ -79,9 +79,15 @@ async def consolidate_code_candidates(
 
     # Embeddings are used only as a prefilter. The LLM sees a much smaller set
     # of likely-related pairs instead of the full O(n^2) code-pair space.
-    embeddings = await (embedding_client or RemoteEmbeddingClient()).embed(
-        [_embedding_text(candidate) for candidate in grouped_candidates]
-    )
+    owns_embedding_client = embedding_client is None
+    selected_embedding_client = embedding_client or RemoteEmbeddingClient()
+    try:
+        embeddings = await selected_embedding_client.embed(
+            [_embedding_text(candidate) for candidate in grouped_candidates]
+        )
+    finally:
+        if owns_embedding_client:
+            await selected_embedding_client.aclose()
     pair_scores = _candidate_pair_scores(
         embeddings,
         threshold=cfg.CODE_SIMILARITY_THRESHOLD,
