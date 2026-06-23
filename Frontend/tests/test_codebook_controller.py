@@ -31,9 +31,9 @@ class FakeCodebookBackend:
         self.last_parsed_file = file.filename
         return self.parse_csv_results
 
-    def create_codebook(self, project_id: str, name: str, themes: list[dict]) -> dict:
+    def create_codebook(self, *, corpus_id: str, name: str, themes: list[dict]) -> dict:
         self._maybe_raise("create_codebook")
-        self.last_created_payload = {"project_id": project_id, "name": name, "themes": themes}
+        self.last_created_payload = {"corpus_id": corpus_id, "name": name, "themes": themes}
         return self.create_codebook_result
 
     def get_codebook(self, codebook_id: str) -> dict:
@@ -147,9 +147,10 @@ def test_unified_upload_page_shows_codebook_card(client, fake_backend):
 def test_manual_form_renders_blank_row(client, fake_codebook_backend):
     resp = client.get("/codebooks/test-corpus-id/manual")
     assert resp.status_code == 200
-    assert b"Preview &amp; Confirm Themes" in resp.data
-    assert b'name="theme_names[]"' in resp.data
-    assert b'name="theme_descriptions[]"' in resp.data
+    assert b"Create Codebook" in resp.data
+    assert b'name="row_names[]"' in resp.data
+    assert b'name="row_descriptions[]"' in resp.data
+    assert b'action="/codebooks/test-corpus-id/confirm"' in resp.data
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +189,7 @@ def test_upload_submit_csv_success(client, fake_codebook_backend):
     )
 
     assert resp.status_code == 200
-    assert b"Preview &amp; Confirm Themes" in resp.data
+    assert b"Create Codebook" in resp.data
     assert b"Theme A" in resp.data
     assert b"Theme B" in resp.data
     assert fake_codebook_backend.last_parsed_file == "my_codebook.csv"
@@ -261,10 +262,10 @@ def test_confirm_submit_success(client, fake_codebook_backend):
         "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "Verified Codebook",
-            "node_types[]": ["THEME", "THEME"],
-            "theme_names[]": ["Theme 1", "Theme 2"],
-            "theme_descriptions[]": ["Desc 1", "Desc 2"],
-            "parent_names[]": ["", ""],
+            "row_names[]": ["Theme 1", "Theme 2"],
+            "row_descriptions[]": ["Desc 1", "Desc 2"],
+            "row_parents[]": ["", ""],
+            "row_is_codes[]": ["0", "0"],
         },
     )
 
@@ -274,6 +275,8 @@ def test_confirm_submit_success(client, fake_codebook_backend):
     assert payload["name"] == "Verified Codebook"
     assert len(payload["themes"]) == 2
     assert payload["themes"][0]["name"] == "Theme 1"
+    # Both root rows derive to THEME.
+    assert payload["themes"][0]["node_type"] == "THEME"
     # No source draft -> nothing deleted.
     assert fake_codebook_backend.deleted_ids == []
 
@@ -287,10 +290,10 @@ def test_confirm_submit_deletes_draft_after_edit(client, fake_codebook_backend):
         "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "Edited Codebook",
-            "node_types[]": ["THEME"],
-            "theme_names[]": ["Theme 1"],
-            "theme_descriptions[]": ["Desc 1"],
-            "parent_names[]": [""],
+            "row_names[]": ["Theme 1"],
+            "row_descriptions[]": ["Desc 1"],
+            "row_parents[]": [""],
+            "row_is_codes[]": ["0"],
             "source_codebook_id": "draft-id",
         },
     )
@@ -310,10 +313,10 @@ def test_confirm_submit_edit_survives_failed_draft_cleanup(client, fake_codebook
         "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "Edited",
-            "node_types[]": ["THEME"],
-            "theme_names[]": ["Theme 1"],
-            "theme_descriptions[]": ["Desc 1"],
-            "parent_names[]": [""],
+            "row_names[]": ["Theme 1"],
+            "row_descriptions[]": ["Desc 1"],
+            "row_parents[]": [""],
+            "row_is_codes[]": ["0"],
             "source_codebook_id": "draft-id",
         },
     )
@@ -327,29 +330,29 @@ def test_confirm_submit_validation_missing_name(client):
         "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "",
-            "node_types[]": ["THEME"],
-            "theme_names[]": ["T1"],
-            "theme_descriptions[]": ["D1"],
-            "parent_names[]": [""],
+            "row_names[]": ["T1"],
+            "row_descriptions[]": ["D1"],
+            "row_parents[]": [""],
+            "row_is_codes[]": ["0"],
         },
     )
     assert resp.status_code == 200
-    assert b"Codebook Name must not be blank" in resp.data
+    assert b"Codebook name must not be blank" in resp.data
 
 
-def test_confirm_submit_validation_blank_theme_names(client):
+def test_confirm_submit_validation_blank_row_names(client):
     resp = client.post(
         "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "Tst",
-            "node_types[]": ["THEME", "THEME"],
-            "theme_names[]": ["", "Valid"],
-            "theme_descriptions[]": ["D1", "D2"],
-            "parent_names[]": ["", ""],
+            "row_names[]": ["", "Valid"],
+            "row_descriptions[]": ["D1", "D2"],
+            "row_parents[]": ["", ""],
+            "row_is_codes[]": ["0", "0"],
         },
     )
     assert resp.status_code == 200
-    assert b"All themes must have a name" in resp.data
+    assert b"All rows must have a name" in resp.data
 
 
 def test_confirm_submit_surfaces_backend_error(client, fake_codebook_backend):
@@ -358,52 +361,57 @@ def test_confirm_submit_surfaces_backend_error(client, fake_codebook_backend):
         "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "Tst",
-            "node_types[]": ["THEME"],
-            "theme_names[]": ["Theme A"],
-            "theme_descriptions[]": ["Desc A"],
-            "parent_names[]": [""],
+            "row_names[]": ["Theme A"],
+            "row_descriptions[]": ["Desc A"],
+            "row_parents[]": [""],
+            "row_is_codes[]": ["0"],
         },
     )
     assert resp.status_code == 200
     assert b"simulated create_codebook failure" in resp.data
 
-def test_confirm_submit_validation_missing_parent(client):
-    resp = client.post(
-        "/codebooks/test-corpus-id/confirm",
-        data={
-            "codebook_name": "Tst",
-            "node_types[]": ["THEME", "SUBTHEME"],
-            "theme_names[]": ["Theme A", "Sub A"],
-            "theme_descriptions[]": ["Desc A", "Desc Sub A"],
-            "parent_names[]": ["", ""],
-        },
-    )
-    assert resp.status_code == 200
-    assert b"must have a Parent Name" in resp.data
 
-def test_confirm_submit_validation_theme_has_parent(client):
+def test_confirm_submit_validation_parentless_code(client):
+    # The type is derived server-side; a code with no parent is invalid.
     resp = client.post(
         "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "Tst",
-            "node_types[]": ["THEME", "THEME"],
-            "theme_names[]": ["Theme A", "Theme B"],
-            "theme_descriptions[]": ["Desc A", "Desc B"],
-            "parent_names[]": ["", "Theme A"],
+            "row_names[]": ["Lonely code"],
+            "row_descriptions[]": ["Desc"],
+            "row_parents[]": [""],
+            "row_is_codes[]": ["1"],
         },
     )
     assert resp.status_code == 200
-    assert b"must not have a Parent Name" in resp.data
+    assert b"codes must sit under a theme or subtheme" in resp.data
+
+
+def test_confirm_submit_validation_code_with_children(client):
+    # Codes must be leaves: a row nested under a code is rejected.
+    resp = client.post(
+        "/codebooks/test-corpus-id/confirm",
+        data={
+            "codebook_name": "Tst",
+            "row_names[]": ["Root", "Parent code", "Child"],
+            "row_descriptions[]": ["a", "b", "c"],
+            "row_parents[]": ["", "Root", "Parent code"],
+            "row_is_codes[]": ["0", "1", "0"],
+        },
+    )
+    assert resp.status_code == 200
+    assert b"codes must be leaf nodes" in resp.data
+
 
 def test_confirm_submit_validation_parent_does_not_exist(client):
     resp = client.post(
         "/codebooks/test-corpus-id/confirm",
         data={
             "codebook_name": "Tst",
-            "node_types[]": ["THEME", "SUBTHEME"],
-            "theme_names[]": ["Theme A", "Sub A"],
-            "theme_descriptions[]": ["Desc A", "Desc Sub A"],
-            "parent_names[]": ["", "Unknown Theme"],
+            "row_names[]": ["Theme A", "Sub A"],
+            "row_descriptions[]": ["Desc A", "Desc Sub A"],
+            "row_parents[]": ["", "Unknown Theme"],
+            "row_is_codes[]": ["0", "0"],
         },
     )
     assert resp.status_code == 200

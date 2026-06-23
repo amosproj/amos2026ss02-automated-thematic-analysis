@@ -473,50 +473,152 @@ def test_progress_cancel_returns_updated_job(client, fake_backend):
 # Mode-2 review — renders preview editor pre-filled from codebook tree -------
 
 
-def test_review_renders_preview_editor_with_themes_subthemes_and_codes(client, fake_backend):
+def _sample_review_codebook(fake_backend):
+    return {
+        "id": "cb-42", "name": "My Generated Codebook",
+        "corpus_id": fake_backend.corpus_id, "version": 1,
+        "created_by": "alice", "description": None,
+        "themes": [
+            {"id": "t-1", "node_type": "THEME", "name": "Work-Life Balance",
+             "description": "Balance between work and personal life",
+             "children": [
+                 {"id": "t-2", "node_type": "SUBTHEME",
+                  "name": "Boundary issues",
+                  "description": "Difficulty separating",
+                  "children": [
+                      {"id": "c-1", "node_type": "CODE",
+                       "name": "Late evenings",
+                       "description": "Works past 8pm"},
+                  ]},
+             ]},
+        ],
+        "codes": [],
+    }
+
+
+def test_review_renders_review_editor_with_indented_rows(client, fake_backend):
     # CodebookDetailSchema nests subthemes and codes inside theme children;
-    # the controller walks this tree depth-first and produces preview.html rows
-    # with node_type, parent_name, name, description.
-    fake_backend.codebooks = [
-        {"id": "cb-42", "name": "My Generated Codebook",
-         "corpus_id": fake_backend.corpus_id, "version": 1,
-         "created_by": "alice", "description": None,
-         "themes": [
-             {"id": "t-1", "node_type": "THEME", "name": "Work-Life Balance",
-              "description": "Balance between work and personal life",
-              "children": [
-                  {"id": "t-2", "node_type": "SUBTHEME",
-                   "name": "Boundary issues",
-                   "description": "Difficulty separating",
-                   "children": [
-                       {"id": "c-1", "node_type": "CODE",
-                        "name": "Late evenings",
-                        "description": "Works past 8pm"},
-                   ]},
-              ]},
-         ],
-         "codes": []},
-    ]
+    # the controller walks this tree depth-first and produces review.html rows
+    # with derived indent and is_code flags (the THEME/SUBTHEME/CODE badge is
+    # painted client-side from those, so it is not in the server HTML).
+    fake_backend.codebooks = [_sample_review_codebook(fake_backend)]
     resp = client.get("/codebooks/cb-42/review")
     assert resp.status_code == 200
     assert b"My Generated Codebook" in resp.data
-    # All three node names appear in input fields.
+    # All three node names appear in the relational row inputs.
     assert b'value="Work-Life Balance"' in resp.data
     assert b'value="Boundary issues"' in resp.data
     assert b'value="Late evenings"' in resp.data
-    # Node type dropdowns are rendered for each row.
-    assert b'name="node_types[]"' in resp.data
-    # Parent name fields are pre-filled with the hierarchy.
-    assert b'name="parent_names[]"' in resp.data
-    assert b"SUBTHEME" in resp.data
-    assert b"CODE" in resp.data
+    assert b'name="row_names[]"' in resp.data
+    assert b'name="row_descriptions[]"' in resp.data
+    # Hierarchy is encoded as positional indent; the code is flagged.
+    assert b'data-indent="0"' in resp.data
+    assert b'data-indent="1"' in resp.data
+    assert b'data-indent="2"' in resp.data
+    assert b'data-is-code="1"' in resp.data
+    # Form posts back to the review-submit route.
+    assert b'action="/codebooks/cb-42/review"' in resp.data
 
 
-def test_review_not_found_for_missing_codebook(client, fake_backend):
+def test_review_not_found_redirects_to_list(client, fake_backend):
     # No entry in fake_backend.codebooks; get_codebook raises NotFound.
     resp = client.get("/codebooks/missing/review")
+    assert resp.status_code == 302
+    assert "/codebooks/" in resp.headers["Location"]
+
+
+def test_review_submit_creates_new_version_and_redirects(client, fake_backend):
+    fake_backend.codebooks = [_sample_review_codebook(fake_backend)]
+    resp = client.post("/codebooks/cb-42/review", data={
+        "corpus_id": fake_backend.corpus_id,
+        "codebook_name": "Edited Codebook",
+        "row_names[]": ["Work-Life Balance", "Boundary issues", "Late evenings"],
+        "row_descriptions[]": ["Balance", "Difficulty separating", "Works past 8pm"],
+        "row_parents[]": ["", "Work-Life Balance", "Boundary issues"],
+        "row_is_codes[]": ["0", "0", "1"],
+    })
+    assert resp.status_code == 302
+    # A new codebook was created with the relational hierarchy reconstructed.
+    req = fake_backend.last_create_codebook_request
+    assert req["name"] == "Edited Codebook"
+    types = {t["name"]: t["node_type"] for t in req["themes"]}
+    parents = {t["name"]: t["parent_name"] for t in req["themes"]}
+    assert types == {
+        "Work-Life Balance": "THEME",
+        "Boundary issues": "SUBTHEME",
+        "Late evenings": "CODE",
+    }
+    assert parents == {
+        "Work-Life Balance": None,
+        "Boundary issues": "Work-Life Balance",
+        "Late evenings": "Boundary issues",
+    }
+
+
+def test_review_submit_rejects_unknown_parent(client, fake_backend):
+    fake_backend.codebooks = [_sample_review_codebook(fake_backend)]
+    resp = client.post("/codebooks/cb-42/review", data={
+        "corpus_id": fake_backend.corpus_id,
+        "codebook_name": "Edited Codebook",
+        "row_names[]": ["Solo"],
+        "row_descriptions[]": ["desc"],
+        "row_parents[]": ["Ghost"],
+        "row_is_codes[]": ["0"],
+    })
     assert resp.status_code == 200
-    assert b"Codebook not found" in resp.data
+    assert b"does not exist in this codebook" in resp.data
+    # No codebook was created on a validation failure.
+    assert fake_backend.last_create_codebook_request is None
+
+
+def test_review_submit_rejects_parentless_code(client, fake_backend):
+    # A code with no parent is invalid; the type is derived server-side, so this
+    # also guards the THEME/SUBTHEME/CODE classification.
+    fake_backend.codebooks = [_sample_review_codebook(fake_backend)]
+    resp = client.post("/codebooks/cb-42/review", data={
+        "corpus_id": fake_backend.corpus_id,
+        "codebook_name": "Edited Codebook",
+        "row_names[]": ["Lonely code"],
+        "row_descriptions[]": ["desc"],
+        "row_parents[]": [""],
+        "row_is_codes[]": ["1"],
+    })
+    assert resp.status_code == 200
+    assert b"codes must sit under a theme or subtheme" in resp.data
+    assert fake_backend.last_create_codebook_request is None
+
+
+def test_review_submit_rejects_code_with_children(client, fake_backend):
+    # A code must be a leaf; nesting a row under a code is invalid.
+    fake_backend.codebooks = [_sample_review_codebook(fake_backend)]
+    resp = client.post("/codebooks/cb-42/review", data={
+        "corpus_id": fake_backend.corpus_id,
+        "codebook_name": "Edited Codebook",
+        "row_names[]": ["Root", "Parent code", "Child"],
+        "row_descriptions[]": ["a", "b", "c"],
+        "row_parents[]": ["", "Root", "Parent code"],
+        "row_is_codes[]": ["0", "1", "0"],
+    })
+    assert resp.status_code == 200
+    assert b"codes must be leaf nodes" in resp.data
+    assert fake_backend.last_create_codebook_request is None
+
+
+def test_review_submit_derives_correct_node_types(client, fake_backend):
+    # The UI no longer shows THEME/SUBTHEME/CODE, but the controller must still
+    # derive them: root -> THEME, parented non-code -> SUBTHEME, is_code -> CODE.
+    fake_backend.codebooks = [_sample_review_codebook(fake_backend)]
+    resp = client.post("/codebooks/cb-42/review", data={
+        "corpus_id": fake_backend.corpus_id,
+        "codebook_name": "Edited Codebook",
+        "row_names[]": ["Root", "Mid", "Leaf"],
+        "row_descriptions[]": ["a", "b", "c"],
+        "row_parents[]": ["", "Root", "Mid"],
+        "row_is_codes[]": ["0", "0", "1"],
+    })
+    assert resp.status_code == 302
+    types = {t["name"]: t["node_type"] for t in fake_backend.last_create_codebook_request["themes"]}
+    assert types == {"Root": "THEME", "Mid": "SUBTHEME", "Leaf": "CODE"}
 
 
 # Demo flow — exercises the wizard without an LLM call ---------------------
