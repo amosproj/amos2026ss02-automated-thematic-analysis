@@ -20,6 +20,7 @@ from app.models.themes import (
     Theme,
     ThemeHierarchyRelationship,
 )
+from app.models.traceable_analysis_job import TraceableAnalysisJob
 
 __all__ = [
     "Base",
@@ -44,4 +45,5 @@ __all__ = [
     "CodeAssignment",
     "DemographicFiles",
     "DemographicRow",
+    "TraceableAnalysisJob",
 ]

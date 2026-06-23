@@ -8,6 +8,7 @@ from app.routers import (
     health,
     ingestion,
     themes,
+    traceable_analysis,
 )
 from app.routers import (
     settings as settings_router,
@@ -21,5 +22,6 @@ def register_routers(app: FastAPI, settings: Settings) -> None:
     app.include_router(demographic.router, prefix=prefix)
     app.include_router(codebooks.router, prefix=prefix)
     app.include_router(codebook_applications.router, prefix=prefix)
+    app.include_router(traceable_analysis.router, prefix=prefix)
     app.include_router(themes.router, prefix=prefix)
     app.include_router(settings_router.router, prefix=prefix)
