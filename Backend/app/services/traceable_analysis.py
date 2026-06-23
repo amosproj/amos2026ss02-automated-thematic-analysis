@@ -195,6 +195,7 @@ class TraceableAnalysisService:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+        self._provider: str | None = None
         self._code_relationship_chain: Any | None = None
         self._batch_code_relationship_chain: Any | None = None
 
@@ -209,6 +210,7 @@ class TraceableAnalysisService:
         research_query: str | None = None,
         researcher_topics: str | None = None,
         max_refinement_rounds: int = 1,
+        provider: str | None = None,
         on_unit_progress: Callable[[int, int], Awaitable[None]] | None = None,
         on_phase_progress: Callable[[str, int, int], Awaitable[None]] | None = None,
         on_phase: Callable[[str], Awaitable[None]] | None = None,
@@ -216,6 +218,7 @@ class TraceableAnalysisService:
         on_application_run_created: Callable[[UUID], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> TraceableAnalysisResult:
+        self._provider = provider
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
         logger.info(
             "Traceable analysis started: corpus_id={}, selected_documents={}, codebook_name='{}', "
@@ -548,7 +551,7 @@ class TraceableAnalysisService:
         should_cancel: Callable[[], Awaitable[bool]] | None,
     ) -> list[_QuoteEvidence]:
         parser = JsonOutputParser(pydantic_object=QuoteCodeExtractionResult)
-        chain = build_quote_code_extraction_prompt() | build_chat_model() | parser
+        chain = build_quote_code_extraction_prompt() | build_chat_model(provider=self._provider) | parser
         evidence: list[_QuoteEvidence] = []
         if on_unit_progress is not None:
             await on_unit_progress(0, len(documents))
@@ -623,7 +626,9 @@ class TraceableAnalysisService:
     ) -> CodeRelationshipResult:
         if self._code_relationship_chain is None:
             parser = JsonOutputParser(pydantic_object=CodeRelationshipResult)
-            self._code_relationship_chain = build_code_relationship_prompt() | build_chat_model(temperature=0.0) | parser
+            self._code_relationship_chain = (
+                build_code_relationship_prompt() | build_chat_model(provider=self._provider, temperature=0.0) | parser
+            )
         payload = {
             "label_a": left.label,
             "description_a": left.description or "",
@@ -669,7 +674,9 @@ class TraceableAnalysisService:
         if self._batch_code_relationship_chain is None:
             parser = JsonOutputParser(pydantic_object=BatchCodeRelationshipResults)
             self._batch_code_relationship_chain = (
-                build_batch_code_relationship_prompt() | build_chat_model(temperature=0.0) | parser
+                build_batch_code_relationship_prompt()
+                | build_chat_model(provider=self._provider, temperature=0.0)
+                | parser
             )
         pairs_payload = [
             {
@@ -739,7 +746,11 @@ class TraceableAnalysisService:
             )
 
         subtheme_parser = JsonOutputParser(pydantic_object=SubthemeSynthesisResult)
-        subtheme_chain = build_subtheme_synthesis_prompt() | build_chat_model(temperature=0.0) | subtheme_parser
+        subtheme_chain = (
+            build_subtheme_synthesis_prompt()
+            | build_chat_model(provider=self._provider, temperature=0.0)
+            | subtheme_parser
+        )
         raw_subthemes = await subtheme_chain.ainvoke(
             {
                 "codes": json.dumps(payload, ensure_ascii=True, indent=2),
@@ -756,7 +767,11 @@ class TraceableAnalysisService:
         )
 
         theme_parser = JsonOutputParser(pydantic_object=ThemeSynthesisResult)
-        theme_chain = build_theme_synthesis_prompt() | build_chat_model(temperature=0.0) | theme_parser
+        theme_chain = (
+            build_theme_synthesis_prompt()
+            | build_chat_model(provider=self._provider, temperature=0.0)
+            | theme_parser
+        )
         raw_themes = await theme_chain.ainvoke(
             {
                 "subthemes": json.dumps(subthemes.model_dump(mode="json"), ensure_ascii=True, indent=2),
@@ -1228,7 +1243,11 @@ class TraceableAnalysisService:
 
         for attempt in range(1, _POLISH_MAX_ATTEMPTS + 1):
             try:
-                chain = build_codebook_polish_prompt() | build_chat_model(temperature=0.0) | parser
+                chain = (
+                    build_codebook_polish_prompt()
+                    | build_chat_model(provider=self._provider, temperature=0.0)
+                    | parser
+                )
                 raw_result = await chain.ainvoke(chain_payload)
                 polish = (
                     raw_result
@@ -1552,7 +1571,11 @@ class TraceableAnalysisService:
             for document in evaluation_documents
         ]
         parser = JsonOutputParser(pydantic_object=CodebookQualityEvaluationResult)
-        chain = build_codebook_quality_evaluation_prompt() | build_chat_model(temperature=0.0) | parser
+        chain = (
+            build_codebook_quality_evaluation_prompt()
+            | build_chat_model(provider=self._provider, temperature=0.0)
+            | parser
+        )
         chain_payload = {
             "codebook": json.dumps(synthesis.model_dump(mode="json"), ensure_ascii=True, indent=2),
             "applications": json.dumps(payload, ensure_ascii=True, indent=2),
@@ -2757,7 +2780,11 @@ class TraceableAnalysisService:
             for quote in quote_evidence
         ]
         parser = JsonOutputParser(pydantic_object=MissingCodeGenerationResult)
-        chain = build_missing_code_generation_prompt() | build_chat_model(temperature=0.0) | parser
+        chain = (
+            build_missing_code_generation_prompt()
+            | build_chat_model(provider=self._provider, temperature=0.0)
+            | parser
+        )
         raw_result = await chain.ainvoke(
             {
                 "codebook": json.dumps(synthesis.model_dump(mode="json"), ensure_ascii=True, indent=2),
@@ -2886,7 +2913,11 @@ class TraceableAnalysisService:
             "quote_count": len(quote_evidence),
         }
         parser = JsonOutputParser(pydantic_object=CodebookReviewResult)
-        chain = build_codebook_review_prompt() | build_chat_model(temperature=0.0) | parser
+        chain = (
+            build_codebook_review_prompt()
+            | build_chat_model(provider=self._provider, temperature=0.0)
+            | parser
+        )
         chain_payload = {"codebook": json.dumps(payload, ensure_ascii=True, indent=2)}
         for attempt in range(1, _REVIEW_MAX_ATTEMPTS + 1):
             try:
@@ -3607,7 +3638,11 @@ class TraceableAnalysisService:
         # codebook labels only.
         codebook_context = self._build_application_codebook_context(synthesis)
         parser = JsonOutputParser(pydantic_object=TraceableApplicationResult)
-        chain = build_traceable_application_prompt() | build_chat_model(temperature=0.0) | parser
+        chain = (
+            build_traceable_application_prompt()
+            | build_chat_model(provider=self._provider, temperature=0.0)
+            | parser
+        )
         allowed_codes = {self._label_key(code.code_label): code.code_label for code in synthesis.codes}
         allowed_themes = {
             self._label_key(node.label): node.label

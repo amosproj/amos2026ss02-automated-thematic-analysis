@@ -94,6 +94,7 @@ class CodebookApplicationService:
         corpus_id: UUID,
         codebook_id: UUID,
         transcript_document_ids: list[UUID] | None,
+        provider: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         on_phase: Callable[[str], Awaitable[None]] | None = None,
         on_run_created: Callable[[UUID], Awaitable[None]] | None = None,
@@ -147,7 +148,7 @@ class CodebookApplicationService:
         if on_phase is not None:
             await on_phase("coding_documents")
 
-        chain = build_codebook_application_with_codes_chain()
+        chain = build_codebook_application_with_codes_chain(provider=provider)
         documents_done = 0
         documents_coded = 0
         failed_documents: list[dict[str, str]] = []

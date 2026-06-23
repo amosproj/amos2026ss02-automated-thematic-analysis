@@ -81,6 +81,7 @@ class CodebookGenerationService:
         transcript_document_ids: list[UUID] | None,
         research_query: str | None = None,
         researcher_topics: str | None = None,
+        provider: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         on_phase: Callable[[str], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
@@ -117,6 +118,7 @@ class CodebookGenerationService:
             passages,
             research_query=research_query,
             researcher_topics=researcher_topics,
+            provider=provider,
             on_progress=on_progress,
             should_cancel=should_cancel,
         )
@@ -258,13 +260,14 @@ class CodebookGenerationService:
         *,
         research_query: str | None = None,
         researcher_topics: str | None = None,
+        provider: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> tuple[list[PassageCodebookGeneration], list[GeneratedCodebookResponse.PassageFailure]]:
         started_at = time.monotonic()
 
         total = len(passages)
-        chain = build_codebook_generation_chain()
+        chain = build_codebook_generation_chain(provider=provider)
         completed = 0
         generation_by_index: dict[int, PassageCodebookGeneration] = {}
         parse_failures_by_index: dict[int, Exception] = {}

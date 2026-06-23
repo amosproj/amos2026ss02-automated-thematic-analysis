@@ -564,6 +564,19 @@ def _resolve_mode(value: str) -> str:
     return value if value in ("auto", "semi") else "auto"
 
 
+def _active_provider_label() -> str | None:
+    """Best-effort label of the active LLM provider; None if backend is down."""
+    try:
+        state = _backend().get_llm_provider()
+        return next(
+            (opt["label"] for opt in state.get("available", [])
+             if opt["id"] == state.get("active")),
+            state.get("active"),
+        )
+    except BackendError:
+        return None
+
+
 @bp.get("/new/<corpus_id>/auto")
 def new_codebook_auto_form(corpus_id: str) -> str:
     mode = _resolve_mode(request.args.get("mode", ""))
@@ -574,6 +587,7 @@ def new_codebook_auto_form(corpus_id: str) -> str:
         codebook_name=request.args.get("name", ""),
         research_query=request.args.get("rq", ""),
         researcher_topics=request.args.get("rt", ""),
+        active_provider_label=_active_provider_label(),
     )
 
 
@@ -595,6 +609,7 @@ def new_codebook_auto_submit(corpus_id: str):
             researcher_topics=researcher_topics,
             rq_error=rq_error,
             rt_error=rt_error,
+            active_provider_label=_active_provider_label(),
         )
 
     if not name:

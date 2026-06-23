@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database import get_session_factory
 from app.models import TraceableAnalysisJob
+from app.services.app_settings import get_active_provider
 from app.services.traceable_analysis import (
     TraceableAnalysisCancelledError,
     TraceableAnalysisService,
@@ -93,6 +94,8 @@ class TraceableAnalysisJobRunner:
             )
 
             transcript_document_ids = [UUID(raw) for raw in json.loads(job.transcript_document_ids_json)]
+            async with session_factory() as provider_session:
+                active_provider = await get_active_provider(provider_session)
             service = TraceableAnalysisService(session)
 
             async def _on_unit_progress(done: int, total: int) -> None:
@@ -158,6 +161,7 @@ class TraceableAnalysisJobRunner:
                     research_query=job.research_query,
                     researcher_topics=job.researcher_topics,
                     max_refinement_rounds=job.max_refinement_rounds,
+                    provider=active_provider,
                     on_unit_progress=_on_unit_progress,
                     on_phase_progress=_on_phase_progress,
                     on_phase=_on_phase,

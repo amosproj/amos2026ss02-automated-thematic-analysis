@@ -7,6 +7,10 @@
     <h1 class="h3 mb-1">Name Your Codebook</h1>
     <p class="text-secondary mb-0">
       Mode: <span class="badge text-bg-secondary">{{ mode_label }}</span>
+      {% if active_provider_label %}
+        &middot; LLM Provider:
+        <span class="badge text-bg-light border" title="Change this on the Home page.">{{ active_provider_label }}</span>
+      {% endif %}
     </p>
   </div>
 
