@@ -59,17 +59,17 @@
             tree.push({
                 theme: {
                     id: c.id,
-                    label: `[CODE] ${c.name}`,
+                    label: c.name,
                     description: c.description,
                     type: "CODE"
                 },
                 children: []
             });
         } else {
-            // It is nested in the tree. We modify the label to include [CODE]
+            // It is nested in the tree. Tag it as a code without altering the label.
             const node = flatTree.find(n => n.theme.id === c.id);
             if (node) {
-                node.theme.label = `[CODE] ${c.name}`;
+                node.theme.label = c.name;
                 node.theme.type = "CODE";
             }
         }
