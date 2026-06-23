@@ -1,5 +1,3 @@
-import pytest
-from flask import session
 
 def test_analysis_index_no_corpus(client, fake_backend):
     # Setup state to simulate backend failure which results in no active corpus

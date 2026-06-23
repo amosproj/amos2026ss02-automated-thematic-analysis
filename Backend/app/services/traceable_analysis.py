@@ -8,6 +8,7 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import UUID
 
 from langchain_core.output_parsers import JsonOutputParser
@@ -62,6 +63,8 @@ from app.schemas.traceable_llm import (
     QuoteCodeExtractionResult,
     SubthemeSynthesisResult,
     SynthesizedCode,
+    SynthesizedSubtheme,
+    SynthesizedTheme,
     SynthesizedThemeNode,
     SynthesizedThemePath,
     ThemeSynthesisResult,
@@ -153,6 +156,34 @@ def _utc_now_naive() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+def _metric_float(metrics: dict[str, object], key: str, default: float = 0.0) -> float:
+    value = metrics.get(key, default)
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return default
+    return default
+
+
+def _metric_int(metrics: dict[str, object], key: str, default: int = 0) -> int:
+    value = metrics.get(key, default)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float | str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
+
+
+def _object_list(value: object) -> list[object]:
+    return value if isinstance(value, list) else []
+
+
 class TraceableAnalysisService:
     """Experimental quote-grounded codebook generation plus application.
 
@@ -164,8 +195,8 @@ class TraceableAnalysisService:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
-        self._code_relationship_chain = None
-        self._batch_code_relationship_chain = None
+        self._code_relationship_chain: Any | None = None
+        self._batch_code_relationship_chain: Any | None = None
 
     async def run_analysis(
         self,
@@ -319,7 +350,7 @@ class TraceableAnalysisService:
             "Traceable iteration selection complete: selected_iteration={}, composite_score={:.3f}, "
             "theme_paths={}, codes={}",
             selected_iteration.iteration,
-            float(selected_iteration.metrics.get("composite_score", 0.0)),
+            _metric_float(selected_iteration.metrics, "composite_score"),
             len(synthesis.themes),
             len(synthesis.codes),
         )
@@ -625,6 +656,11 @@ class TraceableAnalysisService:
                     exc,
                 )
                 await asyncio.sleep(0.5 * attempt)
+        return CodeRelationshipResult(
+            relationship="orthogonal",
+            confidence=0.0,
+            reason="Classification retry loop exhausted without a result.",
+        )
 
     async def _classify_code_pairs(
         self,
@@ -816,11 +852,11 @@ class TraceableAnalysisService:
         ]
         if missing:
             cleaned_subthemes.append(
-                {
-                    "subtheme_label": "Grounded Evidence Patterns",
-                    "subtheme_description": "Consolidated codes grounded in transcript evidence.",
-                    "code_labels": [code.label for code in missing],
-                }
+                SynthesizedSubtheme(
+                    subtheme_label="Grounded Evidence Patterns",
+                    subtheme_description="Consolidated codes grounded in transcript evidence.",
+                    code_labels=[code.label for code in missing],
+                )
             )
         return SubthemeSynthesisResult(subthemes=cleaned_subthemes)
 
@@ -856,11 +892,11 @@ class TraceableAnalysisService:
         ]
         if missing:
             cleaned_themes.append(
-                {
-                    "theme_label": "Grounded Findings",
-                    "theme_description": "Themes synthesized from grounded transcript codes.",
-                    "subtheme_labels": missing,
-                }
+                SynthesizedTheme(
+                    theme_label="Grounded Findings",
+                    theme_description="Themes synthesized from grounded transcript codes.",
+                    subtheme_labels=missing,
+                )
             )
         return ThemeSynthesisResult(themes=cleaned_themes)
 
@@ -1015,19 +1051,19 @@ class TraceableAnalysisService:
                 "parsimony={:.3f}, bloat_penalty={:.3f}, consistency={:.3f}, "
                 "codes={}, missing_concepts={}, overbroad_codes={}",
                 iteration,
-                float(metrics["composite_score"]),
-                float(metrics["code_reusability"]),
-                float(metrics["document_coverage"]),
-                float(metrics["descriptive_fitness_score"]),
-                float(metrics["descriptive_coverage_score"]),
-                float(metrics["parsimony_score"]),
-                float(metrics["bloat_penalty"]),
-                float(metrics["train_eval_consistency"]),
-                int(metrics["code_count"]),
-                int(metrics["missing_concept_count"]),
-                int(metrics["overbroad_code_count"]),
+                _metric_float(metrics, "composite_score"),
+                _metric_float(metrics, "code_reusability"),
+                _metric_float(metrics, "document_coverage"),
+                _metric_float(metrics, "descriptive_fitness_score"),
+                _metric_float(metrics, "descriptive_coverage_score"),
+                _metric_float(metrics, "parsimony_score"),
+                _metric_float(metrics, "bloat_penalty"),
+                _metric_float(metrics, "train_eval_consistency"),
+                _metric_int(metrics, "code_count"),
+                _metric_int(metrics, "missing_concept_count"),
+                _metric_int(metrics, "overbroad_code_count"),
             )
-            if best is None or float(metrics["composite_score"]) > float(best.metrics["composite_score"]):
+            if best is None or _metric_float(metrics, "composite_score") > _metric_float(best.metrics, "composite_score"):
                 best = artifact
 
             if iteration >= max_iterations:
@@ -1394,10 +1430,10 @@ class TraceableAnalysisService:
         original_theme_keys = set(original_theme_nodes)
         seen_theme_keys: set[str] = set()
         for old_key, node in original_theme_nodes.items():
-            update = theme_updates.get(old_key)
+            theme_update = theme_updates.get(old_key)
             new_label = node.label
-            if update is not None:
-                candidate_label = self._truncate_label(self._normalize_label(update.polished_label))
+            if theme_update is not None:
+                candidate_label = self._truncate_label(self._normalize_label(theme_update.polished_label))
                 candidate_key = self._label_key(candidate_label)
                 if candidate_label and (
                     candidate_key == old_key
@@ -1406,8 +1442,8 @@ class TraceableAnalysisService:
                     new_label = candidate_label
             theme_label_map[old_key] = new_label
             theme_description_map[old_key] = (
-                self._clean_optional_text(update.polished_description)
-                if update is not None and update.polished_description is not None
+                self._clean_optional_text(theme_update.polished_description)
+                if theme_update is not None and theme_update.polished_description is not None
                 else node.description
             )
             seen_theme_keys.add(self._label_key(new_label))
@@ -1417,11 +1453,11 @@ class TraceableAnalysisService:
             path: list[SynthesizedThemeNode] = []
             for node in theme.path:
                 old_key = self._label_key(node.label)
-                update = theme_updates.get(old_key)
+                theme_update = theme_updates.get(old_key)
                 new_label = theme_label_map.get(old_key, node.label)
                 new_description = theme_description_map.get(old_key, node.description)
                 path.append(SynthesizedThemeNode(label=new_label, description=new_description))
-                if update is not None and (new_label != node.label or new_description != node.description):
+                if theme_update is not None and (new_label != node.label or new_description != node.description):
                     action_log.append(
                         {
                             "artifact_type": "theme" if len(path) == 1 else "subtheme",
@@ -1745,7 +1781,7 @@ class TraceableAnalysisService:
         for action in merge_actions:
             source_keys = {
                 self._label_key(str(label))
-                for label in action.get("source_labels", [])
+                for label in _object_list(action.get("source_labels"))
             }
             replacement = self._truncate_label(
                 self._normalize_label(str(action.get("replacement") or action.get("target") or ""))
@@ -1799,17 +1835,18 @@ class TraceableAnalysisService:
             remaining = [code for code in current if self._label_key(code.label) != target_key]
             target_quote_ids = set(target.quote_ids)
             children: list[ConsolidatedCode] = []
-            for raw_child in action.get("split_children", []):
+            for raw_child in _object_list(action.get("split_children")):
                 if not isinstance(raw_child, dict):
                     continue
+                child_payload = cast(dict[str, object], raw_child)
                 label = self._truncate_label(
-                    self._normalize_label(str(raw_child.get("code_label") or ""))
+                    self._normalize_label(str(child_payload.get("code_label") or ""))
                 )
                 if not label:
                     continue
                 child_quote_ids = [
                     str(quote_id)
-                    for quote_id in raw_child.get("source_quote_ids", [])
+                    for quote_id in _object_list(child_payload.get("source_quote_ids"))
                     if str(quote_id) in target_quote_ids
                 ]
                 if not child_quote_ids:
@@ -1820,7 +1857,7 @@ class TraceableAnalysisService:
                 children.append(
                     ConsolidatedCode(
                         label=label,
-                        description=self._clean_optional_text(str(raw_child.get("code_description") or "")),
+                        description=self._clean_optional_text(str(child_payload.get("code_description") or "")),
                         candidate_ids=[f"split:{target_key}:{self._label_key(label)}"],
                         quote_ids=child_quote_ids,
                     )
@@ -2083,7 +2120,7 @@ class TraceableAnalysisService:
             already_merged = {
                 self._label_key(str(label))
                 for action in merge_actions
-                for label in action.get("source_labels", [])
+                for label in _object_list(action.get("source_labels"))
             }
             for path, codes in sorted(groups_by_path.items(), key=lambda item: len(item[1]), reverse=True):
                 if projected_count <= target_max:
@@ -2156,12 +2193,14 @@ class TraceableAnalysisService:
             return current, current_codes, action_log
 
         for action in merge_actions:
+            action_source_labels = _object_list(action["source_labels"])
+            action_new_parent_path = _object_list(action["new_parent_path"])
             current = self._apply_merge_action(
                 current,
-                [str(label) for label in action["source_labels"]],
+                [str(label) for label in action_source_labels],
                 str(action["replacement"]),
                 "code",
-                [str(label) for label in action["new_parent_path"]],
+                [str(label) for label in action_new_parent_path],
             )
         current_codes = self._apply_code_merge_actions_to_consolidated_codes(
             current_codes,
@@ -2809,7 +2848,7 @@ class TraceableAnalysisService:
                     metrics.get("target_max_codes", 0) if metrics else 0,
                 ],
                 "over_target_by": (
-                    max(0, int(metrics.get("code_count", 0)) - int(metrics.get("target_max_codes", 0)))
+                    max(0, _metric_int(metrics, "code_count") - _metric_int(metrics, "target_max_codes"))
                     if metrics
                     else 0
                 ),
@@ -4107,7 +4146,7 @@ class TraceableAnalysisService:
                     )
         best_iteration = max(
             iteration_artifacts,
-            key=lambda artifact: float(artifact.metrics.get("composite_score", 0.0)),
+            key=lambda artifact: _metric_float(artifact.metrics, "composite_score"),
             default=None,
         )
         return {

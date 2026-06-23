@@ -115,7 +115,7 @@ async def consolidate_code_candidates(
         batch: list[tuple[int, int, int, float]],
     ) -> list[tuple[int, int, int, float, CodeRelationshipResult]]:
         if batch_classifier is None:
-            results: list[tuple[int, int, int, float, CodeRelationshipResult]] = []
+            results = []
             for sequence, left_index, right_index, score in batch:
                 results.append(await classify_pair(sequence, left_index, right_index, score))
             return results
@@ -136,17 +136,17 @@ async def consolidate_code_candidates(
                 len(batch),
                 exc,
             )
-            results: list[tuple[int, int, int, float, CodeRelationshipResult]] = []
+            fallback_results: list[tuple[int, int, int, float, CodeRelationshipResult]] = []
             for sequence, left_index, right_index, score in batch:
-                results.append(await classify_pair(sequence, left_index, right_index, score))
-            return results
-        results = []
+                fallback_results.append(await classify_pair(sequence, left_index, right_index, score))
+            return fallback_results
+        batch_classified_results = []
         for sequence, left_index, right_index, score in batch:
             result = batch_results.get(sequence)
             if result is None:
                 result = await classifier(grouped_candidates[left_index], grouped_candidates[right_index])
-            results.append((sequence, left_index, right_index, score, result))
-        return results
+            batch_classified_results.append((sequence, left_index, right_index, score, result))
+        return batch_classified_results
 
     concurrency = max(1, cfg.CODE_PAIR_CLASSIFICATION_CONCURRENCY)
     batch_size = max(1, cfg.CODE_PAIR_CLASSIFICATION_BATCH_SIZE)
@@ -417,7 +417,7 @@ def _candidate_pair_scores(
         for right_index, score in local_scores[:top_k]:
             if score < threshold:
                 continue
-            pair = tuple(sorted((left_index, right_index)))
+            pair = (min(left_index, right_index), max(left_index, right_index))
             if pair in candidates:
                 continue
             candidates.add(pair)
