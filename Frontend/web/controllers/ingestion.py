@@ -136,7 +136,7 @@ def delete_corpus_submit(corpus_id: str):
     except BackendError as exc:
         flash(exc.user_message, "danger")
         return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
-    
+
     return redirect(url_for("ingestion.transcripts_landing"))
 
 
