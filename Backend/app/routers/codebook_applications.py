@@ -333,6 +333,33 @@ async def get_codebook_application_run(
     return JSONResponse(content=ResponseEnvelope.ok(detail).model_dump(mode="json"))
 
 
+@router.delete(
+    "/codebook-application-runs/{run_id}",
+    response_model=ResponseEnvelope[None],
+    summary="Delete a codebook application run",
+)
+async def delete_codebook_application_run(
+    run_id: UUID,
+    session: DbSession,
+) -> JSONResponse:
+    """Hard-delete an analysis run and all its coded results.
+
+    Cascades to the run's document codings and their theme/code assignments via
+    the database ON DELETE CASCADE constraints. A run that is still running is
+    refused so a live job does not keep writing to a deleted run.
+    """
+    run = await session.get(CodebookApplicationRun, run_id)
+    if run is None:
+        raise NotFoundError(f"Codebook application run '{run_id}' not found")
+    if run.status == "running":
+        raise UnprocessableError(
+            f"Run '{run_id}' is still running. Cancel the analysis before deleting it."
+        )
+    await session.delete(run)
+    await session.commit()
+    return JSONResponse(content=ResponseEnvelope.ok(None).model_dump(mode="json"))
+
+
 @router.get(
     "/codebook-application-runs/{run_id}/documents",
     response_model=ResponseEnvelope[list[DocumentCodingSchema]],
