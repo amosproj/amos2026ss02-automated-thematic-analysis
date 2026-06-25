@@ -321,6 +321,10 @@ class BackendClient:
             return result
         return result.get("items", result) if isinstance(result, dict) else []
 
+    def delete_codebook_application_run(self, run_id: str) -> None:
+        """Hard-delete an analysis run and its coded results."""
+        self._delete(f"/codebook-application-runs/{run_id}")
+
     # ---- Codebook Upload & Parsing ------------------------------------------
 
     def parse_csv_preview(self, file: FileStorage) -> list[dict]:
