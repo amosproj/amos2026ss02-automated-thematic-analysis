@@ -294,17 +294,86 @@ def delete_selected_transcripts(corpus_id: str):
     return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
 
 
+def _flatten_theme_tree(tree: list[dict]) -> dict:
+    """Recursively flatten a theme tree into {theme_id_str: {label, description}}."""
+    result: dict[str, dict] = {}
+
+    def _walk(nodes: list[dict]) -> None:
+        for node in nodes:
+            t = node.get("theme", {})
+            tid = str(t.get("id", ""))
+            if tid:
+                result[tid] = {
+                    "label": t.get("label", ""),
+                    "description": t.get("description") or "",
+                }
+            _walk(node.get("children", []))
+
+    _walk(tree)
+    return result
+
+
 @bp.get("/<corpus_id>/<document_id>/read")
 def read_transcript(corpus_id: str, document_id: str) -> str:
     set_active_corpus_id(corpus_id)
+    run_id = request.args.get("run_id", "").strip()
+
     try:
-        document = _backend().get_document_content(corpus_id, document_id)
+        client = _backend()
+        document = client.get_document_content(corpus_id, document_id)
     except BackendError as exc:
         flash(exc.user_message, "danger")
         return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+
+    # Build dropdown: all succeeded runs across all codebooks for this corpus.
+    # Failures here are non-fatal — the transcript still renders without the panel.
+    available_runs: list[dict] = []
+    try:
+        codebooks = client.list_codebooks(corpus_id)
+        for cb in codebooks:
+            runs = client.list_codebook_application_runs(cb["id"])
+            for r in runs:
+                if r.get("status") == "succeeded":
+                    available_runs.append({
+                        "run_id": str(r["id"]),
+                        "codebook_id": str(cb["id"]),
+                        "codebook_name": cb.get("name", ""),
+                        "run_name": r.get("name") or r.get("custom_id") or "",
+                        "run_date": (r.get("created_at") or "")[:10],
+                    })
+        available_runs.sort(key=lambda x: x["run_date"], reverse=True)
+    except BackendError:
+        pass
+
+    # Fetch document coding and theme metadata for the selected run.
+    themes: dict[str, dict] = {}
+    code_assignments: list[dict] = []
+    if run_id:
+        try:
+            doc_codings = client.get_codebook_application_run_documents(run_id)
+            doc_coding = next(
+                (dc for dc in doc_codings if str(dc.get("document_id", "")) == document_id),
+                None,
+            )
+            if doc_coding:
+                code_assignments = [
+                    ca for ca in doc_coding.get("code_assignments", [])
+                    if ca.get("quote")
+                    and ca.get("quote_match_status") in ("exact", "normalized", "fuzzy")
+                ]
+                codebook_id = str(doc_coding.get("codebook_id", ""))
+                if codebook_id:
+                    tree = client.get_theme_tree(codebook_id)
+                    themes = _flatten_theme_tree(tree)
+        except BackendError:
+            pass
 
     return render_template(
         "ingestion/read.html",
         document=document,
         corpus_id=corpus_id,
+        available_runs=available_runs,
+        selected_run_id=run_id,
+        themes=themes,
+        code_assignments=code_assignments,
     )
