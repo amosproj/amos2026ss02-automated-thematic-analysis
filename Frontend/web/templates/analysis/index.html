@@ -125,9 +125,9 @@
     <h5 class="card-title fw-bold mb-3">Previous Analysis Runs</h5>
     {% if previous_runs %}
     {# Reuses the shared selectable-list pattern (Codebooks/Transcripts). The
-       list sits inside this card, so it intentionally omits its own
-       bg-white/border to avoid a double frame. #}
-    <div class="ata-selectable-list border rounded-2 overflow-hidden" data-selectable-list>
+       surrounding card is border-0 (shadow only), so the list keeps its own
+       border to frame the table. #}
+    <div class="ata-selectable-list border rounded-2" data-selectable-list>
       {% set selectable_list_label = 'analysis runs' %}
       {% set selectable_list_item_singular = 'run' %}
       {% set selectable_list_item_plural = 'runs' %}

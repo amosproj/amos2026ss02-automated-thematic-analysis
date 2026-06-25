@@ -130,7 +130,7 @@ def job_status(job_id: str):
 @bp.post("/runs/delete")
 def delete_selected_runs():
     """Hard-delete the analysis runs selected in the Previous Analysis Runs box."""
-    corpus_id = request.args.get("corpus_id") or request.form.get("corpus_id")
+    corpus_id = request.args.get("corpus_id")
     run_ids = [item_id for item_id in request.form.getlist("item_ids") if item_id]
     if not run_ids:
         flash("Select at least one analysis run to delete.", "warning")
