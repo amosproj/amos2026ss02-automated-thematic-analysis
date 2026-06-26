@@ -186,18 +186,29 @@ class BackendClient:
     # ---- Codebooks ----------------------------------------------------------
 
 
-    def get_theme_frequencies(self, codebook_id: str) -> list[dict]:
-        return self._get(f"/codebooks/{codebook_id}/themes")
+    def get_theme_frequencies(
+        self, codebook_id: str, application_run_id: str | None = None
+    ) -> list[dict]:
+        params = {"application_run_id": application_run_id} if application_run_id else None
+        return self._get(f"/codebooks/{codebook_id}/themes", params=params)
 
     def get_theme_tree(self, codebook_id: str) -> list[dict]:
         return self._get(f"/codebooks/{codebook_id}/themes/tree")
 
     def get_theme_quotes(
-        self, codebook_id: str, theme_id: str, page: int = 1, page_size: int = 20
+        self,
+        codebook_id: str,
+        theme_id: str,
+        page: int = 1,
+        page_size: int = 20,
+        application_run_id: str | None = None,
     ) -> dict:
+        params = {"page": page, "page_size": page_size}
+        if application_run_id:
+            params["application_run_id"] = application_run_id
         return self._get(
             f"/codebooks/{codebook_id}/themes/{theme_id}/quotes",
-            params={"page": page, "page_size": page_size},
+            params=params,
         )
 
     # ---- Demographic --------------------------------------------------------

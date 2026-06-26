@@ -30,6 +30,56 @@ _QUERY_MIN = 10
 _QUERY_MAX = 500
 
 
+def _format_run_timestamp(run: dict) -> str:
+    raw = run.get("finished_at") or run.get("created_at") or ""
+    return str(raw).replace("T", " ")[:16]
+
+
+def _prepare_application_runs(
+    application_runs: list[dict],
+    requested_run_id: str,
+) -> tuple[list[dict], dict | None, str]:
+    decorated_runs = []
+    latest_run = max(
+        application_runs,
+        key=lambda run: str(run.get("finished_at") or run.get("created_at") or ""),
+        default=None,
+    )
+    latest_successful_run = max(
+        (run for run in application_runs if run.get("status") == "succeeded"),
+        key=lambda run: str(run.get("finished_at") or run.get("created_at") or ""),
+        default=None,
+    )
+    latest_successful_id = str(latest_successful_run.get("id")) if latest_successful_run else ""
+    fallback_run_id = latest_successful_id or (str(latest_run.get("id")) if latest_run else "")
+
+    valid_run_ids = {str(run.get("id")) for run in application_runs}
+    selected_run_id = requested_run_id if requested_run_id in valid_run_ids else ""
+    if not selected_run_id:
+        selected_run_id = fallback_run_id
+
+    for run in application_runs:
+        run_id = str(run.get("id"))
+        timestamp = _format_run_timestamp(run)
+        run_name = run.get("name") or run.get("custom_id") or run_id
+        label = f"{run_name} - {timestamp}" if timestamp else run_name
+        if run_id == latest_successful_id:
+            label = f"{label} - Latest successful"
+        decorated_runs.append({
+            **run,
+            "id": run_id,
+            "timestamp_label": timestamp,
+            "select_label": label,
+            "is_latest_successful": run_id == latest_successful_id,
+        })
+
+    selected_run = next(
+        (run for run in decorated_runs if str(run.get("id")) == selected_run_id),
+        None,
+    )
+    return decorated_runs, selected_run, selected_run_id
+
+
 def _safe_export_filename(name: str, version: int | str | None) -> str:
     safe_name = "".join(
         ch if ch.isalnum() or ch in ("-", "_") else "_"
@@ -173,6 +223,7 @@ def codebook_themes(codebook_id: str) -> str:
                 codebook_id=codebook_id,
                 name=request.args.get("name", ""),
                 version=request.args.get("version", ""),
+                application_run_id=request.args.get("application_run_id", ""),
             )
         )
 
@@ -190,6 +241,7 @@ def codebook_themes(codebook_id: str) -> str:
                 codebook_id=codebook_id,
                 name=request.args.get("name", ""),
                 version=request.args.get("version", ""),
+                application_run_id=request.args.get("application_run_id", ""),
             )
         )
     return redirect(url_for("codebooks.list_codebooks"))
@@ -200,7 +252,10 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
     set_active_corpus_id(corpus_id)
     name = request.args.get("name", "")
     version = request.args.get("version", "")
+    selected_application_run_id = request.args.get("application_run_id", "")
     active_codebook_id = codebook_id
+    application_runs: list[dict] = []
+    selected_application_run: dict | None = None
     corpus_name = "Selected Corpus"
     corpus_options: list[dict] = [{"id": corpus_id, "name": corpus_name}]
     try:
@@ -231,8 +286,15 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             version = str(active_codebook["version"])
         research_query = active_codebook.get("research_query") or ""
         researcher_topics = active_codebook.get("researcher_topics") or ""
+        application_runs = client.list_codebook_application_runs(active_codebook_id)
+        application_runs, selected_application_run, selected_application_run_id = (
+            _prepare_application_runs(application_runs, selected_application_run_id)
+        )
 
-        frequencies = client.get_theme_frequencies(active_codebook_id)
+        frequencies = client.get_theme_frequencies(
+            active_codebook_id,
+            application_run_id=selected_application_run_id or None,
+        )
         tree = client.get_theme_tree(active_codebook_id)
         codebook = client.get_codebook(active_codebook_id)
         codes = codebook.get("codes", [])
@@ -251,6 +313,9 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             codes=[],
             research_query="",
             researcher_topics="",
+            application_runs=application_runs,
+            selected_application_run_id=selected_application_run_id,
+            selected_application_run=selected_application_run,
             error=True,
         )
     except BackendError as exc:
@@ -268,6 +333,9 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             codes=[],
             research_query="",
             researcher_topics="",
+            application_runs=application_runs,
+            selected_application_run_id=selected_application_run_id,
+            selected_application_run=selected_application_run,
             error=True,
         )
     return render_template(
@@ -283,6 +351,9 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         codes=codes,
         research_query=research_query,
         researcher_topics=researcher_topics,
+        application_runs=application_runs,
+        selected_application_run_id=selected_application_run_id,
+        selected_application_run=selected_application_run,
     )
 
 @bp.get("/<corpus_id>/<codebook_id>/themes/<theme_id>/quotes.json")
@@ -293,7 +364,14 @@ def theme_quotes_json(corpus_id: str, codebook_id: str, theme_id: str):
     except (TypeError, ValueError):
         page, page_size = 1, 20
     try:
-        result = _backend().get_theme_quotes(codebook_id, theme_id, page, page_size)
+        application_run_id = request.args.get("application_run_id") or None
+        result = _backend().get_theme_quotes(
+            codebook_id,
+            theme_id,
+            page,
+            page_size,
+            application_run_id=application_run_id,
+        )
         return jsonify(result)
     except BackendError as exc:
         return jsonify({"error": exc.user_message}), 502

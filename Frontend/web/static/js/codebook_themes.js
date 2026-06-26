@@ -8,6 +8,20 @@
     const codes             = JSON.parse(appRoot.dataset.codes       || "[]");
     const quotesUrlTemplate = appRoot.dataset.quotesUrlTemplate || "";
     const readUrlTemplate   = appRoot.dataset.readUrlTemplate   || "";
+    const applicationRunId  = appRoot.dataset.applicationRunId || "";
+    const applicationRunSelect = document.getElementById("application-run-select");
+
+    if (applicationRunSelect) {
+        applicationRunSelect.addEventListener("change", () => {
+            const url = new URL(window.location.href);
+            if (applicationRunSelect.value) {
+                url.searchParams.set("application_run_id", applicationRunSelect.value);
+            } else {
+                url.searchParams.delete("application_run_id");
+            }
+            window.location.href = url.toString();
+        });
+    }
 
     // Topics the researcher asked the AI to focus on.
     const researcherTopics = (() => {
@@ -404,8 +418,13 @@
     const PAGE_SIZE        = 20;
 
     function quotesUrl(themeId, page) {
-        return quotesUrlTemplate.replace("__THEME__", themeId)
-            + "?page=" + page + "&page_size=" + PAGE_SIZE;
+        const url = new URL(quotesUrlTemplate.replace("__THEME__", themeId), window.location.origin);
+        url.searchParams.set("page", page);
+        url.searchParams.set("page_size", PAGE_SIZE);
+        if (applicationRunId) {
+            url.searchParams.set("application_run_id", applicationRunId);
+        }
+        return url.toString();
     }
 
     function interviewUrl(documentId) {
