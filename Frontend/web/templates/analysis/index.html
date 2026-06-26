@@ -148,6 +148,7 @@
               <th>Codebook</th>
               <th>Status</th>
               <th>Date</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -175,6 +176,12 @@
                 {% endif %}
               </td>
               <td>{{ run.created_at[:10] }}</td>
+              <td>
+                <a class="btn btn-sm btn-outline-primary"
+                   href="{{ url_for('codebooks.codebook_themes_for_corpus', corpus_id=active_corpus_id, codebook_id=run.codebook_id, application_run_id=run.id) }}">
+                  View Analysis
+                </a>
+              </td>
             </tr>
             {% endfor %}
           </tbody>
