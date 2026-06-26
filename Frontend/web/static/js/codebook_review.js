@@ -58,7 +58,6 @@
                   aria-label="Remove">&times;</button>
           <label class="form-check form-switch mb-0 small">
             <input class="form-check-input code-toggle" type="checkbox" ${isCode ? "checked" : ""}>
-            <span class="form-check-label">Code</span>
           </label>
         </div>
       </div>
