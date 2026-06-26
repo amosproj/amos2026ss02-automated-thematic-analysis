@@ -125,3 +125,30 @@ def job_status(job_id: str):
         return jsonify(job)
     except BackendError as exc:
         return jsonify({"error": exc.user_message}), 500
+
+
+@bp.post("/runs/delete")
+def delete_selected_runs():
+    """Hard-delete the analysis runs selected in the Previous Analysis Runs box."""
+    corpus_id = request.args.get("corpus_id")
+    run_ids = [item_id for item_id in request.form.getlist("item_ids") if item_id]
+    if not run_ids:
+        flash("Select at least one analysis run to delete.", "warning")
+        return redirect(url_for("analysis.index", corpus_id=corpus_id))
+
+    client = _backend()
+    deleted = 0
+    try:
+        for run_id in run_ids:
+            client.delete_codebook_application_run(run_id)
+            deleted += 1
+        flash(f"Deleted {deleted} analysis run{'s' if deleted != 1 else ''}.", "success")
+    except BackendError as exc:
+        if deleted:
+            flash(
+                f"Deleted {deleted} analysis run{'s' if deleted != 1 else ''} before an error occurred.",
+                "warning",
+            )
+        flash(exc.user_message, "danger")
+
+    return redirect(url_for("analysis.index", corpus_id=corpus_id))

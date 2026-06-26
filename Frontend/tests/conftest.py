@@ -43,6 +43,9 @@ class FakeBackend:
         self.codebooks: list[dict] = []
         self.theme_frequencies: list[dict] = []
         self.theme_tree: list[dict] = []
+        # Analysis runs (Previous Analysis Runs box)
+        self.application_runs: list[dict] = []
+        self.deleted_run_ids: list[str] = []
         # Demographic data
         self.demographic_files: list[dict] = []
         self.demographic_rows: list[dict] = []
@@ -314,7 +317,17 @@ class FakeBackend:
 
     def list_codebook_application_runs(self, codebook_id: str) -> list[dict]:
         self._maybe_raise("list_codebook_application_runs")
-        return []
+        return [
+            run for run in self.application_runs
+            if run.get("codebook_id") in (None, codebook_id)
+        ]
+
+    def delete_codebook_application_run(self, run_id: str) -> None:
+        self._maybe_raise("delete_codebook_application_run")
+        self.deleted_run_ids.append(run_id)
+        self.application_runs = [
+            run for run in self.application_runs if run.get("id") != run_id
+        ]
 
     # ---- Internal -----------------------------------------------------------
 
