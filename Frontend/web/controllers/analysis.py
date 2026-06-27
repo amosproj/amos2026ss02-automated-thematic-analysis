@@ -127,6 +127,15 @@ def job_status(job_id: str):
         return jsonify({"error": exc.user_message}), 500
 
 
+@bp.post("/job/<job_id>/cancel")
+def cancel_job(job_id: str):
+    try:
+        job = _backend().cancel_analysis_job(job_id)
+    except BackendError as exc:
+        return jsonify({"error": exc.user_message}), 200
+    return jsonify(job)
+
+
 @bp.post("/runs/delete")
 def delete_selected_runs():
     """Hard-delete the analysis runs selected in the Previous Analysis Runs box."""

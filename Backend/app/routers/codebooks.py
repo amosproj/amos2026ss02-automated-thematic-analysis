@@ -319,8 +319,9 @@ async def get_codebook_detail(
 async def delete_codebook(
     codebook_id: UUID,
     session: DbSession,
+    force: bool = False,
 ) -> JSONResponse:
     """Delete a codebook and all its themes/codes."""
     service = CodebookService(session)
-    await service.delete_codebook(codebook_id)
+    await service.delete_codebook(codebook_id, force=force)
     return JSONResponse(content=ResponseEnvelope.ok(None).model_dump(mode="json"))

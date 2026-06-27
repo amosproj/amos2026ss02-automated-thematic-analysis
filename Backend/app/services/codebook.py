@@ -20,6 +20,7 @@ from app.schemas.codebook import (
     NodeType,
     ThemeInCodebookSchema,
 )
+from app.services.analysis_dependency_guard import guard_codebook_deletion
 
 if TYPE_CHECKING:
     from app.schemas.codebook import CodebookDetailSchema
@@ -255,7 +256,7 @@ class CodebookService:
     # Delete
     # ------------------------------------------------------------------
 
-    async def delete_codebook(self, codebook_id: uuid.UUID) -> None:
+    async def delete_codebook(self, codebook_id: uuid.UUID, *, force: bool = False) -> None:
         """Delete a codebook and all associated themes/codes via cascade.
 
         Raises:
@@ -268,6 +269,11 @@ class CodebookService:
         if codebook is None:
             raise NotFoundError(f"Codebook '{codebook_id}' not found.")
 
+        await guard_codebook_deletion(
+            self._session,
+            codebook_ids=[codebook_id],
+            force=force,
+        )
         await self._session.delete(codebook)
         await self._session.commit()
 

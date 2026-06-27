@@ -15,6 +15,7 @@
   <div class="bg-white border rounded-2 p-4" style="max-width: 640px;"
        data-job-id="{{ job_id }}"
        data-status-url="{{ url_for('analysis.job_status', job_id=job_id) }}"
+       data-cancel-url="{{ url_for('analysis.cancel_job', job_id=job_id) }}"
        data-list-url="{{ url_for('analysis.index') }}"
        id="progress-app">
 
@@ -40,6 +41,7 @@
       const app = document.getElementById("progress-app");
       const jobId = app.dataset.jobId;
       const statusUrl = app.dataset.statusUrl;
+      const cancelUrl = app.dataset.cancelUrl;
       const listUrl = app.dataset.listUrl;
 
       const statusLine = document.getElementById("status-line");
@@ -160,9 +162,17 @@
       cancelBtn.addEventListener("click", async () => {
         cancelBtn.disabled = true;
         try {
-          // Send cancel request to the job cancellation endpoint
-          await fetch("/api/v1/codebooks/apply-jobs/" + jobId + "/cancel", { method: "POST" });
+          const r = await fetch(cancelUrl, { method: "POST", headers: { "Accept": "application/json" } });
+          const body = await r.json();
+          if (body.error) {
+            showError(body.error);
+            cancelBtn.disabled = false;
+            return;
+          }
+          statusLine.textContent = "Cancellation requested…";
         } catch (e) {
+          showError("Could not request cancellation. Please try again.");
+          cancelBtn.disabled = false;
         }
       });
 

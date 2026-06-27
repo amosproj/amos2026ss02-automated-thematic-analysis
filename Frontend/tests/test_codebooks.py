@@ -719,6 +719,57 @@ def test_delete_selected_codebooks_success(client, fake_backend):
     assert fake_backend.codebooks == []
 
 
+def test_delete_selected_codebooks_running_analysis_warning(client, fake_backend):
+    from web.services.backend_client import BackendConflictError
+
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+        {"id": "cb-2", "name": "Focus Group Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "bob", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    fake_backend.raise_on = ("delete_codebook", BackendConflictError)
+
+    resp = client.post(
+        f"/codebooks/{fake_backend.corpus_id}/delete",
+        data={"item_ids": ["cb-1", "cb-2"]},
+        follow_redirects=True,
+    )
+
+    assert resp.status_code == 200
+    assert b"running analysis" in resp.data
+    assert b'id="confirmAnalysisDeleteModal"' in resp.data
+    assert b"modal fade text-start" in resp.data
+    assert b"Delete Codebooks" in resp.data
+    assert b'name="force_delete" value="1"' in resp.data
+    assert b'value="cb-1"' in resp.data
+    assert b'value="cb-2"' in resp.data
+    assert b'data-flash-category="warning"' not in resp.data
+
+
+def test_delete_selected_codebooks_force_after_warning(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+        {"id": "cb-2", "name": "Focus Group Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "bob", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+
+    resp = client.post(
+        f"/codebooks/{fake_backend.corpus_id}/delete",
+        data={"item_ids": ["cb-1", "cb-2"], "force_delete": "1"},
+        follow_redirects=True,
+    )
+
+    assert resp.status_code == 200
+    assert b"Deleted 2 codebooks" in resp.data
+    assert fake_backend.force_deleted_codebooks == ["cb-1", "cb-2"]
+
+
 def test_delete_selected_codebooks_requires_selection(client, fake_backend):
     resp = client.post(
         f"/codebooks/{fake_backend.corpus_id}/delete",

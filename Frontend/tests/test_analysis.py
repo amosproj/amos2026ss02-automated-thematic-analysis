@@ -88,6 +88,8 @@ def test_analysis_wait_page(client):
     resp = client.get("/analysis/job/test-job")
     assert resp.status_code == 200
     assert b"Applying Codebook" in resp.data
+    assert b'data-cancel-url="/analysis/job/test-job/cancel"' in resp.data
+    assert b"/api/v1/codebooks/apply-jobs/" not in resp.data
 
 def test_analysis_job_status(client, fake_backend):
     job = fake_backend.trigger_analysis("test", "cb1")
@@ -96,6 +98,13 @@ def test_analysis_job_status(client, fake_backend):
     data = resp.json
     assert data["id"] == job["id"]
     assert data["status"] == "queued"
+
+
+def test_analysis_job_cancel(client, fake_backend):
+    resp = client.post("/analysis/job/job-123/cancel")
+    assert resp.status_code == 200
+    assert fake_backend.cancelled_analysis_job_ids == ["job-123"]
+    assert resp.json["cancel_requested"] is True
 
 
 # Delete Analysis Runs (issue #203) ------------------------------------------

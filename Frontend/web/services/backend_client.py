@@ -75,6 +75,15 @@ class BackendNotFoundError(BackendError):
     log_level = "info"
 
 
+class BackendConflictError(BackendError):
+    """The backend returned 409 — the request conflicts with live state."""
+
+    default_user_message = (
+        "This action conflicts with the current analysis state. Please review and try again."
+    )
+    log_level = "info"
+
+
 class BackendValidationError(BackendError):
     """The backend returned 422 — payload failed Pydantic validation.
 
@@ -170,12 +179,13 @@ class BackendClient:
         """Fetch a single document including its full text content."""
         return self._get(f"/ingestion/corpora/{corpus_id}/documents/{document_id}")
 
-    def delete_document(self, corpus_id: str, document_id: str) -> None:
+    def delete_document(self, corpus_id: str, document_id: str, *, force: bool = False) -> None:
         """Delete a document from a corpus."""
         path = f"/ingestion/corpora/{corpus_id}/documents/{document_id}"
+        params = {"force": "true"} if force else None
         started_at = time.monotonic()
         try:
-            r = self._client.delete(path)
+            r = self._client.delete(path, params=params)
             r.raise_for_status()
             return self._unwrap(r)
         except httpx.HTTPError as exc:
@@ -315,6 +325,9 @@ class BackendClient:
     def get_analysis_job(self, job_id: str) -> dict:
         return self._get(f"/codebooks/apply-jobs/{job_id}")
 
+    def cancel_analysis_job(self, job_id: str) -> dict:
+        return self._post(f"/codebooks/apply-jobs/{job_id}/cancel")
+
     def list_codebook_application_runs(self, codebook_id: str) -> list[dict]:
         result = self._get(f"/codebooks/{codebook_id}/application-runs")
         if isinstance(result, list):
@@ -362,9 +375,10 @@ class BackendClient:
             return result
         return result.get("items", result) if isinstance(result, dict) else []
 
-    def delete_codebook(self, codebook_id: str) -> None:
+    def delete_codebook(self, codebook_id: str, *, force: bool = False) -> None:
         """Delete a codebook and all its associated themes/codes via cascade."""
-        self._delete(f"/codebooks/{codebook_id}")
+        params = {"force": "true"} if force else None
+        self._delete(f"/codebooks/{codebook_id}", params=params)
 
     # ---- Codebook generation jobs -------------------------------------------
 
@@ -503,6 +517,13 @@ class BackendClient:
             if status_code == 404:
                 error = BackendNotFoundError(
                     source_exc=exc, status_code=status_code, path=path
+                )
+            elif status_code == 409:
+                error = BackendConflictError(
+                    user_message=_parse_validation_detail(exc.response),
+                    source_exc=exc,
+                    status_code=status_code,
+                    path=path,
                 )
             elif status_code == 422:
                 if has_app_context():

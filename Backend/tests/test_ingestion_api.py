@@ -1,4 +1,9 @@
+import json
+import uuid
 from pathlib import Path
+from uuid import uuid4
+
+from app.models import Codebook, CodebookApplicationJob, CorpusDocument
 
 API = "/api/v1/ingestion"
 
@@ -585,3 +590,85 @@ async def test_delete_document_not_found(client):
 
     del_resp = await client.delete(f"{API}/corpora/{corpus_id}/documents/{MISSING_STR}")
     assert del_resp.status_code == 404
+
+
+async def test_delete_document_warns_when_running_analysis_depends_on_it(client, db_session):
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
+    corpus_id = create.json()["data"]["id"]
+
+    await client.post(
+        f"{API}/corpora/{corpus_id}/documents/bulk",
+        json={"documents": [{"title": "Running doc", "text": "content"}]},
+    )
+    docs_resp = await client.get(f"{API}/corpora/{corpus_id}/documents")
+    document_id = docs_resp.json()["data"]["items"][0]["id"]
+
+    codebook = Codebook(
+        id=uuid4(),
+        corpus_id=uuid.UUID(P1_STR),
+        name="Active Codebook",
+        version=1,
+        created_by="test",
+    )
+    job = CodebookApplicationJob(
+        id=uuid4(),
+        name="Running Analysis",
+        status="running",
+        phase="coding_documents",
+        corpus_id=uuid.UUID(P1_STR),
+        codebook_id=codebook.id,
+        transcript_document_ids_json=json.dumps([document_id]),
+        cancel_requested=False,
+    )
+    db_session.add_all([codebook, job])
+    await db_session.commit()
+
+    del_resp = await client.delete(f"{API}/corpora/{corpus_id}/documents/{document_id}")
+
+    assert del_resp.status_code == 409
+    assert "running analysis" in del_resp.json()["error"].lower()
+    still_exists = await db_session.get(CorpusDocument, uuid.UUID(document_id))
+    assert still_exists is not None
+
+
+async def test_delete_document_force_cancels_impacted_analysis(client, db_session):
+    create = await client.post(f"{API}/corpora", json={"corpus_id": P1_STR, "name": "C"})
+    corpus_id = create.json()["data"]["id"]
+
+    await client.post(
+        f"{API}/corpora/{corpus_id}/documents/bulk",
+        json={"documents": [{"title": "Force delete doc", "text": "content"}]},
+    )
+    docs_resp = await client.get(f"{API}/corpora/{corpus_id}/documents")
+    document_id = docs_resp.json()["data"]["items"][0]["id"]
+
+    codebook = Codebook(
+        id=uuid4(),
+        corpus_id=uuid.UUID(P1_STR),
+        name="Active Codebook",
+        version=1,
+        created_by="test",
+    )
+    job = CodebookApplicationJob(
+        id=uuid4(),
+        name="Running Analysis",
+        status="running",
+        phase="coding_documents",
+        corpus_id=uuid.UUID(P1_STR),
+        codebook_id=codebook.id,
+        transcript_document_ids_json=json.dumps([document_id]),
+        cancel_requested=False,
+    )
+    db_session.add_all([codebook, job])
+    await db_session.commit()
+
+    del_resp = await client.delete(
+        f"{API}/corpora/{corpus_id}/documents/{document_id}",
+        params={"force": "true"},
+    )
+
+    assert del_resp.status_code == 200
+    refreshed_job = await db_session.get(CodebookApplicationJob, job.id)
+    assert refreshed_job is not None
+    await db_session.refresh(refreshed_job)
+    assert refreshed_job.cancel_requested is True

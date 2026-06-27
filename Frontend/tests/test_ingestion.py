@@ -385,6 +385,49 @@ def test_delete_selected_transcripts_success(client, fake_backend):
     assert [d["id"] for d in fake_backend.documents] == ["doc-3"]
 
 
+def test_delete_selected_transcripts_running_analysis_warning(client, fake_backend):
+    from web.services.backend_client import BackendConflictError
+
+    fake_backend.documents = [
+        {"id": "doc-1", "title": "Interview 1", "filename": "1.txt", "created_at": "2026-05-12"},
+        {"id": "doc-2", "title": "Interview 2", "filename": "2.txt", "created_at": "2026-05-13"},
+    ]
+    fake_backend.raise_on = ("delete_document", BackendConflictError)
+
+    resp = client.post(
+        f"/transcripts/{CORPUS}/delete_transcripts",
+        data={"item_ids": ["doc-1", "doc-2"]},
+        follow_redirects=True,
+    )
+
+    assert resp.status_code == 200
+    assert b"running analysis" in resp.data
+    assert b'id="confirmAnalysisDeleteModal"' in resp.data
+    assert b"modal fade text-start" in resp.data
+    assert b"Delete Transcripts" in resp.data
+    assert b'name="force_delete" value="1"' in resp.data
+    assert b'value="doc-1"' in resp.data
+    assert b'value="doc-2"' in resp.data
+    assert b'data-flash-category="warning"' not in resp.data
+
+
+def test_delete_selected_transcripts_force_after_warning(client, fake_backend):
+    fake_backend.documents = [
+        {"id": "doc-1", "title": "Interview 1", "filename": "1.txt", "created_at": "2026-05-12"},
+        {"id": "doc-2", "title": "Interview 2", "filename": "2.txt", "created_at": "2026-05-13"},
+    ]
+
+    resp = client.post(
+        f"/transcripts/{CORPUS}/delete_transcripts",
+        data={"item_ids": ["doc-1", "doc-2"], "force_delete": "1"},
+        follow_redirects=True,
+    )
+
+    assert resp.status_code == 200
+    assert b"Deleted 2 transcripts" in resp.data
+    assert fake_backend.force_deleted_documents == [(CORPUS, "doc-1"), (CORPUS, "doc-2")]
+
+
 def test_delete_selected_transcripts_requires_selection(client, fake_backend):
     resp = client.post(f"/transcripts/{CORPUS}/delete_transcripts", data={}, follow_redirects=True)
     assert resp.status_code == 200

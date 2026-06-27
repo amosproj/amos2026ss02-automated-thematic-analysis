@@ -18,6 +18,8 @@
     </a>
   </div>
 
+  {% include "_analysis_delete_confirm_modal.html" %}
+
   {# Server-rendered in-progress runs (visible in any session). job_tracker.js
      polls these rows live and skips creating duplicates for the same job id. #}
   {% if running_jobs %}
@@ -110,5 +112,16 @@
     </div>
   {% else %}
     <p class="text-secondary">No codebooks found.</p>
+  {% endif %}
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
+  {% if pending_analysis_delete %}
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const modalEl = document.getElementById("confirmAnalysisDeleteModal");
+        if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      });
+    </script>
   {% endif %}
 {% endblock %}

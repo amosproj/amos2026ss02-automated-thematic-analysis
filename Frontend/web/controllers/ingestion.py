@@ -1,7 +1,8 @@
 import uuid
-from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
 
 from web.services.backend_client import (
+    BackendConflictError,
     BackendError,
     BackendValidationError,
     get_backend_client as _backend,
@@ -12,6 +13,8 @@ from web.services.corpus_context import (
 )
 
 bp = Blueprint("ingestion", __name__)
+
+_PENDING_TRANSCRIPT_DELETE_KEY = "pending_transcript_delete"
 
 
 
@@ -224,6 +227,22 @@ def _build_link_status(client, corpus_id: str) -> dict:
     return status
 
 
+def _pending_transcript_delete(corpus_id: str) -> dict | None:
+    pending = session.pop(_PENDING_TRANSCRIPT_DELETE_KEY, None)
+    if not isinstance(pending, dict) or pending.get("corpus_id") != corpus_id:
+        return None
+    item_ids = [item_id for item_id in pending.get("item_ids", []) if item_id]
+    if not item_ids:
+        return None
+    return {
+        "message": pending.get("message") or "Deleting these transcripts would interrupt a running analysis.",
+        "item_ids": item_ids,
+        "action": url_for("ingestion.delete_selected_transcripts", corpus_id=corpus_id),
+        "title": "Delete Transcripts",
+        "confirm_label": "Yes, Delete Transcripts",
+    }
+
+
 @bp.get("/<corpus_id>/")
 def list_transcripts(corpus_id: str) -> str:
     set_active_corpus_id(corpus_id)
@@ -245,6 +264,7 @@ def list_transcripts(corpus_id: str) -> str:
             corpus_id=corpus_id,
             corpus_options=corpus_options,
             active_corpus_name=active_corpus_name,
+            pending_analysis_delete=None,
             error=True,
         )
     link_status = _build_link_status(client, active_corpus_id)
@@ -255,6 +275,7 @@ def list_transcripts(corpus_id: str) -> str:
         corpus_options=corpus_options,
         active_corpus_name=active_corpus_name,
         link_status=link_status,
+        pending_analysis_delete=_pending_transcript_delete(active_corpus_id),
     )
 
 
@@ -262,9 +283,16 @@ def list_transcripts(corpus_id: str) -> str:
 def delete_transcript(corpus_id: str, document_id: str):
     """Delete a single transcript from the active corpus."""
     set_active_corpus_id(corpus_id)
+    force = request.form.get("force_delete") == "1"
     try:
-        _backend().delete_document(corpus_id, document_id)
+        _backend().delete_document(corpus_id, document_id, force=force)
         flash("Transcript deleted successfully.", "success")
+    except BackendConflictError as exc:
+        session[_PENDING_TRANSCRIPT_DELETE_KEY] = {
+            "corpus_id": corpus_id,
+            "item_ids": [document_id],
+            "message": exc.user_message,
+        }
     except BackendError as exc:
         flash(exc.user_message, "danger")
     return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
@@ -279,13 +307,25 @@ def delete_selected_transcripts(corpus_id: str):
         flash("Select at least one transcript to delete.", "warning")
         return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
 
+    force = request.form.get("force_delete") == "1"
     deleted = 0
     try:
         client = _backend()
         for document_id in document_ids:
-            client.delete_document(corpus_id, document_id)
+            client.delete_document(corpus_id, document_id, force=force)
             deleted += 1
         flash(f"Deleted {deleted} transcript{'s' if deleted != 1 else ''}.", "success")
+    except BackendConflictError as exc:
+        if deleted:
+            flash(f"Deleted {deleted} transcript{'s' if deleted != 1 else ''} before an error occurred.", "warning")
+        if not force:
+            session[_PENDING_TRANSCRIPT_DELETE_KEY] = {
+                "corpus_id": corpus_id,
+                "item_ids": document_ids[deleted:],
+                "message": exc.user_message,
+            }
+        else:
+            flash(exc.user_message, "danger")
     except BackendError as exc:
         if deleted:
             flash(f"Deleted {deleted} transcript{'s' if deleted != 1 else ''} before an error occurred.", "warning")
