@@ -15,13 +15,13 @@
         <p>The Automated Thematic Analysis tool simplifies the qualitative research process into three main steps:</p>
         <ol class="mb-0">
           <li class="mb-2">
-            <strong>1. Upload your data:</strong> Head over to the <a href="{{ url_for('ingestion.transcripts_landing') }}">Transcripts</a> page to securely upload your interview texts. Optionally, attach metadata via the <a href="{{ url_for('demographic.demographic_landing') }}">Demographic Data</a> section.
+            <strong>Upload your data:</strong> Head over to the <a href="{{ url_for('ingestion.transcripts_landing') }}">Transcripts</a> page to securely upload your interview texts. Optionally, attach metadata via the <a href="{{ url_for('demographic.demographic_landing') }}">Demographic Data</a> section.
           </li>
           <li class="mb-2">
-            <strong>2. Generate a Codebook:</strong> On the <a href="{{ url_for('codebooks.list_codebooks') }}">Codebooks</a> page, you can instruct our LLM to automatically generate a hierarchical theme-structure from your corpus, or you can build/upload one manually.
+            <strong>Generate a Codebook:</strong> On the <a href="{{ url_for('codebooks.list_codebooks') }}">Codebooks</a> page, you can instruct our LLM to automatically generate a hierarchical theme-structure from your corpus, or you can build/upload one manually.
           </li>
           <li>
-            <strong>3. Run the Analysis:</strong> Navigate to the <a href="{{ url_for('analysis.index') }}">Analysis</a> workspace to apply your Codebook across all documents. The system will extract specific quotes and link them to themes for easy review.
+            <strong>Run the Analysis:</strong> Navigate to the <a href="{{ url_for('analysis.index') }}">Analysis</a> workspace to apply your Codebook across all documents. The system will extract specific quotes and link them to themes for easy review.
           </li>
         </ol>
       </div>
