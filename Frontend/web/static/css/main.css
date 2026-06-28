@@ -68,6 +68,51 @@
     background: linear-gradient(135deg, #3730a3 0%, #4f46e5 55%, #6366f1 100%);
 }
 
+.analysis-run-bar {
+    background: linear-gradient(135deg, #3730a3 0%, #4f46e5 55%, #6366f1 100%);
+}
+
+.analysis-run-badge {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    white-space: nowrap;
+}
+
+.analysis-run-meta {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.86rem;
+}
+
+.analysis-run-message {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.9rem;
+}
+
+.analysis-run-meta span + span::before {
+    content: "•";
+    margin-right: 0.5rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.analysis-run-control {
+    width: min(100%, 360px);
+}
+
+.analysis-run-control .form-select {
+    border-color: rgba(255, 255, 255, 0.38);
+    box-shadow: none;
+}
+
+.analysis-run-control .form-select:focus {
+    border-color: #fff;
+    box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.24);
+}
+
 .theme-version-badge {
     background: rgba(255, 255, 255, 0.18);
     color: #fff;
@@ -77,6 +122,12 @@
     border-radius: 20px;
     border: 1px solid rgba(255, 255, 255, 0.3);
     letter-spacing: 0.03em;
+}
+
+@media (max-width: 767.98px) {
+    .analysis-run-control {
+        width: 100%;
+    }
 }
 
 /* ── Metric cards ───────────────────────────────────────────────────────────── */

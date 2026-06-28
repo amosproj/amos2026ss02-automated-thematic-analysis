@@ -9,6 +9,7 @@
      data-researcher-topics='{{ researcher_topics | tojson }}'
      data-codebook-id="{{ codebook_id }}"
      data-corpus-id="{{ corpus_id }}"
+     data-application-run-id="{{ selected_application_run_id or '' }}"
      data-quotes-url-template="{{ url_for('codebooks.theme_quotes_json', corpus_id=corpus_id, codebook_id=codebook_id, theme_id='__THEME__') }}"
      data-read-url-template="{{ url_for('ingestion.read_transcript', corpus_id=corpus_id, document_id='__DOC__') }}">
 
@@ -30,13 +31,12 @@
     </ol>
   </nav>
 
-
   {% if error %}
   <p class="text-secondary">Couldn't load themes for this codebook right now.</p>
   {% elif frequencies or tree or codes %}
 
   {# Gradient page header #}
-  <div class="theme-page-header rounded-3 mb-4 p-4">
+  <div class="theme-page-header rounded-3 mb-3 p-4">
     <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
       <div>
         <p class="text-white-50 small mb-1 text-uppercase fw-semibold" style="letter-spacing:.07em">Theme Browser</p>
@@ -53,6 +53,77 @@
         <a href="{{ url_for('codebooks.export_codebook', corpus_id=corpus_id, codebook_id=codebook_id) }}" class="btn btn-sm btn-outline-light ms-2">
           Export CSV
         </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="analysis-run-bar rounded-3 mb-4 p-4">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+      <div>
+        <p class="text-white-50 small mb-1 text-uppercase fw-semibold" style="letter-spacing:.07em">Analysis Run</p>
+        <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+          <h2 class="h5 text-white mb-0">
+            {% if selected_application_run %}
+              {{ selected_application_run.name or selected_application_run.custom_id or selected_application_run.id }}
+            {% else %}
+              Select an analysis run
+            {% endif %}
+          </h2>
+          {% if selected_application_run and selected_application_run.is_latest_successful %}
+            <span class="analysis-run-badge">Latest successful</span>
+          {% endif %}
+          {% if selected_application_run %}
+            {% if selected_application_run.status == 'succeeded' %}
+              <span class="badge bg-success">Succeeded</span>
+            {% elif selected_application_run.status == 'failed' %}
+              <span class="badge bg-danger">Failed</span>
+            {% elif selected_application_run.status == 'cancelled' %}
+              <span class="badge bg-secondary">Cancelled</span>
+            {% else %}
+              <span class="badge bg-primary">Running</span>
+            {% endif %}
+          {% endif %}
+        </div>
+        {% if selected_application_run %}
+          <div class="analysis-run-meta d-flex align-items-center flex-wrap gap-2">
+            {% if selected_application_run.custom_id %}
+              <span>{{ selected_application_run.custom_id }}</span>
+            {% endif %}
+            {% if selected_application_run.timestamp_label %}
+              <span>{{ selected_application_run.timestamp_label }}</span>
+            {% endif %}
+            {% if selected_application_run.documents_coded is defined %}
+              <span>{{ selected_application_run.documents_coded }} coded</span>
+            {% endif %}
+            {% if selected_application_run.documents_total is defined %}
+              <span>{{ selected_application_run.documents_total }} total</span>
+            {% endif %}
+            {% if selected_application_run.documents_failed is defined and selected_application_run.documents_failed %}
+              <span>{{ selected_application_run.documents_failed }} failed</span>
+            {% endif %}
+          </div>
+          {% if selected_application_run.status == 'failed' %}
+            <p class="analysis-run-message mb-0 mt-2">This analysis run failed. Results may be incomplete or unavailable.</p>
+          {% endif %}
+        {% else %}
+          <p class="analysis-run-message mb-0">No analysis runs for this codebook.</p>
+        {% endif %}
+      </div>
+      <div class="analysis-run-control">
+        <label for="application-run-select" class="form-label text-white-50 small text-uppercase fw-semibold mb-1" style="letter-spacing:.07em">Select Run</label>
+        {% if application_runs %}
+          <select id="application-run-select" class="form-select form-select-sm">
+            {% for run in application_runs %}
+              <option value="{{ run.id }}" {% if selected_application_run_id == run.id|string %}selected{% endif %}>
+                {{ run.select_label }}
+              </option>
+            {% endfor %}
+          </select>
+        {% else %}
+          <select id="application-run-select" class="form-select form-select-sm" disabled>
+            <option selected>No analysis runs available</option>
+          </select>
+        {% endif %}
       </div>
     </div>
   </div>
