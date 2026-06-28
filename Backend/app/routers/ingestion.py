@@ -91,9 +91,10 @@ async def delete_corpus(
     corpus_id: uuid.UUID,
     session: DbSession,
     settings: AppSettings,
+    force: bool = False,
 ) -> ResponseEnvelope[bool]:
     service = IngestionService(session)
-    await service.delete_corpus(corpus_id)
+    await service.delete_corpus(corpus_id, force=force)
     return ResponseEnvelope.ok(True)
 
 

@@ -432,3 +432,37 @@ def test_delete_selected_transcripts_requires_selection(client, fake_backend):
     resp = client.post(f"/transcripts/{CORPUS}/delete_transcripts", data={}, follow_redirects=True)
     assert resp.status_code == 200
     assert b"Select at least one transcript to delete" in resp.data
+
+
+def test_delete_corpus_running_analysis_warning(client, fake_backend):
+    from web.services.backend_client import BackendConflictError
+
+    fake_backend.corpora = [{"id": CORPUS, "name": "Test Corpus"}]
+    fake_backend.raise_on = ("delete_corpus", BackendConflictError)
+
+    resp = client.post(f"/transcripts/{CORPUS}/delete", follow_redirects=True)
+
+    assert resp.status_code == 200
+    assert b"running analysis" in resp.data
+    assert b'id="confirmAnalysisDeleteModal"' in resp.data
+    assert b"Delete Corpus" in resp.data
+    assert b'name="force_delete" value="1"' in resp.data
+    # Without force the corpus is left intact.
+    assert fake_backend.force_deleted_corpora == []
+
+
+def test_delete_corpus_force_after_warning(client, fake_backend):
+    fake_backend.corpora = [
+        {"id": CORPUS, "name": "Test Corpus"},
+        {"id": "other-corpus", "name": "Other Corpus"},
+    ]
+
+    resp = client.post(
+        f"/transcripts/{CORPUS}/delete",
+        data={"force_delete": "1"},
+        follow_redirects=True,
+    )
+
+    assert resp.status_code == 200
+    assert b"Corpus deleted successfully" in resp.data
+    assert fake_backend.force_deleted_corpora == [CORPUS]

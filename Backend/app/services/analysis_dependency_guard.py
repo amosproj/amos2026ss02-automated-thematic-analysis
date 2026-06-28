@@ -129,3 +129,36 @@ async def guard_codebook_deletion(
     if not force:
         raise ConflictError(_conflict_message(resource_label="the selected codebook(s)", jobs=impacted_jobs))
     await _cancel_jobs(impacted_jobs)
+
+
+async def active_jobs_for_corpus(
+    session: AsyncSession,
+    *,
+    corpus_id: UUID,
+) -> list[CodebookApplicationJob]:
+    return list(
+        (
+            await session.scalars(
+                select(CodebookApplicationJob).where(
+                    CodebookApplicationJob.corpus_id == corpus_id,
+                    CodebookApplicationJob.status.in_(_ACTIVE_STATUSES),
+                )
+            )
+        ).all()
+    )
+
+
+async def guard_corpus_deletion(
+    session: AsyncSession,
+    *,
+    corpus_id: UUID,
+    force: bool,
+) -> None:
+    # Deleting a corpus cascades to every document it owns, so any active job
+    # in the corpus is impacted regardless of which documents it targets.
+    impacted_jobs = await active_jobs_for_corpus(session, corpus_id=corpus_id)
+    if not impacted_jobs:
+        return
+    if not force:
+        raise ConflictError(_conflict_message(resource_label="this corpus", jobs=impacted_jobs))
+    await _cancel_jobs(impacted_jobs)

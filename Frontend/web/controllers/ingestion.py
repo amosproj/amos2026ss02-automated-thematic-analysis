@@ -15,6 +15,7 @@ from web.services.corpus_context import (
 bp = Blueprint("ingestion", __name__)
 
 _PENDING_TRANSCRIPT_DELETE_KEY = "pending_transcript_delete"
+_PENDING_CORPUS_DELETE_KEY = "pending_corpus_delete"
 
 
 
@@ -49,6 +50,19 @@ def upload_landing():
 
 
 
+def _pending_corpus_delete(corpus_id: str) -> dict | None:
+    pending = session.pop(_PENDING_CORPUS_DELETE_KEY, None)
+    if not isinstance(pending, dict) or pending.get("corpus_id") != corpus_id:
+        return None
+    return {
+        "message": pending.get("message") or "Deleting this corpus would interrupt a running analysis.",
+        "item_ids": [],
+        "action": url_for("ingestion.delete_corpus_submit", corpus_id=corpus_id),
+        "title": "Delete Corpus",
+        "confirm_label": "Yes, Delete Corpus",
+    }
+
+
 def _render_upload_form(corpus_id: str) -> str:
     cfg = current_app.config
     try:
@@ -70,6 +84,7 @@ def _render_upload_form(corpus_id: str) -> str:
         corpus_options=corpus_options,
         max_size_mb=cfg["MAX_UPLOAD_SIZE_MB"],
         accepted_extensions=sorted(cfg["ACCEPTED_EXTENSIONS"]),
+        pending_analysis_delete=_pending_corpus_delete(active_corpus_id),
     )
 
 
@@ -131,15 +146,22 @@ def create_corpus_submit():
 @bp.post("/<corpus_id>/delete")
 def delete_corpus_submit(corpus_id: str):
     """Delete a corpus and redirect to landing page."""
+    force = request.form.get("force_delete") == "1"
     try:
-        _backend().delete_corpus(corpus_id)
+        _backend().delete_corpus(corpus_id, force=force)
         flash("Corpus deleted successfully.", "success")
         # Clear the active corpus ID from the session as it no longer exists
         set_active_corpus_id(None)
+    except BackendConflictError as exc:
+        session[_PENDING_CORPUS_DELETE_KEY] = {
+            "corpus_id": corpus_id,
+            "message": exc.user_message,
+        }
+        return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
     except BackendError as exc:
         flash(exc.user_message, "danger")
         return redirect(url_for("ingestion.upload_form", corpus_id=corpus_id))
-    
+
     return redirect(url_for("ingestion.transcripts_landing"))
 
 

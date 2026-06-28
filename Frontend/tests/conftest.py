@@ -49,6 +49,7 @@ class FakeBackend:
         self.cancelled_analysis_job_ids: list[str] = []
         self.force_deleted_documents: list[tuple[str, str]] = []
         self.force_deleted_codebooks: list[str] = []
+        self.force_deleted_corpora: list[str] = []
         # Demographic data
         self.demographic_files: list[dict] = []
         self.demographic_rows: list[dict] = []
@@ -118,8 +119,10 @@ class FakeBackend:
         self.last_created_corpus = created
         return created
 
-    def delete_corpus(self, corpus_id: str) -> None:
+    def delete_corpus(self, corpus_id: str, *, force: bool = False) -> None:
         self._maybe_raise("delete_corpus")
+        if force:
+            self.force_deleted_corpora.append(corpus_id)
         self.corpora = [c for c in self.corpora if c.get("id") != corpus_id]
 
     def upload_files(self, corpus_id, files) -> list[dict]:

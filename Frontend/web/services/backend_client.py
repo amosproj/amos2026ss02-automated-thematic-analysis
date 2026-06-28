@@ -134,12 +134,13 @@ class BackendClient:
             return existing[0]["id"]
         return self.create_corpus(corpus_id, name)["id"]
 
-    def delete_corpus(self, corpus_id: str) -> None:
+    def delete_corpus(self, corpus_id: str, *, force: bool = False) -> None:
         """Delete a corpus and all its associated data."""
         path = f"/ingestion/corpora/{corpus_id}"
+        params = {"force": "true"} if force else None
         started_at = time.monotonic()
         try:
-            r = self._client.delete(path)
+            r = self._client.delete(path, params=params)
             r.raise_for_status()
             return self._unwrap(r)
         except httpx.HTTPError as exc:
