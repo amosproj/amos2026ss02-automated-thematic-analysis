@@ -59,6 +59,11 @@ def set_llm_provider():
     return redirect(url_for("main.index"))
 
 
+@bp.get("/help")
+def help_page() -> str:
+    return render_template("help.html")
+
+
 @bp.get("/health")
 def health() -> dict:
     """Liveness probe for Docker HEALTHCHECK; does not check the backend."""

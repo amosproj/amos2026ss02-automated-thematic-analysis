@@ -57,6 +57,10 @@
             <a class="nav-link {% if request.endpoint == 'analysis.index' %}active{% endif %}"
                href="{{ url_for('analysis.index') }}">Analysis</a>
           </li>
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'main.help_page' %}active{% endif %}"
+               href="{{ url_for('main.help_page') }}">Help</a>
+          </li>
         </ul>
       </div>
     </div>
