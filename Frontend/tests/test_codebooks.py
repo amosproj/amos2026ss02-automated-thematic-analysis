@@ -490,6 +490,10 @@ def test_auto_submit_creates_job_and_redirects_to_codebook_list(client, fake_bac
         "transcript_document_ids": None,
         "research_query": None,
         "researcher_topics": None,
+        "analysis_name": None,
+        "custom_id": None,
+        "max_refinement_rounds": None,
+        "apply_after_generation": None,
     }
 
 
@@ -538,6 +542,10 @@ def test_auto_submit_forwards_research_query_and_topics(client, fake_backend):
         "transcript_document_ids": None,
         "research_query": "How do participants describe remote work challenges?",
         "researcher_topics": "isolation, productivity",
+        "analysis_name": None,
+        "custom_id": None,
+        "max_refinement_rounds": None,
+        "apply_after_generation": None,
     }
 
 

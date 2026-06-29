@@ -101,6 +101,16 @@ class CodebookSchema(BaseSchema):
 
 class CodebookGenerateRequest(BaseSchema):
     codebook_name: str = Field(min_length=1, max_length=255)
+    analysis_name: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Optional name for the application run created after generation.",
+    )
+    custom_id: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Optional external identifier for the application run.",
+    )
     corpus_id: UUID
     transcript_document_ids: list[UUID] | None = None
     research_query: str | None = Field(
@@ -113,6 +123,16 @@ class CodebookGenerateRequest(BaseSchema):
         max_length=_QUERY_MAX,
         description="Optional comma-separated topics the researcher wants the analysis to cover.",
     )
+    max_refinement_rounds: int = Field(
+        default=5,
+        ge=0,
+        le=10,
+        description="Maximum traceable reviewer/refinement rounds before selecting the best codebook iteration.",
+    )
+    apply_after_generation: bool = Field(
+        default=True,
+        description="Apply the generated codebook to the selected transcripts in the same job.",
+    )
 
     @field_validator("codebook_name")
     @classmethod
@@ -122,14 +142,27 @@ class CodebookGenerateRequest(BaseSchema):
             raise ValueError("codebook_name must not be empty")
         return normalized
 
+    @field_validator("analysis_name", "custom_id")
+    @classmethod
+    def normalize_optional_label(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(value.split())
+        return normalized or None
+
     @field_validator("transcript_document_ids")
     @classmethod
     def normalize_transcript_document_ids(cls, values: list[UUID] | None) -> list[UUID] | None:
-        if values is None:
-            return None
         if not values:
             return None
-        return values
+        ordered_unique: list[UUID] = []
+        seen: set[UUID] = set()
+        for document_id in values:
+            if document_id in seen:
+                continue
+            seen.add(document_id)
+            ordered_unique.append(document_id)
+        return ordered_unique
 
     @field_validator("research_query", mode="before")
     @classmethod
@@ -178,10 +211,16 @@ class GeneratedCodebookResponse(BaseSchema):
         attempts: int
 
     codebook: CodebookSchema
+    application_run_id: UUID | None = None
     transcripts_processed: int
     passages_processed: int
     themes_created: int
     codes_created: int
+    documents_coded: int | None = None
+    documents_failed: int | None = None
+    quotes_created: int | None = None
+    provenance: dict[str, object] | None = None
+    action_log: list[dict[str, object]] = Field(default_factory=list)
     passages_failed: int = 0
     failed_passages: list[PassageFailure] = Field(default_factory=list)
 
@@ -199,6 +238,8 @@ class CodebookGenerationJobSchema(BaseSchema):
     phase: str
     progress_percent: int
     codebook_name: str
+    analysis_name: str | None = None
+    custom_id: str | None = None
     corpus_id: UUID
     transcript_document_ids: list[UUID]
     cancel_requested: bool
@@ -206,13 +247,25 @@ class CodebookGenerationJobSchema(BaseSchema):
     researcher_topics: str | None = None
 
     codebook_id: UUID | None = None
+    application_run_id: UUID | None = None
+    documents_total: int
+    documents_done: int
+    analysis_units_total: int
+    analysis_units_done: int
     passages_total: int
     passages_done: int
     transcripts_processed: int | None = None
     passages_processed: int | None = None
+    quotes_created: int | None = None
     themes_created: int | None = None
     codes_created: int | None = None
+    documents_coded: int | None = None
+    documents_failed: int | None = None
+    max_refinement_rounds: int
+    apply_after_generation: bool
     error_message: str | None = None
+    provenance_json: str | None = None
+    action_log_json: str | None = None
 
     created_at: datetime
     updated_at: datetime

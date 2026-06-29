@@ -17,6 +17,7 @@ from app.models import (
     ThemeCodeRelationship,
     ThemeHierarchyRelationship,
 )
+from app.schemas.codebook import CodebookSchema, GeneratedCodebookResponse
 from app.schemas.llm import (
     CodeConsolidationResult,
     GeneratedCodeSuggestion,
@@ -128,23 +129,63 @@ async def _create_corpus_and_docs(client) -> tuple[str, list[str]]:
 
 
 def _patch_batched_generation(monkeypatch, single_passage_fn) -> None:
-    async def _fake_generate_codebook_for_passages(passages, *_, **__):
-        results = []
-        for passage in passages:
+    async def _fake_generate_codebook(self, **kwargs) -> GeneratedCodebookResponse:
+        normalized_document_ids = self._deduplicate_document_ids(kwargs.get("transcript_document_ids"))
+        await self._load_corpus(kwargs["corpus_id"])
+        documents = await self._load_documents(
+            corpus_id=kwargs["corpus_id"],
+            transcript_document_ids=normalized_document_ids,
+        )
+        passages = await self._load_passages(
+            corpus_id=kwargs["corpus_id"],
+            transcript_document_ids=[document.id for document in documents],
+        )
+        generation_results: list[PassageCodebookGeneration] = []
+        failed_passages: list[GeneratedCodebookResponse.PassageFailure] = []
+        for passage_index, passage in enumerate(passages, start=1):
             try:
-                results.append(single_passage_fn(passage))
+                generation_results.append(single_passage_fn(passage))
             except Exception as exc:
-                results.append(exc)
-        return results
+                failed_passages.append(
+                    GeneratedCodebookResponse.PassageFailure(
+                        passage_index=passage_index,
+                        passage_excerpt=passage[:200],
+                        error=str(exc),
+                        attempts=3,
+                    )
+                )
+        theme_nodes, code_nodes, hierarchy_edges = self._deduplicate_generation(generation_results)
+        code_nodes = await self._post_process_codes(code_nodes, theme_nodes=theme_nodes, should_cancel=None)
+        theme_nodes, hierarchy_edges = await self._post_process_themes(
+            theme_nodes=theme_nodes,
+            hierarchy_edges=hierarchy_edges,
+            should_cancel=None,
+        )
+        code_nodes = self._remap_code_parent_keys(code_nodes, theme_nodes=theme_nodes)
+        created_codebook, themes_created, codes_created = await self._persist_generated_codebook(
+            codebook_name=kwargs["codebook_name"],
+            corpus_id=kwargs["corpus_id"],
+            research_query=kwargs.get("research_query"),
+            researcher_topics=kwargs.get("researcher_topics"),
+            theme_nodes=theme_nodes,
+            code_nodes=code_nodes,
+            hierarchy_edges=hierarchy_edges,
+        )
+        return GeneratedCodebookResponse(
+            codebook=CodebookSchema.model_validate(created_codebook),
+            application_run_id=None,
+            transcripts_processed=len(documents),
+            passages_processed=len(passages),
+            themes_created=themes_created,
+            codes_created=codes_created,
+            documents_coded=None,
+            documents_failed=None,
+            quotes_created=None,
+            passages_failed=len(failed_passages),
+            failed_passages=failed_passages,
+        )
 
-    monkeypatch.setattr(
-        "app.services.codebook_generation.generate_codebook_for_passages",
-        _fake_generate_codebook_for_passages,
-    )
-    monkeypatch.setattr(
-        "app.services.codebook_generation.build_codebook_generation_chain",
-        lambda *_, **__: object(),
-    )
+    monkeypatch.setattr(CodebookGenerationService, "generate_codebook", _fake_generate_codebook)
 
 
 async def test_generate_codebook_creates_deduplicated_themes_and_codes(

@@ -186,7 +186,7 @@ def _object_list(value: object) -> list[object]:
 
 
 class TraceableAnalysisService:
-    """Experimental quote-grounded codebook generation plus application.
+    """Quote-grounded codebook generation plus optional application.
 
     The pipeline follows the paper's overall shape while adapting persistence to
     the existing codebook/application tables: quote-code evidence first, code
@@ -211,6 +211,7 @@ class TraceableAnalysisService:
         research_query: str | None = None,
         researcher_topics: str | None = None,
         max_refinement_rounds: int = 1,
+        apply_after_generation: bool = True,
         provider: str | None = None,
         on_unit_progress: Callable[[int, int], Awaitable[None]] | None = None,
         on_phase_progress: Callable[[str, int, int], Awaitable[None]] | None = None,
@@ -223,11 +224,13 @@ class TraceableAnalysisService:
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
         logger.info(
             "Traceable analysis started: corpus_id={}, selected_documents={}, codebook_name='{}', "
-            "max_refinement_rounds={}, research_query_present={}, researcher_topics_present={}",
+            "max_refinement_rounds={}, apply_after_generation={}, research_query_present={}, "
+            "researcher_topics_present={}",
             corpus_id,
             len(normalized_document_ids) if normalized_document_ids else "all",
             codebook_name,
             max_refinement_rounds,
+            apply_after_generation,
             bool(research_query),
             bool(researcher_topics),
         )
@@ -386,50 +389,63 @@ class TraceableAnalysisService:
             len(persisted.code_by_label),
         )
 
-        if on_phase is not None:
-            await on_phase("applying_codebook")
-        # Final paper-style application: after refinement, apply only the fixed
-        # generated codebook. Generation quotes are provenance, not assignments.
-        application_result = await self._apply_codebook_to_documents(
-            documents=documents,
-            synthesis=synthesis,
-            should_cancel=should_cancel,
-        )
-        applied_evidence = application_result.evidence
-        if application_result.action_log:
-            action_log.extend(application_result.action_log)
-        action_log.append(
-            {
-                "action": "apply_final_codebook",
-                "documents": len(documents),
-                "assignments": len(applied_evidence),
-                "documents_failed": len(application_result.failed_document_ids),
-            }
-        )
-        logger.info(
-            "Traceable final application complete: documents={}, assignments={}, failed_documents={}",
-            len(documents),
-            len(applied_evidence),
-            len(application_result.failed_document_ids),
-        )
-        application_run = await self._persist_application(
-            analysis_name=analysis_name,
-            custom_id=custom_id,
-            corpus_id=corpus_id,
-            documents=documents,
-            applied_evidence=applied_evidence,
-            failed_document_ids=application_result.failed_document_ids,
-            persisted=persisted,
-        )
-        if on_application_run_created is not None:
-            await on_application_run_created(application_run.id)
+        applied_evidence: list[_AppliedEvidence] = []
+        final_failed_document_ids: list[UUID] = []
+        application_run: CodebookApplicationRun | None = None
+        if apply_after_generation:
+            if on_phase is not None:
+                await on_phase("applying_codebook")
+            # Final paper-style application: after refinement, apply only the fixed
+            # generated codebook. Generation quotes are provenance, not assignments.
+            application_result = await self._apply_codebook_to_documents(
+                documents=documents,
+                synthesis=synthesis,
+                should_cancel=should_cancel,
+            )
+            applied_evidence = application_result.evidence
+            final_failed_document_ids = application_result.failed_document_ids
+            if application_result.action_log:
+                action_log.extend(application_result.action_log)
+            action_log.append(
+                {
+                    "action": "apply_final_codebook",
+                    "documents": len(documents),
+                    "assignments": len(applied_evidence),
+                    "documents_failed": len(final_failed_document_ids),
+                }
+            )
+            logger.info(
+                "Traceable final application complete: documents={}, assignments={}, failed_documents={}",
+                len(documents),
+                len(applied_evidence),
+                len(final_failed_document_ids),
+            )
+            application_run = await self._persist_application(
+                analysis_name=analysis_name,
+                custom_id=custom_id,
+                corpus_id=corpus_id,
+                documents=documents,
+                applied_evidence=applied_evidence,
+                failed_document_ids=final_failed_document_ids,
+                persisted=persisted,
+            )
+            if on_application_run_created is not None:
+                await on_application_run_created(application_run.id)
+        else:
+            action_log.append(
+                {
+                    "action": "skip_final_application",
+                    "reason": "apply_after_generation=false",
+                }
+            )
+
         logger.info(
             "Traceable analysis finished: codebook_id={}, application_run_id={}, documents_coded={}, "
             "documents_failed={}, final_themes={}, final_codes={}",
             persisted.codebook.id,
-            application_run.id,
-            application_run.documents_coded,
-            application_run.documents_failed,
+            application_run.id if application_run is not None else None,
+            application_run.documents_coded if application_run is not None else 0,
+            application_run.documents_failed if application_run is not None else 0,
             len(persisted.theme_by_label),
             len(persisted.code_by_label),
         )
@@ -442,19 +458,19 @@ class TraceableAnalysisService:
             iteration_artifacts=iteration_artifacts,
             selected_iteration=selected_iteration.iteration,
             used_heldout_evaluation=bool(heldout_documents),
-            final_failed_document_ids=application_result.failed_document_ids,
+            final_failed_document_ids=final_failed_document_ids,
         )
         action_log = self._with_action_ids(action_log)
         return TraceableAnalysisResult(
             codebook_id=persisted.codebook.id,
-            application_run_id=application_run.id,
+            application_run_id=application_run.id if application_run is not None else None,
             documents_processed=len(documents),
             analysis_units_processed=len(documents),
             quotes_created=len(quote_evidence),
             codes_created=len(persisted.code_by_label),
             themes_created=len(persisted.theme_by_label),
-            documents_coded=application_run.documents_coded,
-            documents_failed=application_run.documents_failed,
+            documents_coded=application_run.documents_coded if application_run is not None else 0,
+            documents_failed=application_run.documents_failed if application_run is not None else 0,
             provenance=provenance,
             action_log=action_log,
         )
@@ -3416,9 +3432,9 @@ class TraceableAnalysisService:
             id=uuid.uuid4(),
             corpus_id=corpus_id,
             name=codebook_name,
-            description="Generated by experimental traceable analysis.",
+            description="Generated by traceable analysis.",
             version=version,
-            created_by="traceable-analysis",
+            created_by="system-llm",
             research_query=research_query,
             researcher_topics=researcher_topics,
         )
@@ -3993,7 +4009,7 @@ class TraceableAnalysisService:
         used_heldout_evaluation: bool = False,
         final_failed_document_ids: list[UUID] | None = None,
     ) -> dict[str, object]:
-        # Store paper-like artifact provenance as JSON on the experimental job
+        # Store paper-like artifact provenance as JSON on the generation job
         # instead of adding normalized provenance tables during this test phase.
         theme_artifacts: dict[str, dict[str, object]] = {}
         subtheme_artifacts: dict[str, dict[str, object]] = {}

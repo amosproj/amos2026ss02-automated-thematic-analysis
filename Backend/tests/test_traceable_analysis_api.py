@@ -47,7 +47,7 @@ async def _wait_for_terminal_job_status(client, job_id: str, timeout_seconds: fl
     started = time.monotonic()
     last_payload: dict = {}
     while time.monotonic() - started < timeout_seconds:
-        response = await client.get(f"{API_CODEBOOKS}/generate-apply-jobs/{job_id}")
+        response = await client.get(f"{API_CODEBOOKS}/generate-jobs/{job_id}")
         assert response.status_code == 200
         payload = response.json()["data"]
         last_payload = payload
@@ -57,7 +57,7 @@ async def _wait_for_terminal_job_status(client, job_id: str, timeout_seconds: fl
     raise AssertionError(f"Job {job_id} did not reach terminal status. Last payload: {last_payload}")
 
 
-async def test_traceable_analysis_job_creates_codebook_and_application_run(client, monkeypatch) -> None:
+async def test_generation_job_uses_traceable_pipeline_and_creates_application_run(client, monkeypatch) -> None:
     corpus_id, document_ids = await _create_corpus_with_docs(
         client,
         texts=["The project has manual handoffs slow every review and creates rework."],
@@ -172,7 +172,7 @@ async def test_traceable_analysis_job_creates_codebook_and_application_run(clien
     )
 
     create_response = await client.post(
-        f"{API_CODEBOOKS}/generate-apply-jobs",
+        f"{API_CODEBOOKS}/generate-jobs",
         json={
             "codebook_name": "Traceable Generated",
             "analysis_name": "Traceable Application",
@@ -192,6 +192,8 @@ async def test_traceable_analysis_job_creates_codebook_and_application_run(clien
     assert job["quotes_created"] == 1
     assert job["codes_created"] == 1
     assert job["themes_created"] == 1
+    assert job["documents_coded"] == 1
+    assert job["documents_failed"] == 0
 
     codebook_response = await client.get(f"{API_CODEBOOKS}/{job['codebook_id']}")
     assert codebook_response.status_code == 200
