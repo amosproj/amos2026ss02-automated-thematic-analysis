@@ -141,7 +141,7 @@ def cancel_job(job_id: str):
     try:
         job = _backend().cancel_analysis_job(job_id)
     except BackendError as exc:
-        return jsonify({"error": exc.user_message}), 200
+        return jsonify({"error": exc.user_message}), 400
     return jsonify(job)
 
 @bp.post("/runs/export")
