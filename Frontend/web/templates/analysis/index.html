@@ -127,10 +127,12 @@
     {# Reuses the shared selectable-list pattern (Codebooks/Transcripts). The
        surrounding card is border-0 (shadow only), so the list keeps its own
        border to frame the table. #}
-    <div class="ata-selectable-list border rounded-2" data-selectable-list>
+    <div id="previousRunsList" class="ata-selectable-list border rounded-2" data-selectable-list>
       {% set selectable_list_label = 'analysis runs' %}
       {% set selectable_list_item_singular = 'run' %}
       {% set selectable_list_item_plural = 'runs' %}
+      {% set selectable_list_export_modal_id = 'exportRunsModal' %}
+      {% set selectable_list_export_label = 'Export selected' %}
       {% set selectable_list_delete_action = url_for('analysis.delete_selected_runs', corpus_id=active_corpus_id) %}
       {% set selectable_list_delete_label = 'Delete selected' %}
       {% set selectable_list_delete_modal_id = 'deleteSelectedRunsModal' %}
@@ -179,6 +181,80 @@
             {% endfor %}
           </tbody>
         </table>
+      </div>
+
+      {# Kept inside the selectable list so its form receives the selected run
+         ids that selectable_list.js injects as item_ids (same as the delete modal). #}
+      <div class="modal fade text-start" id="exportRunsModal" tabindex="-1"
+           aria-labelledby="exportRunsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <form method="POST"
+                  action="{{ url_for('analysis.export_selected_runs', corpus_id=active_corpus_id) }}"
+                  data-selectable-list-selected-form>
+              <div class="modal-header">
+                <h5 class="modal-title" id="exportRunsModalLabel">Export Analysis Runs</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <p class="text-secondary">
+                  Pick one or both formats. The selected runs download as a single ZIP
+                  with <strong>one CSV per format, per run</strong>.
+                </p>
+
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" id="exportThemeBased"
+                         name="formats" value="theme-based" checked>
+                  <label class="form-check-label fw-semibold" for="exportThemeBased">Theme-based</label>
+                </div>
+                <p class="small text-secondary ms-4 mb-2">One row per tagged quote, grouped by theme.</p>
+                <div class="table-responsive ms-4 mb-4">
+                  <table class="table table-sm table-bordered small mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Theme Name</th><th>Parent Theme</th><th>Theme Description</th>
+                        <th>Participant ID</th><th>Quote</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr class="text-secondary">
+                        <td>Team Communication</td><td>Communication</td><td>In-person team comms.</td>
+                        <td>P-001</td><td>"Our daily standups help…"</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" id="exportParticipantBased"
+                         name="formats" value="participant-based">
+                  <label class="form-check-label fw-semibold" for="exportParticipantBased">Participant-based</label>
+                </div>
+                <p class="small text-secondary ms-4 mb-2">Demographics repeated per quote, grouped by participant.</p>
+                <div class="table-responsive ms-4 mb-0">
+                  <table class="table table-sm table-bordered small mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Participant ID</th><th>&lt;demographic columns…&gt;</th>
+                        <th>Theme Name</th><th>Quote</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr class="text-secondary">
+                        <td>P-001</td><td>29, Software Engineer, …</td>
+                        <td>Team Communication</td><td>"Our daily standups help…"</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary">Download ZIP</button>
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
     {% else %}

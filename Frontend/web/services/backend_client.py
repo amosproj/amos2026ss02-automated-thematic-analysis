@@ -325,6 +325,21 @@ class BackendClient:
         """Hard-delete an analysis run and its coded results."""
         self._delete(f"/codebook-application-runs/{run_id}")
 
+    def fetch_run_export_csv(self, run_id: str, export_format: str) -> bytes:
+        """Fetch a run's CSV export as raw bytes.
+
+        The export endpoint returns raw CSV, not the JSON envelope, so this
+        bypasses _get / _unwrap.
+        """
+        path = f"/codebook-application-runs/{run_id}/export"
+        started_at = time.monotonic()
+        try:
+            r = self._client.get(path, params={"format": export_format})
+            r.raise_for_status()
+            return r.content
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "GET", started_at)
+
     # ---- Codebook Upload & Parsing ------------------------------------------
 
     def parse_csv_preview(self, file: FileStorage) -> list[dict]:
