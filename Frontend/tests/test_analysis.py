@@ -143,6 +143,22 @@ def test_previous_runs_render_with_delete_toolbar(client, fake_backend):
     assert b"Initial Run" in body
 
 
+def test_previous_runs_render_view_analysis_link(client, fake_backend):
+    corpus_id = _ready_corpus_with_runs(fake_backend)
+    with client.session_transaction() as sess:
+        sess["active_corpus_id"] = corpus_id
+
+    resp = client.get("/analysis/")
+    assert resp.status_code == 200
+    body = resp.data
+    assert b"<th>Actions</th>" in body
+    assert b"View Analysis" in body
+    assert (
+        b'href="/codebooks/test-corpus/cb1/themes?application_run_id=run1"'
+        in body
+    )
+
+
 def test_delete_selected_runs_success(client, fake_backend):
     corpus_id = _ready_corpus_with_runs(fake_backend)
     with client.session_transaction() as sess:

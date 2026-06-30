@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Help & Documentation{% endblock %}
+{% block content %}
+  <div class="mb-4">
+    <h1 class="h3 mb-1">Help &amp; Documentation</h1>
+    <p class="text-secondary mb-0">Resources to help you use the platform and understand its underlying mechanics.</p>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-12 col-md-8">
+      
+      <!-- Getting Started Workflow -->
+      <div class="bg-white border rounded-2 p-4 mb-4">
+        <h2 class="h5 mb-3">Getting Started</h2>
+        <p>The Automated Thematic Analysis tool simplifies the qualitative research process into three main steps:</p>
+        <ol class="mb-0">
+          <li class="mb-2">
+            <strong>Upload your data:</strong> Head over to the <a href="{{ url_for('ingestion.transcripts_landing') }}">Transcripts</a> page to securely upload your interview texts. Optionally, attach metadata via the <a href="{{ url_for('demographic.demographic_landing') }}">Demographic Data</a> section.
+          </li>
+          <li class="mb-2">
+            <strong>Generate a Codebook:</strong> On the <a href="{{ url_for('codebooks.list_codebooks') }}">Codebooks</a> page, you can instruct our LLM to automatically generate a hierarchical theme-structure from your corpus, or you can build/upload one manually.
+          </li>
+          <li>
+            <strong>Run the Analysis:</strong> Navigate to the <a href="{{ url_for('analysis.index') }}">Analysis</a> workspace to apply your Codebook across all documents. The system will extract specific quotes and link them to themes for easy review.
+          </li>
+        </ol>
+      </div>
+
+      <!-- FAQ -->
+      <div class="bg-white border rounded-2 p-4">
+        <h2 class="h5 mb-3">Frequently Asked Questions</h2>
+        
+        <div class="mb-3">
+          <h3 class="h6 mb-1">Which Large Language Model is being used?</h3>
+          <p class="small text-secondary mb-0">By default, we connect to the NHR@FAU cluster, which runs state-of-the-art open-weights models (such as Qwen or Mixtral) in a secure, privacy-compliant environment. You can change the active provider on the <a href="{{ url_for('main.index') }}">Home page</a>.</p>
+        </div>
+        
+        <div class="mb-3">
+          <h3 class="h6 mb-1">What happens to my data?</h3>
+          <p class="small text-secondary mb-0">Your transcripts are stored securely in our database and are only processed by the selected LLM provider. When using the default FAU NHR provider, your data never leaves the university's secure network infrastructure.</p>
+        </div>
+
+        <div>
+          <h3 class="h6 mb-1">How can I extend the platform?</h3>
+          <p class="small text-secondary mb-0">This tool is entirely open-source. If you wish to experiment with different prompt strategies or integrate new generation methods, the backend services are highly compartmentalized. Check out the project repository linked on the right.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Sidebar Links -->
+    <div class="col-12 col-md-4">
+      
+      <div class="bg-white border rounded-2 p-3 mb-3">
+        <h2 class="h6 mb-2">Project Wiki</h2>
+        <p class="text-secondary small mb-3">Comprehensive documentation on system architecture, data models, and API endpoints.</p>
+        <a class="btn btn-sm btn-outline-primary w-100" href="https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/wiki" target="_blank" rel="noopener">
+          Open Wiki &nearr;
+        </a>
+      </div>
+
+      <div class="bg-white border rounded-2 p-3">
+        <h2 class="h6 mb-2">Source Code</h2>
+        <p class="text-secondary small mb-3">Explore the codebase, report issues, or contribute to the project on GitHub.</p>
+        <a class="btn btn-sm btn-dark w-100" href="https://github.com/amosproj/amos2026ss02-automated-thematic-analysis" target="_blank" rel="noopener">
+          View Repository &nearr;
+        </a>
+      </div>
+
+    </div>
+  </div>
+{% endblock %}

@@ -56,9 +56,9 @@
         <div class="d-flex flex-column align-items-end gap-1">
           <button type="button" class="btn btn-sm btn-outline-secondary remove-row-btn"
                   aria-label="Remove">&times;</button>
-          <label class="form-check form-switch mb-0 small">
-            <input class="form-check-input code-toggle" type="checkbox" ${isCode ? "checked" : ""}>
-            <span class="form-check-label">Code</span>
+          <label class="form-check form-switch mb-0 small" title="Mark this row as a code (leaf observation)">
+            <input class="form-check-input code-toggle" type="checkbox"
+                   aria-label="Code" ${isCode ? "checked" : ""}>
           </label>
         </div>
       </div>

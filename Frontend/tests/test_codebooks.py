@@ -175,6 +175,151 @@ def test_codebook_themes_renders_frequency_and_tree(client, fake_backend):
     assert b'id="global-corpus-select"' in resp.data
 
 
+def test_codebook_themes_selects_requested_analysis_run(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    fake_backend.application_runs = [
+        {"id": "run-1", "codebook_id": "cb-1", "name": "Initial Run",
+         "custom_id": "RUN-001", "status": "succeeded",
+         "created_at": "2026-01-01T00:00:00"},
+        {"id": "run-2", "codebook_id": "cb-1", "name": "Follow-up Run",
+         "custom_id": "RUN-002", "status": "succeeded",
+         "created_at": "2026-01-02T00:00:00"},
+    ]
+    fake_backend.theme_frequencies = [
+        {"theme_id": "t-1", "theme_name": "Default Theme",
+         "occurrence_count": 1, "interview_coverage_percentage": 10.0},
+    ]
+    fake_backend.theme_frequencies_by_run = {
+        "run-2": [
+            {"theme_id": "t-1", "theme_name": "Run Two Theme",
+             "occurrence_count": 7, "interview_coverage_percentage": 70.0},
+        ],
+    }
+    fake_backend.theme_tree = [
+        {"theme": {"id": "t-1", "label": "Run Two Theme", "is_active": True},
+         "children": []},
+    ]
+
+    resp = client.get(
+        "/codebooks/test-corpus-id/cb-1/themes?application_run_id=run-2",
+        follow_redirects=True,
+    )
+
+    assert resp.status_code == 200
+    assert fake_backend.last_theme_frequencies_application_run_id == "run-2"
+    assert b"Run Two Theme" in resp.data
+    assert b"analysis-run-bar" in resp.data
+    assert b'id="application-run-select"' in resp.data
+    assert b'value="run-2" selected' in resp.data
+    assert b"Latest successful" in resp.data
+    assert b"Follow-up Run - 2026-01-02 00:00" in resp.data
+    assert b"Latest successful run" not in resp.data
+
+
+def test_codebook_themes_defaults_to_latest_successful_run(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    fake_backend.application_runs = [
+        {"id": "run-1", "codebook_id": "cb-1", "name": "Initial Run",
+         "custom_id": "RUN-001", "status": "succeeded",
+         "created_at": "2026-01-01T00:00:00"},
+        {"id": "run-2", "codebook_id": "cb-1", "name": "Latest Run",
+         "custom_id": "RUN-002", "status": "succeeded",
+         "created_at": "2026-01-02T00:00:00", "documents_coded": 4,
+         "documents_total": 5, "documents_failed": 1},
+        {"id": "run-3", "codebook_id": "cb-1", "name": "Running Run",
+         "custom_id": "RUN-003", "status": "running",
+         "created_at": "2026-01-03T00:00:00"},
+    ]
+    fake_backend.theme_frequencies_by_run = {
+        "run-2": [
+            {"theme_id": "t-1", "theme_name": "Latest Theme",
+             "occurrence_count": 7, "interview_coverage_percentage": 70.0},
+        ],
+    }
+    fake_backend.theme_tree = [
+        {"theme": {"id": "t-1", "label": "Latest Theme", "is_active": True},
+         "children": []},
+    ]
+
+    resp = client.get("/codebooks/test-corpus-id/cb-1/themes", follow_redirects=True)
+
+    assert resp.status_code == 200
+    assert fake_backend.last_theme_frequencies_application_run_id == "run-2"
+    assert b'value="run-2" selected' in resp.data
+    assert b"Latest Theme" in resp.data
+    assert b"4 coded" in resp.data
+    assert b"1 failed" in resp.data
+
+
+def test_codebook_themes_shows_analysis_run_bar_without_runs(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    fake_backend.application_runs = []
+    fake_backend.theme_tree = [
+        {"theme": {"id": "t-1", "label": "Work-Life Balance", "is_active": True},
+         "children": []},
+    ]
+
+    resp = client.get("/codebooks/test-corpus-id/cb-1/themes", follow_redirects=True)
+
+    assert resp.status_code == 200
+    assert b"analysis-run-bar" in resp.data
+    assert b"Select an analysis run" in resp.data
+    assert b"No analysis runs for this codebook." in resp.data
+    assert b'id="application-run-select"' in resp.data
+    assert b"disabled" in resp.data
+    assert b"No analysis runs available" in resp.data
+
+
+def test_codebook_themes_defaults_to_latest_failed_run_when_no_success(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    fake_backend.application_runs = [
+        {"id": "run-1", "codebook_id": "cb-1", "name": "Failed Run 1",
+         "custom_id": "RUN-001", "status": "failed",
+         "created_at": "2026-01-01T00:00:00", "documents_coded": 1,
+         "documents_total": 5, "documents_failed": 4},
+        {"id": "run-2", "codebook_id": "cb-1", "name": "Failed Run 2",
+         "custom_id": "RUN-002", "status": "failed",
+         "created_at": "2026-01-02T00:00:00", "documents_coded": 2,
+         "documents_total": 5, "documents_failed": 3},
+    ]
+    fake_backend.theme_frequencies_by_run = {
+        "run-2": [
+            {"theme_id": "t-1", "theme_name": "Partial Theme",
+             "occurrence_count": 2, "interview_coverage_percentage": 20.0},
+        ],
+    }
+    fake_backend.theme_tree = [
+        {"theme": {"id": "t-1", "label": "Partial Theme", "is_active": True},
+         "children": []},
+    ]
+
+    resp = client.get("/codebooks/test-corpus-id/cb-1/themes", follow_redirects=True)
+
+    assert resp.status_code == 200
+    assert fake_backend.last_theme_frequencies_application_run_id == "run-2"
+    assert b'value="run-2" selected' in resp.data
+    assert b"Failed" in resp.data
+    assert b"This analysis run failed." in resp.data
+    assert b"2 coded" in resp.data
+    assert b"3 failed" in resp.data
+
+
 def test_codebook_themes_renders_name_from_query_param(client, fake_backend):
     fake_backend.codebooks = [
         {"id": "cb-1", "name": "Interview Codebook", "version": 3,

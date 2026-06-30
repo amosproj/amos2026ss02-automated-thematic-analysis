@@ -42,6 +42,8 @@ class FakeBackend:
         self.uploaded_files: list[str] = []
         self.codebooks: list[dict] = []
         self.theme_frequencies: list[dict] = []
+        self.theme_frequencies_by_run: dict[str, list[dict]] = {}
+        self.last_theme_frequencies_application_run_id: str | None = None
         self.theme_tree: list[dict] = []
         # Analysis runs (Previous Analysis Runs box)
         self.application_runs: list[dict] = []
@@ -168,8 +170,13 @@ class FakeBackend:
         from web.services.backend_client import BackendNotFoundError
         raise BackendNotFoundError(user_message="Codebook not found.")
 
-    def get_theme_frequencies(self, codebook_id: str) -> list[dict]:
+    def get_theme_frequencies(
+        self, codebook_id: str, application_run_id: str | None = None
+    ) -> list[dict]:
         self._maybe_raise("get_theme_frequencies")
+        self.last_theme_frequencies_application_run_id = application_run_id
+        if application_run_id and application_run_id in self.theme_frequencies_by_run:
+            return self.theme_frequencies_by_run[application_run_id]
         return self.theme_frequencies
 
     def get_theme_tree(self, codebook_id: str) -> list[dict]:

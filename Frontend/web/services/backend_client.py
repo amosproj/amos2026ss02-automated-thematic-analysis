@@ -197,18 +197,29 @@ class BackendClient:
     # ---- Codebooks ----------------------------------------------------------
 
 
-    def get_theme_frequencies(self, codebook_id: str) -> list[dict]:
-        return self._get(f"/codebooks/{codebook_id}/themes")
+    def get_theme_frequencies(
+        self, codebook_id: str, application_run_id: str | None = None
+    ) -> list[dict]:
+        params = {"application_run_id": application_run_id} if application_run_id else None
+        return self._get(f"/codebooks/{codebook_id}/themes", params=params)
 
     def get_theme_tree(self, codebook_id: str) -> list[dict]:
         return self._get(f"/codebooks/{codebook_id}/themes/tree")
 
     def get_theme_quotes(
-        self, codebook_id: str, theme_id: str, page: int = 1, page_size: int = 20
+        self,
+        codebook_id: str,
+        theme_id: str,
+        page: int = 1,
+        page_size: int = 20,
+        application_run_id: str | None = None,
     ) -> dict:
+        params = {"page": page, "page_size": page_size}
+        if application_run_id:
+            params["application_run_id"] = application_run_id
         return self._get(
             f"/codebooks/{codebook_id}/themes/{theme_id}/quotes",
-            params={"page": page, "page_size": page_size},
+            params=params,
         )
 
     # ---- Demographic --------------------------------------------------------
@@ -338,6 +349,21 @@ class BackendClient:
     def delete_codebook_application_run(self, run_id: str) -> None:
         """Hard-delete an analysis run and its coded results."""
         self._delete(f"/codebook-application-runs/{run_id}")
+
+    def fetch_run_export_csv(self, run_id: str, export_format: str) -> bytes:
+        """Fetch a run's CSV export as raw bytes.
+
+        The export endpoint returns raw CSV, not the JSON envelope, so this
+        bypasses _get / _unwrap.
+        """
+        path = f"/codebook-application-runs/{run_id}/export"
+        started_at = time.monotonic()
+        try:
+            r = self._client.get(path, params={"format": export_format})
+            r.raise_for_status()
+            return r.content
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "GET", started_at)
 
     # ---- Codebook Upload & Parsing ------------------------------------------
 
