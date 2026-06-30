@@ -5,7 +5,10 @@ tested endpoints over HTTP/REST on an in-memory SQLite database.
 """
 from __future__ import annotations
 
+import json
 import uuid
+
+from app.models import CodebookApplicationJob
 
 API = "/api/v1/codebooks"
 CORPUS_ID = "00000000-0000-0000-0000-000000000099"
@@ -260,4 +263,71 @@ async def test_delete_codebook_not_found(client):
     body = resp.json()
     assert body["success"] is False
     assert "not found" in body["error"].lower()
+
+
+async def test_delete_codebook_warns_when_running_analysis_depends_on_it(client, db_session):
+    await _ensure_corpus(client)
+    payload = {
+        "name": "Active Analysis Codebook",
+        "corpus_id": CORPUS_ID,
+        "nodes": [
+            {"name": f"Theme {index}", "description": "Desc", "node_type": "THEME"}
+            for index in range(1, 6)
+        ],
+    }
+    create_resp = await client.post(f"{API}/", json=payload)
+    codebook_id = create_resp.json()["data"]["id"]
+
+    job = CodebookApplicationJob(
+        id=uuid.uuid4(),
+        name="Running Analysis",
+        status="running",
+        phase="coding_documents",
+        corpus_id=uuid.UUID(CORPUS_ID),
+        codebook_id=uuid.UUID(codebook_id),
+        transcript_document_ids_json=json.dumps([]),
+        cancel_requested=False,
+    )
+    db_session.add(job)
+    await db_session.commit()
+
+    resp = await client.delete(f"{API}/{codebook_id}")
+
+    assert resp.status_code == 409
+    assert "running analysis" in resp.json()["error"].lower()
+
+
+async def test_delete_codebook_force_cancels_impacted_analysis(client, db_session):
+    await _ensure_corpus(client)
+    payload = {
+        "name": "Forced Delete Codebook",
+        "corpus_id": CORPUS_ID,
+        "nodes": [
+            {"name": f"Theme {index}", "description": "Desc", "node_type": "THEME"}
+            for index in range(1, 6)
+        ],
+    }
+    create_resp = await client.post(f"{API}/", json=payload)
+    codebook_id = create_resp.json()["data"]["id"]
+
+    job = CodebookApplicationJob(
+        id=uuid.uuid4(),
+        name="Running Analysis",
+        status="running",
+        phase="coding_documents",
+        corpus_id=uuid.UUID(CORPUS_ID),
+        codebook_id=uuid.UUID(codebook_id),
+        transcript_document_ids_json=json.dumps([]),
+        cancel_requested=False,
+    )
+    db_session.add(job)
+    await db_session.commit()
+
+    resp = await client.delete(f"{API}/{codebook_id}", params={"force": "true"})
+
+    assert resp.status_code == 200
+    refreshed_job = await db_session.get(CodebookApplicationJob, job.id)
+    if refreshed_job is not None:
+        await db_session.refresh(refreshed_job)
+        assert refreshed_job.cancel_requested is True
 

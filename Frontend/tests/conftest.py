@@ -57,6 +57,10 @@ class FakeBackend:
         # Analysis runs (Previous Analysis Runs box)
         self.application_runs: list[dict] = []
         self.deleted_run_ids: list[str] = []
+        self.cancelled_analysis_job_ids: list[str] = []
+        self.force_deleted_documents: list[tuple[str, str]] = []
+        self.force_deleted_codebooks: list[str] = []
+        self.force_deleted_corpora: list[str] = []
         # Demographic data
         self.demographic_files: list[dict] = []
         self.demographic_rows: list[dict] = []
@@ -129,8 +133,10 @@ class FakeBackend:
         self.last_created_corpus = created
         return created
 
-    def delete_corpus(self, corpus_id: str) -> None:
+    def delete_corpus(self, corpus_id: str, *, force: bool = False) -> None:
         self._maybe_raise("delete_corpus")
+        if force:
+            self.force_deleted_corpora.append(corpus_id)
         self.corpora = [c for c in self.corpora if c.get("id") != corpus_id]
 
     def upload_files(self, corpus_id, files) -> list[dict]:
@@ -147,14 +153,18 @@ class FakeBackend:
         self._maybe_raise("get_document_content")
         return self.document_content
 
-    def delete_document(self, corpus_id, document_id) -> None:
+    def delete_document(self, corpus_id, document_id, *, force: bool = False) -> None:
         self._maybe_raise("delete_document")
+        if force:
+            self.force_deleted_documents.append((corpus_id, document_id))
         self.documents = [d for d in self.documents if d["id"] != document_id]
 
     # ---- Codebooks / themes -------------------------------------------------
 
-    def delete_codebook(self, codebook_id: str) -> None:
+    def delete_codebook(self, codebook_id: str, *, force: bool = False) -> None:
         self._maybe_raise("delete_codebook")
+        if force:
+            self.force_deleted_codebooks.append(codebook_id)
         self.codebooks = [cb for cb in self.codebooks if cb.get("id") != codebook_id]
 
     def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
@@ -358,6 +368,15 @@ class FakeBackend:
             return {"id": job_id, "status": "succeeded", "documents_total": 5, "documents_done": 5}
         return self.analysis_jobs[job_id]
 
+    def cancel_analysis_job(self, job_id: str) -> dict:
+        self._maybe_raise("cancel_analysis_job")
+        self.cancelled_analysis_job_ids.append(job_id)
+        if not hasattr(self, "analysis_jobs"):
+            self.analysis_jobs = {}
+        job = self.analysis_jobs.setdefault(job_id, {"id": job_id, "status": "running"})
+        job["cancel_requested"] = True
+        return job
+
     def list_codebook_application_runs(self, codebook_id: str) -> list[dict]:
         self._maybe_raise("list_codebook_application_runs")
         return [
@@ -389,6 +408,8 @@ class FakeBackend:
             and self.raise_on[0] == method
         ):
             exc_class = self.raise_on[1]
+            if exc_class.__name__ == "BackendConflictError":
+                raise exc_class("Deleting this item would interrupt a running analysis.")
             raise exc_class()
 
 
