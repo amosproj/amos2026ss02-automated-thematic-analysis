@@ -10,7 +10,9 @@
      data-codebook-id="{{ codebook_id }}"
      data-corpus-id="{{ corpus_id }}"
      data-application-run-id="{{ selected_application_run_id or '' }}"
+     data-demographic-dimensions='{{ (demographic_dimensions or []) | tojson }}'
      data-quotes-url-template="{{ url_for('codebooks.theme_quotes_json', corpus_id=corpus_id, codebook_id=codebook_id, theme_id='__THEME__') }}"
+     data-breakdown-url-template="{{ url_for('codebooks.theme_demographic_breakdown_json', corpus_id=corpus_id, codebook_id=codebook_id, theme_id='__THEME__') }}"
      data-read-url-template="{{ url_for('ingestion.read_transcript', corpus_id=corpus_id, document_id='__DOC__') }}">
 
   {% if corpus_id and corpus_options %}
@@ -220,6 +222,51 @@
 
     </div>
 
+    {# Demographic breakdown (UC 3.6) — per-theme, driven by the selected theme #}
+    <div class="row g-3 mt-1">
+      <div class="col-12">
+        <div class="bg-white border rounded-3 p-3">
+          <h2 class="h6 panel-title">Demographic Breakdown</h2>
+
+          {% if demographic_dimensions %}
+            <p class="text-secondary small mb-2">
+              Choose one or more demographic variables to see how
+              <span id="breakdown-theme-name" class="fw-semibold">the selected theme</span>'s
+              frequency differs across groups. Your selection applies to this theme only.
+            </p>
+
+            <div id="breakdown-dimension-picker" class="d-flex flex-wrap gap-3 mb-3">
+              {% for dim in demographic_dimensions %}
+                <div class="form-check form-check-inline m-0">
+                  <input class="form-check-input" type="checkbox"
+                         id="breakdown-dim-{{ loop.index }}"
+                         value="{{ dim }}" data-breakdown-dimension>
+                  <label class="form-check-label" for="breakdown-dim-{{ loop.index }}">{{ dim }}</label>
+                </div>
+              {% endfor %}
+            </div>
+
+            <p id="breakdown-empty" class="text-secondary mb-0 text-center py-3">
+              Select a theme and at least one demographic variable to see the breakdown.
+            </p>
+            <div id="breakdown-loading" class="d-none text-center py-4">
+              <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading breakdown…</span>
+              </div>
+            </div>
+            <div id="breakdown-error" class="d-none alert alert-danger" role="alert"></div>
+            <div id="breakdown-results"></div>
+          {% else %}
+            <div class="alert alert-secondary mb-0" role="status">
+              <strong>No demographic data available.</strong>
+              Upload a demographic CSV for this corpus and link it to your transcripts to
+              break themes down by variables such as age, gender, or political affiliation.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
   {% else %}
     <p class="text-secondary">No themes found for this codebook.</p>
   {% endif %}
@@ -260,4 +307,5 @@
 {% block scripts %}
 
 <script src="{{ url_for('static', filename='js/codebook_themes.js') }}"></script>
+<script src="{{ url_for('static', filename='js/theme_breakdown.js') }}"></script>
 {% endblock %}

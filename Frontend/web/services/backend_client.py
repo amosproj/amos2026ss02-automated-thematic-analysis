@@ -211,7 +211,30 @@ class BackendClient:
             params=params,
         )
 
+    def get_theme_demographic_breakdown(
+        self,
+        codebook_id: str,
+        theme_id: str,
+        dimensions: list[str],
+        application_run_id: str | None = None,
+    ) -> dict:
+        """Break a theme's frequency down by the given demographic dimensions."""
+        params: dict = {"dimensions": ",".join(dimensions)}
+        if application_run_id:
+            params["application_run_id"] = application_run_id
+        return self._get(
+            f"/codebooks/{codebook_id}/themes/{theme_id}/demographic-breakdown",
+            params=params,
+        )
+
     # ---- Demographic --------------------------------------------------------
+
+    def get_demographic_dimensions(self, corpus_id: str) -> list[str]:
+        """List demographic variables available for breaking down a theme."""
+        return self._get(
+            f"/demographic/{corpus_id}/dimensions",
+            sub_key="dimensions",
+        )
 
     def upload_demographic(
         self, corpus_id: str, file: FileStorage, name: str | None = None,
