@@ -91,9 +91,10 @@ async def delete_corpus(
     corpus_id: uuid.UUID,
     session: DbSession,
     settings: AppSettings,
+    force: bool = False,
 ) -> ResponseEnvelope[bool]:
     service = IngestionService(session)
-    await service.delete_corpus(corpus_id)
+    await service.delete_corpus(corpus_id, force=force)
     return ResponseEnvelope.ok(True)
 
 
@@ -250,8 +251,9 @@ async def delete_document(
     corpus_id: uuid.UUID,
     document_id: uuid.UUID,
     session: DbSession,
+    force: bool = False,
 ) -> ResponseEnvelope[None]:
     """Delete a single document and its relationships."""
     service = IngestionService(session)
-    await service.delete_document(corpus_id=corpus_id, document_id=document_id)
+    await service.delete_document(corpus_id=corpus_id, document_id=document_id, force=force)
     return ResponseEnvelope.ok(None)

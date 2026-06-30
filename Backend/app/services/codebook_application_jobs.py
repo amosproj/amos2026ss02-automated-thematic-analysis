@@ -126,7 +126,7 @@ class CodebookApplicationJobRunner:
             async def _should_cancel() -> bool:
                 async with session_factory() as cancel_session:
                     cancel_job = await cancel_session.get(CodebookApplicationJob, job_id)
-                    return bool(cancel_job and cancel_job.cancel_requested)
+                    return cancel_job is None or cancel_job.cancel_requested
 
             try:
                 summary = await service.apply_codebook(
@@ -141,15 +141,24 @@ class CodebookApplicationJobRunner:
                     on_run_created=_on_run_created,
                     should_cancel=_should_cancel,
                 )
-                await session.refresh(job)
-                job.status = "succeeded"
-                job.phase = "succeeded"
-                job.application_run_id = summary.application_run.id
-                job.documents_total = summary.documents_total
-                job.documents_done = summary.documents_total
-                job.documents_coded = summary.documents_coded
-                job.documents_failed = summary.documents_failed
-                job.error_message = (
+                current_job = await session.get(CodebookApplicationJob, job_id)
+                if current_job is None:
+                    return
+                if current_job.cancel_requested:
+                    current_job.status = "cancelled"
+                    current_job.phase = "cancelled"
+                    current_job.finished_at = _utc_now_naive()
+                    await self._mark_run_terminal(session, current_job.application_run_id, status="cancelled")
+                    await session.commit()
+                    return
+                current_job.status = "succeeded"
+                current_job.phase = "succeeded"
+                current_job.application_run_id = summary.application_run.id
+                current_job.documents_total = summary.documents_total
+                current_job.documents_done = summary.documents_total
+                current_job.documents_coded = summary.documents_coded
+                current_job.documents_failed = summary.documents_failed
+                current_job.error_message = (
                     json.dumps(
                         {
                             "type": "document_application_partial_failures",
@@ -161,24 +170,35 @@ class CodebookApplicationJobRunner:
                     if summary.documents_failed
                     else None
                 )
-                job.finished_at = _utc_now_naive()
+                current_job.finished_at = _utc_now_naive()
                 await session.commit()
             except CodebookApplicationCancelledError:
                 await session.rollback()
-                await session.refresh(job)
-                job.status = "cancelled"
-                job.phase = "cancelled"
-                job.finished_at = _utc_now_naive()
-                await self._mark_run_terminal(session, job.application_run_id, status="cancelled")
+                current_job = await session.get(CodebookApplicationJob, job_id)
+                if current_job is None:
+                    return
+                current_job.status = "cancelled"
+                current_job.phase = "cancelled"
+                current_job.finished_at = _utc_now_naive()
+                await self._mark_run_terminal(session, current_job.application_run_id, status="cancelled")
                 await session.commit()
             except Exception as exc:
                 await session.rollback()
-                await session.refresh(job)
-                job.status = "failed"
-                job.phase = "failed"
-                job.error_message = str(exc)
-                job.finished_at = _utc_now_naive()
-                await self._mark_run_terminal(session, job.application_run_id, status="failed")
+                current_job = await session.get(CodebookApplicationJob, job_id)
+                if current_job is None:
+                    return
+                if current_job.cancel_requested:
+                    current_job.status = "cancelled"
+                    current_job.phase = "cancelled"
+                    current_job.finished_at = _utc_now_naive()
+                    await self._mark_run_terminal(session, current_job.application_run_id, status="cancelled")
+                    await session.commit()
+                    return
+                current_job.status = "failed"
+                current_job.phase = "failed"
+                current_job.error_message = str(exc)
+                current_job.finished_at = _utc_now_naive()
+                await self._mark_run_terminal(session, current_job.application_run_id, status="failed")
                 await session.commit()
 
     @staticmethod

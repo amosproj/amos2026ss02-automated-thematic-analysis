@@ -12,10 +12,12 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 
 from web.services.backend_client import (
+    BackendConflictError,
     BackendError,
     BackendNotFoundError,
     get_backend_client as _backend,
@@ -28,6 +30,7 @@ CODING_MODES = ("auto", "semi", "manual")
 
 _QUERY_MIN = 10
 _QUERY_MAX = 500
+_PENDING_CODEBOOK_DELETE_KEY = "pending_codebook_delete"
 
 
 def _format_run_timestamp(run: dict) -> str:
@@ -127,6 +130,22 @@ def _codebook_to_csv(codebook: dict) -> str:
     return output.getvalue()
 
 
+def _pending_codebook_delete(corpus_id: str) -> dict | None:
+    pending = session.pop(_PENDING_CODEBOOK_DELETE_KEY, None)
+    if not isinstance(pending, dict) or pending.get("corpus_id") != corpus_id:
+        return None
+    item_ids = [item_id for item_id in pending.get("item_ids", []) if item_id]
+    if not item_ids:
+        return None
+    return {
+        "message": pending.get("message") or "Deleting these codebooks would interrupt a running analysis.",
+        "item_ids": item_ids,
+        "action": url_for("codebooks.delete_selected_codebooks", corpus_id=corpus_id),
+        "title": "Delete Codebooks",
+        "confirm_label": "Delete",
+    }
+
+
 @bp.get("/")
 def list_codebooks() -> str:
     requested_corpus_id = request.args.get("corpus_id")
@@ -189,6 +208,7 @@ def list_codebooks_for_corpus(corpus_id: str) -> str:
             corpus_options=corpus_options,
             active_corpus_name=corpus_name,
             running_jobs=[],
+            pending_analysis_delete=None,
             error=True,
         )
 
@@ -209,6 +229,7 @@ def list_codebooks_for_corpus(corpus_id: str) -> str:
         corpus_options=corpus_options,
         active_corpus_name=corpus_name,
         running_jobs=running_jobs,
+        pending_analysis_delete=_pending_codebook_delete(active_corpus_id),
     )
 
 
@@ -1074,9 +1095,16 @@ def codebook_review_submit(codebook_id: str) -> str:
 @bp.post("/<corpus_id>/<codebook_id>/delete")
 def delete_codebook(corpus_id: str, codebook_id: str):
     """Delete a codebook and its themes."""
+    force = request.form.get("force_delete") == "1"
     try:
-        _backend().delete_codebook(codebook_id)
+        _backend().delete_codebook(codebook_id, force=force)
         flash("Codebook successfully deleted.", "success")
+    except BackendConflictError as exc:
+        session[_PENDING_CODEBOOK_DELETE_KEY] = {
+            "corpus_id": corpus_id,
+            "item_ids": [codebook_id],
+            "message": exc.user_message,
+        }
     except BackendError as exc:
         flash(exc.user_message, "danger")
     return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
@@ -1090,13 +1118,25 @@ def delete_selected_codebooks(corpus_id: str):
         flash("Select at least one codebook to delete.", "warning")
         return redirect(url_for("codebooks.list_codebooks_for_corpus", corpus_id=corpus_id))
 
+    force = request.form.get("force_delete") == "1"
     deleted = 0
     try:
         client = _backend()
         for codebook_id in codebook_ids:
-            client.delete_codebook(codebook_id)
+            client.delete_codebook(codebook_id, force=force)
             deleted += 1
         flash(f"Deleted {deleted} codebook{'s' if deleted != 1 else ''}.", "success")
+    except BackendConflictError as exc:
+        if deleted:
+            flash(f"Deleted {deleted} codebook{'s' if deleted != 1 else ''} before an error occurred.", "warning")
+        if not force:
+            session[_PENDING_CODEBOOK_DELETE_KEY] = {
+                "corpus_id": corpus_id,
+                "item_ids": codebook_ids[deleted:],
+                "message": exc.user_message,
+            }
+        else:
+            flash(exc.user_message, "danger")
     except BackendError as exc:
         if deleted:
             flash(f"Deleted {deleted} codebook{'s' if deleted != 1 else ''} before an error occurred.", "warning")

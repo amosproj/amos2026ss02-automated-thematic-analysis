@@ -13,6 +13,7 @@ import pytest
 from web.services.backend_client import (
     BackendClient,
     BackendError,
+    BackendConflictError,
     BackendNotFoundError,
     BackendServerError,
     BackendUnavailableError,
@@ -100,6 +101,23 @@ def test_status_422_parses_response_envelope_meta_detail():
     with pytest.raises(BackendValidationError) as exc_info:
         client.list_codebooks()
     assert "username already exists" in exc_info.value.user_message
+
+
+def test_status_409_parses_response_envelope_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            409,
+            json={
+                "success": False,
+                "error": "Deleting this transcript would interrupt a running analysis.",
+                "meta": None,
+            },
+        )
+
+    client = _client_with_handler(handler)
+    with pytest.raises(BackendConflictError) as exc_info:
+        client.delete_document("corpus-1", "doc-1")
+    assert "interrupt a running analysis" in exc_info.value.user_message
 
 
 def test_status_500_maps_to_server_error():
@@ -231,6 +249,29 @@ def test_cancel_generation_job_posts_and_unwraps():
     assert captured["method"] == "POST"
     assert captured["path"].endswith("/codebooks/generate-jobs/job-7/cancel")
     assert job["status"] == "cancelled"
+
+
+def test_cancel_analysis_job_posts_and_unwraps():
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        return httpx.Response(
+            202,
+            json={
+                "success": True,
+                "data": {"id": "job-8", "status": "running", "cancel_requested": True},
+                "error": None,
+                "meta": None,
+            },
+        )
+
+    client = _client_with_handler(handler)
+    job = client.cancel_analysis_job("job-8")
+    assert captured["method"] == "POST"
+    assert captured["path"].endswith("/codebooks/apply-jobs/job-8/cancel")
+    assert job["cancel_requested"] is True
 
 
 # User messages never leak raw exception text

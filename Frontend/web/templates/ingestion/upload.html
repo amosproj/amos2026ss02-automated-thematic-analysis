@@ -15,6 +15,8 @@
   {% set show_delete_corpus = True %}
   {% include "_corpus_select.html" %}
 
+  {% include "_analysis_delete_confirm_modal.html" %}
+
   <div class="row g-4 upload-row">
 
     {# ─── Transcripts card (primary, indigo) ─────────────────────────── #}
@@ -463,4 +465,15 @@
       document.getElementById("codebook-upload-col").scrollIntoView({ behavior: "smooth", block: "nearest" });
     })();
   </script>
+{% endblock %}
+{% block scripts %}
+  {{ super() }}
+  {% if pending_analysis_delete %}
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const modalEl = document.getElementById("confirmAnalysisDeleteModal");
+        if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      });
+    </script>
+  {% endif %}
 {% endblock %}

@@ -136,6 +136,14 @@ def job_status(job_id: str):
         return jsonify({"error": exc.user_message}), 500
 
 
+@bp.post("/job/<job_id>/cancel")
+def cancel_job(job_id: str):
+    try:
+        job = _backend().cancel_analysis_job(job_id)
+    except BackendError as exc:
+        return jsonify({"error": exc.user_message}), 400
+    return jsonify(job)
+
 @bp.post("/runs/export")
 def export_selected_runs() -> Response | str:
     """Export the selected runs as one ZIP with a CSV per run, per chosen format."""

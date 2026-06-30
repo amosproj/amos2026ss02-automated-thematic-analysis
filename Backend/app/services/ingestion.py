@@ -8,6 +8,10 @@ from sqlalchemy.orm import joinedload
 from app.exceptions import NotFoundError, UnprocessableError
 from app.models.ingestion import Corpus, CorpusDocument
 from app.schemas.ingestion import CorpusCreate, DocumentInput
+from app.services.analysis_dependency_guard import (
+    guard_corpus_deletion,
+    guard_document_deletion,
+)
 from app.services.linking import auto_link_demographics
 
 
@@ -72,11 +76,16 @@ class IngestionService:
         )
         return list(rows.scalars().all()), total
 
-    async def delete_corpus(self, corpus_id: uuid.UUID) -> None:
+    async def delete_corpus(self, corpus_id: uuid.UUID, *, force: bool = False) -> None:
         """Delete a corpus and all its associated data.
         Relies on database CASCADE ON DELETE constraints.
         """
         corpus = await self.get_corpus(corpus_id)
+        await guard_corpus_deletion(
+            self._session,
+            corpus_id=corpus_id,
+            force=force,
+        )
         await self._session.delete(corpus)
         await self._session.commit()
 
@@ -162,9 +171,21 @@ class IngestionService:
             raise NotFoundError(f"Document '{document_id}' not found in corpus '{corpus_id}'")
         return doc
 
-    async def delete_document(self, corpus_id: uuid.UUID, document_id: uuid.UUID) -> None:
+    async def delete_document(
+        self,
+        corpus_id: uuid.UUID,
+        document_id: uuid.UUID,
+        *,
+        force: bool = False,
+    ) -> None:
         """Delete a single document by ID. Raises NotFoundError if absent."""
         doc = await self.get_document(corpus_id, document_id)
+        await guard_document_deletion(
+            self._session,
+            corpus_id=corpus_id,
+            document_ids=[document_id],
+            force=force,
+        )
         await self._session.delete(doc)
         await self._session.commit()
 
