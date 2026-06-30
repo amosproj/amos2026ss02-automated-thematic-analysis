@@ -245,6 +245,89 @@
 /* 67–100 %: prevalent — emerald */
 .theme-progress-bar--high { background: linear-gradient(90deg, #059669, #34d399); }
 
+/* ── Demographic breakdown (UC 3.6) ─────────────────────────────────────────── */
+.breakdown-dimension { margin-bottom: 1.5rem; }
+.breakdown-dimension:last-of-type { margin-bottom: 0; }
+
+.breakdown-dim-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #4f46e5;
+    margin-bottom: 0.6rem;
+}
+
+.breakdown-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.9rem;
+}
+
+.breakdown-row {
+    display: grid;
+    grid-template-columns: minmax(90px, 160px) 1fr;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.breakdown-row-label {
+    font-size: 0.82rem;
+    color: #374151;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.breakdown-track {
+    position: relative;
+    height: 20px;
+    background: #eef2ff;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.breakdown-bar {
+    height: 100%;
+    border-radius: 6px;
+    background: linear-gradient(90deg, #4338ca, #6366f1);
+    transition: width 0.4s ease;
+    min-width: 2px;
+}
+
+.breakdown-bar-value {
+    font-size: 0.75rem;
+    color: #1e1b4b;
+    margin-left: 0.5rem;
+    white-space: nowrap;
+}
+
+.breakdown-table th {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+}
+
+.breakdown-small-sample {
+    display: inline-block;
+    font-size: 0.66rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #92400e;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    padding: 1px 7px;
+    margin-left: 6px;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
 /* ── Tree with connector lines (file-explorer style) ────────────────────────── */
 .tree-container {
     flex: 1 1 auto;

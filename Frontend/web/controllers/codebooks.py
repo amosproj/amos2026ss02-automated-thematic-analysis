@@ -298,6 +298,13 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         tree = client.get_theme_tree(active_codebook_id)
         codebook = client.get_codebook(active_codebook_id)
         codes = codebook.get("codes", [])
+
+        # Best-effort: demographic variables available for per-theme breakdowns.
+        # A failure here must not block the themes page, so default to none.
+        try:
+            demographic_dimensions = client.get_demographic_dimensions(active_corpus_id)
+        except BackendError:
+            demographic_dimensions = []
     except BackendNotFoundError as exc:
         flash(exc.user_message, "danger")
         return render_template(
@@ -316,6 +323,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             application_runs=application_runs,
             selected_application_run_id=selected_application_run_id,
             selected_application_run=selected_application_run,
+            demographic_dimensions=[],
             error=True,
         )
     except BackendError as exc:
@@ -336,6 +344,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             application_runs=application_runs,
             selected_application_run_id=selected_application_run_id,
             selected_application_run=selected_application_run,
+            demographic_dimensions=[],
             error=True,
         )
     return render_template(
@@ -354,7 +363,26 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         application_runs=application_runs,
         selected_application_run_id=selected_application_run_id,
         selected_application_run=selected_application_run,
+        demographic_dimensions=demographic_dimensions,
     )
+
+@bp.get("/<corpus_id>/<codebook_id>/themes/<theme_id>/demographic-breakdown.json")
+def theme_demographic_breakdown_json(corpus_id: str, codebook_id: str, theme_id: str):
+    dimensions = [d for d in request.args.get("dimensions", "").split(",") if d]
+    application_run_id = request.args.get("application_run_id") or None
+    try:
+        result = _backend().get_theme_demographic_breakdown(
+            codebook_id,
+            theme_id,
+            dimensions,
+            application_run_id=application_run_id,
+        )
+        return jsonify(result)
+    except BackendError as exc:
+        return jsonify({"error": exc.user_message}), 502
+    except Exception:
+        return jsonify({"error": "An unexpected error occurred."}), 500
+
 
 @bp.get("/<corpus_id>/<codebook_id>/themes/<theme_id>/quotes.json")
 def theme_quotes_json(corpus_id: str, codebook_id: str, theme_id: str):

@@ -51,6 +51,9 @@ class FakeBackend:
         # Demographic data
         self.demographic_files: list[dict] = []
         self.demographic_rows: list[dict] = []
+        self.demographic_dimensions: list[str] = []
+        self.theme_demographic_breakdown: dict = {"theme_id": None, "dimensions": []}
+        self.last_breakdown_request: dict | None = None
         self.demographic_link_summary: dict = {
             "total_transcripts": 0,
             "matched": 0,
@@ -172,6 +175,26 @@ class FakeBackend:
     def get_theme_tree(self, codebook_id: str) -> list[dict]:
         self._maybe_raise("get_theme_tree")
         return self.theme_tree
+
+    def get_demographic_dimensions(self, corpus_id: str) -> list[str]:
+        self._maybe_raise("get_demographic_dimensions")
+        return self.demographic_dimensions
+
+    def get_theme_demographic_breakdown(
+        self,
+        codebook_id: str,
+        theme_id: str,
+        dimensions: list[str],
+        application_run_id: str | None = None,
+    ) -> dict:
+        self._maybe_raise("get_theme_demographic_breakdown")
+        self.last_breakdown_request = {
+            "codebook_id": codebook_id,
+            "theme_id": theme_id,
+            "dimensions": dimensions,
+            "application_run_id": application_run_id,
+        }
+        return self.theme_demographic_breakdown
 
     def create_codebook(self, *, corpus_id: str, name: str, themes: list[dict]) -> dict:
         self._maybe_raise("create_codebook")

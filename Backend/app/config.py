@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     DEMOGRAPHIC_UPLOAD_TTL_SECONDS: int = 60 * 60
     UPLOAD_CLEANUP_INTERVAL_SECONDS: int = 5 * 60
 
+    # Demographic groups smaller than this are flagged as small samples in the
+    # per-theme demographic breakdown so percentages are read with caution.
+    DEMOGRAPHIC_SMALL_SAMPLE_THRESHOLD: int = 5
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV == "production" # Helper property to check if the app is running in production mode

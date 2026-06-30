@@ -193,6 +193,14 @@
     // Detail panel
     // ------------------------------------------------------------------
 
+    // Broadcast theme selection so sibling modules (e.g. the demographic
+    // breakdown panel) can react. A global mirror covers the boot race where a
+    // listener attaches after the initial auto-selection has already fired.
+    function announceSelectedTheme(detail) {
+        window.__ataCurrentTheme = detail.themeId ? detail : null;
+        document.dispatchEvent(new CustomEvent("theme:selected", { detail }));
+    }
+
     function clearThemeDetails() {
         selectedThemeId = null;
         themeDetailsEmpty.classList.remove("d-none");
@@ -202,6 +210,7 @@
         themeDetailsId.textContent          = "";
         themeDetailsOccur.textContent       = "";
         themeDetailsCoverage.textContent    = "";
+        announceSelectedTheme({ themeId: null, themeName: "" });
     }
 
     // Sync the visual selection highlight across both the table and tree.
@@ -232,6 +241,7 @@
         themeDetailsOccur.textContent    = String(info.occurrence_count ?? 0);
         themeDetailsCoverage.textContent = formatCoverage(info.interview_coverage_percentage ?? 0);
         highlightSelectedRow();
+        announceSelectedTheme({ themeId, themeName: info.theme_name ?? "" });
     }
 
     // ------------------------------------------------------------------
