@@ -4,8 +4,8 @@ import json
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Query
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -31,7 +31,9 @@ from app.schemas.codebook_application import (
     ThemeAssignmentSchema,
 )
 from app.schemas.common import ResponseEnvelope
+from app.schemas.export_results import RunExportFormat
 from app.services.codebook_application_jobs import codebook_application_job_runner
+from app.services.export_results import RunExportService
 
 router = APIRouter(tags=["codebook-applications"])
 
@@ -333,6 +335,33 @@ async def get_codebook_application_run(
     return JSONResponse(content=ResponseEnvelope.ok(detail).model_dump(mode="json"))
 
 
+@router.delete(
+    "/codebook-application-runs/{run_id}",
+    response_model=ResponseEnvelope[None],
+    summary="Delete a codebook application run",
+)
+async def delete_codebook_application_run(
+    run_id: UUID,
+    session: DbSession,
+) -> JSONResponse:
+    """Hard-delete an analysis run and all its coded results.
+
+    Cascades to the run's document codings and their theme/code assignments via
+    the database ON DELETE CASCADE constraints. A run that is still running is
+    refused so a live job does not keep writing to a deleted run.
+    """
+    run = await session.get(CodebookApplicationRun, run_id)
+    if run is None:
+        raise NotFoundError(f"Codebook application run '{run_id}' not found")
+    if run.status == "running":
+        raise UnprocessableError(
+            f"Run '{run_id}' is still running. Cancel the analysis before deleting it."
+        )
+    await session.delete(run)
+    await session.commit()
+    return JSONResponse(content=ResponseEnvelope.ok(None).model_dump(mode="json"))
+
+
 @router.get(
     "/codebook-application-runs/{run_id}/documents",
     response_model=ResponseEnvelope[list[DocumentCodingSchema]],
@@ -347,6 +376,30 @@ async def list_codebook_application_run_documents(
         raise NotFoundError(f"Codebook application run '{run_id}' not found")
     document_codings = await _load_document_coding_schemas(run_id=run_id, session=session)
     return JSONResponse(content=ResponseEnvelope.ok(document_codings).model_dump(mode="json"))
+
+
+@router.get(
+    "/codebook-application-runs/{run_id}/export",
+    summary="Export a codebook application run as CSV",
+)
+async def export_codebook_application_run(
+    run_id: UUID,
+    session: DbSession,
+    format: RunExportFormat = Query(description="Table shape: theme-based or participant-based"),
+) -> Response:
+    service = RunExportService(session)
+    data = await service.fetch_rows(run_id)
+    csv_text = (
+        service.to_theme_based_csv(data)
+        if format == RunExportFormat.THEME_BASED
+        else service.to_participant_based_csv(data)
+    )
+    filename = f"run-{run_id}-{format.value}.csv"
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 async def _load_document_coding_schemas(

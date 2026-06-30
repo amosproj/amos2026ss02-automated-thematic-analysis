@@ -42,10 +42,18 @@ class FakeBackend:
         self.uploaded_files: list[str] = []
         self.codebooks: list[dict] = []
         self.theme_frequencies: list[dict] = []
+        self.theme_frequencies_by_run: dict[str, list[dict]] = {}
+        self.last_theme_frequencies_application_run_id: str | None = None
         self.theme_tree: list[dict] = []
+        # Analysis runs (Previous Analysis Runs box)
+        self.application_runs: list[dict] = []
+        self.deleted_run_ids: list[str] = []
         # Demographic data
         self.demographic_files: list[dict] = []
         self.demographic_rows: list[dict] = []
+        self.demographic_dimensions: list[str] = []
+        self.theme_demographic_breakdown: dict = {"theme_id": None, "dimensions": []}
+        self.last_breakdown_request: dict | None = None
         self.demographic_link_summary: dict = {
             "total_transcripts": 0,
             "matched": 0,
@@ -59,9 +67,37 @@ class FakeBackend:
         self.generation_jobs: dict[str, dict] = {}
         self.last_generation_job_request: dict | None = None
         self.last_create_codebook_request: dict | None = None
+        # LLM provider setting (Home page dropdown)
+        self.llm_provider_state: dict = {
+            "active": "FAU",
+            "default": "FAU",
+            "available": [
+                {"id": "FAU", "label": "FAU NHR",
+                 "description": "The university's NHR@FAU gateway (default).",
+                 "has_api_key": True},
+                {"id": "ACADEMIC", "label": "Academic Cloud",
+                 "description": "The GWDG Academic Cloud chat-ai endpoint.",
+                 "has_api_key": True},
+            ],
+        }
+        self.last_set_provider: str | None = None
         # Either a method-name string (generic BackendError) or a
         # (method-name, ExceptionClass) tuple (specific typed subclass).
         self.raise_on: str | tuple[str, type] | None = None
+
+    # ---- Settings -----------------------------------------------------------
+
+    def get_llm_provider(self) -> dict:
+        self._maybe_raise("get_llm_provider")
+        return self.llm_provider_state
+
+    def set_llm_provider(self, provider: str) -> dict:
+        self._maybe_raise("set_llm_provider")
+        self.last_set_provider = provider
+        new_state = dict(self.llm_provider_state)
+        new_state["active"] = provider.upper()
+        self.llm_provider_state = new_state
+        return new_state
 
     # ---- Corpora / documents ------------------------------------------------
 
@@ -127,13 +163,38 @@ class FakeBackend:
         from web.services.backend_client import BackendNotFoundError
         raise BackendNotFoundError(user_message="Codebook not found.")
 
-    def get_theme_frequencies(self, codebook_id: str) -> list[dict]:
+    def get_theme_frequencies(
+        self, codebook_id: str, application_run_id: str | None = None
+    ) -> list[dict]:
         self._maybe_raise("get_theme_frequencies")
+        self.last_theme_frequencies_application_run_id = application_run_id
+        if application_run_id and application_run_id in self.theme_frequencies_by_run:
+            return self.theme_frequencies_by_run[application_run_id]
         return self.theme_frequencies
 
     def get_theme_tree(self, codebook_id: str) -> list[dict]:
         self._maybe_raise("get_theme_tree")
         return self.theme_tree
+
+    def get_demographic_dimensions(self, corpus_id: str) -> list[str]:
+        self._maybe_raise("get_demographic_dimensions")
+        return self.demographic_dimensions
+
+    def get_theme_demographic_breakdown(
+        self,
+        codebook_id: str,
+        theme_id: str,
+        dimensions: list[str],
+        application_run_id: str | None = None,
+    ) -> dict:
+        self._maybe_raise("get_theme_demographic_breakdown")
+        self.last_breakdown_request = {
+            "codebook_id": codebook_id,
+            "theme_id": theme_id,
+            "dimensions": dimensions,
+            "application_run_id": application_run_id,
+        }
+        return self.theme_demographic_breakdown
 
     def create_codebook(self, *, corpus_id: str, name: str, themes: list[dict]) -> dict:
         self._maybe_raise("create_codebook")
@@ -286,7 +347,17 @@ class FakeBackend:
 
     def list_codebook_application_runs(self, codebook_id: str) -> list[dict]:
         self._maybe_raise("list_codebook_application_runs")
-        return []
+        return [
+            run for run in self.application_runs
+            if run.get("codebook_id") in (None, codebook_id)
+        ]
+
+    def delete_codebook_application_run(self, run_id: str) -> None:
+        self._maybe_raise("delete_codebook_application_run")
+        self.deleted_run_ids.append(run_id)
+        self.application_runs = [
+            run for run in self.application_runs if run.get("id") != run_id
+        ]
 
     # ---- Internal -----------------------------------------------------------
 
@@ -312,6 +383,7 @@ def fake_backend(monkeypatch) -> FakeBackend:
     monkeypatch.setattr("web.controllers.codebooks._backend", lambda: fake)
     monkeypatch.setattr("web.controllers.demographic._backend", lambda: fake)
     monkeypatch.setattr("web.controllers.analysis._backend", lambda: fake)
+    monkeypatch.setattr("web.controllers.main._backend", lambda: fake)
     return fake
 
 

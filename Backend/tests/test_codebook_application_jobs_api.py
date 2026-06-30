@@ -149,7 +149,7 @@ def _patch_application(monkeypatch, single_transcript_fn) -> None:
     )
     monkeypatch.setattr(
         "app.services.codebook_application.build_codebook_application_with_codes_chain",
-        lambda: object(),
+        lambda **_: object(),
     )
     monkeypatch.setattr(
         CodebookApplicationService,
@@ -260,7 +260,7 @@ async def test_apply_codebook_uses_application_parallelization_settings(db_engin
     )
     monkeypatch.setattr(
         "app.services.codebook_application.build_codebook_application_with_codes_chain",
-        lambda: object(),
+        lambda **_: object(),
     )
 
     session_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
@@ -323,7 +323,7 @@ async def test_apply_codebook_job_can_be_cancelled_while_running(client, db_engi
     )
     monkeypatch.setattr(
         "app.services.codebook_application.build_codebook_application_with_codes_chain",
-        lambda: object(),
+        lambda **_: object(),
     )
     monkeypatch.setattr(
         CodebookApplicationService,

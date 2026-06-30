@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}{% if codebook_id %}Review Codebook{% else %}Create Codebook{% endif %}{% endblock %}
+{% block head_extra %}
+<style>
+  /* Each .codebook-row is the FRAME for a node *and its whole subtree*: the
+     node's own controls live in .row-card, and its descendants nest inside
+     .node-children, so the border encloses the subtree (visualises set ⊇ subset). */
+  .codebook-row { background: #fff; border: 1px solid #dee2e6; border-radius: .5rem;
+                  padding: .5rem .6rem; margin-bottom: .5rem; }
+  .codebook-row.is-code { background: #fff9e6; border-color: #ffd966; }
+  .codebook-row.dragging { opacity: .4; }
+  /* Drop feedback: nest INTO the target (middle) vs place before/after it. */
+  .codebook-row.drop-inside { border-color: var(--bs-primary); box-shadow: 0 0 0 2px rgba(13,110,253,.15); }
+  .codebook-row.drop-before { box-shadow: 0 -3px 0 0 var(--bs-primary); }
+  .codebook-row.drop-after  { box-shadow: 0 3px 0 0 var(--bs-primary); }
+  .node-children { padding-left: 1.25rem; margin-top: .5rem; }
+  .node-children:empty { display: none; }
+  .codebook-row.collapsed > .node-children { display: none; }
+  .drag-handle { cursor: grab; color: #6c757d; user-select: none; font-size: 1.1rem; line-height: 1; }
+  .drag-handle:active { cursor: grabbing; }
+  /* Chevron toggles a subtree; only shown on rows that actually have children. */
+  .chevron-btn { border: 0; background: transparent; color: #6c757d; cursor: pointer;
+                 width: 1.4rem; padding: 0; line-height: 1; font-size: 1.1rem;
+                 transition: transform .15s ease; visibility: hidden; }
+  .field-row textarea { resize: none; overflow: hidden; }
+  .codebook-row.has-children > .row-card .chevron-btn { visibility: visible; }
+  .codebook-row.collapsed > .row-card .chevron-btn { transform: scaleY(-1); }
+  /* Inline "Name:" / "Description:" labels to the left of each field. */
+  .field-row { display: flex; align-items: flex-start; gap: .5rem; }
+  .field-row + .field-row { margin-top: .4rem; }
+  .field-label { flex: 0 0 5.5rem; text-align: right; padding-top: .35rem;
+                 font-size: .8rem; font-weight: 600; color: #6c757d; }
+  .indent-controls .btn { padding: .1rem .4rem; line-height: 1; }
+</style>
+{% endblock %}
+{% block content %}
+  <div class="mb-4">
+    <h1 class="h3 mb-1">{% if codebook_id %}Review Codebook{% else %}Create Codebook{% endif %}</h1>
+    <p class="text-secondary mb-0">
+      Drag a row onto another to re-parent it &mdash; drop on the middle to nest
+      it inside, or near the top/bottom edge to place it before/after as a
+      sibling. The whole subtree moves with it. You can also use
+      <span class="text-nowrap">&larr; / &rarr;</span> to change the indent, and
+      the chevron to collapse a subtree. Use the <strong>code</strong> toggle to
+      mark a row as a leaf code: codes describe specific observed phenomena and
+      must always sit under a parent, so a row cannot be a code unless it is
+      nested under another row. Saving creates a new versioned codebook; the
+      generated copy stays intact.
+    </p>
+  </div>
+
+  {% if error %}
+    <div class="alert alert-danger" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <form method="post"
+        action="{% if codebook_id %}{{ url_for('codebooks.codebook_review_submit', codebook_id=codebook_id) }}{% else %}{{ url_for('codebooks.confirm_submit', corpus_id=corpus_id) }}{% endif %}"
+        id="review-form">
+    <input type="hidden" name="corpus_id" value="{{ corpus_id }}">
+    {% if source_codebook_id %}
+      <input type="hidden" name="source_codebook_id" value="{{ source_codebook_id }}">
+    {% endif %}
+    <div class="bg-white border rounded-2 p-4 mb-3" style="max-width: 920px;">
+      <div class="mb-3">
+        <label for="codebook_name" class="form-label fw-semibold">Codebook name</label>
+        <input type="text" class="form-control" id="codebook_name"
+               name="codebook_name" value="{{ codebook_name }}"
+               maxlength="255" minlength="1" required>
+        <div class="invalid-feedback">Codebook name must not be blank.</div>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-baseline mb-2">
+        <span class="form-label fw-semibold mb-0">Themes &amp; codes</span>
+        <button type="button" id="add-row-btn" class="btn btn-sm btn-outline-primary">
+          + Add
+        </button>
+      </div>
+
+      <div id="codebook-rows">
+        {% for node in nodes %}
+          <div class="codebook-row {% if node.is_code %}is-code{% endif %}"
+               draggable="true"
+               data-indent="{{ node.indent }}"
+               data-is-code="{{ '1' if node.is_code else '0' }}">
+            <div class="row-card d-flex align-items-start gap-2">
+              <button type="button" class="chevron-btn" title="Collapse / expand subtree" aria-label="Collapse or expand">&vee;</button>
+              <span class="drag-handle" aria-hidden="true">&#x2630;</span>
+              <div class="indent-controls btn-group btn-group-sm" role="group" aria-label="Indent">
+                <button type="button" class="btn btn-outline-secondary outdent-btn" title="Outdent">&larr;</button>
+                <button type="button" class="btn btn-outline-secondary indent-btn" title="Indent">&rarr;</button>
+              </div>
+              <div class="flex-grow-1">
+                <div class="field-row">
+                  <label class="field-label">Name:</label>
+                  <input type="text" class="form-control form-control-sm fw-semibold"
+                         name="row_names[]" value="{{ node.name }}"
+                         placeholder="Name" required>
+                </div>
+                <div class="field-row">
+                  <label class="field-label">Description:</label>
+                  <textarea class="form-control form-control-sm"
+                            name="row_descriptions[]" rows="1"
+                            placeholder="Description" required>{{ node.description }}</textarea>
+                </div>
+              </div>
+              <div class="d-flex flex-column align-items-end gap-1">
+                <button type="button" class="btn btn-sm btn-outline-secondary remove-row-btn"
+                        aria-label="Remove">&times;</button>
+                <label class="form-check form-switch mb-0 small" title="Mark this row as a code (leaf observation)">
+                  <input class="form-check-input code-toggle" type="checkbox"
+                         aria-label="Code"
+                         {% if node.is_code %}checked{% endif %}>
+                </label>
+              </div>
+            </div>
+            <div class="node-children"></div>
+          </div>
+        {% endfor %}
+      </div>
+
+      {% if not nodes and not error %}
+        <p class="text-secondary mb-0">No themes or codes yet. Add one to get started.</p>
+      {% endif %}
+    </div>
+
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary"
+         href="{{ url_for('codebooks.list_codebooks') }}">Cancel</a>
+      <button type="submit" class="btn btn-primary">{% if codebook_id %}Save as new version{% else %}Save codebook{% endif %}</button>
+    </div>
+
+    {# Hidden inputs the controller will read; populated at submit time. #}
+    <div id="row-parents-shadow" hidden></div>
+    <div id="row-types-shadow" hidden></div>
+  </form>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/codebook_review.js') }}"></script>
+{% endblock %}

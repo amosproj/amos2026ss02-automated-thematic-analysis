@@ -6,6 +6,13 @@ The **Automated Thematic Analysis** project is designed to automate the extracti
 
 By mapping documents and extracted text chunks to a hierarchical thematic tree (Codebook), the system enables structured qualitative analysis, thematic frequency tracking, and deeper insights into your data corpora.
 
+### Demographic Breakdown
+
+When demographic data (a CSV linked to your transcripts) is uploaded for a corpus, the Theme Browser lets researchers break a theme's frequency down by demographic group:
+
+- **Choose variables per theme** — pick one or more demographic dimensions (e.g. gender, age group, political affiliation) from the variables present in the uploaded data. Only variables that exist in the data are offered, and the selection applies to the selected theme only (changeable at any time). If no demographic data is uploaded, the panel is shown in a disabled state with an explanation.
+- **See frequency across groups** — for each selected dimension, the theme's frequency is shown per group as both an absolute count and a percentage within that group, rendered as a table and bar chart. Groups with no occurrences are shown with a count of 0, very small groups are flagged with a small-sample warning, and interviews without a linked demographic value are bucketed as "Not specified". The breakdown updates immediately as dimensions are toggled.
+
 ## Built With
 
 - **Backend Framework:** FastAPI (Python 3.11+)

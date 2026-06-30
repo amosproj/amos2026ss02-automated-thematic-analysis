@@ -74,6 +74,7 @@ demo_data/
 
 # Internal frontend planning document
 Documentation/frontend-improvements.md
+Frontend/tmp/
 
 # PyCharm Plugins
 .codebuddy

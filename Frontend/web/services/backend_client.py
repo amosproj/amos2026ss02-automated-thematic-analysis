@@ -186,13 +186,55 @@ class BackendClient:
     # ---- Codebooks ----------------------------------------------------------
 
 
-    def get_theme_frequencies(self, codebook_id: str) -> list[dict]:
-        return self._get(f"/codebooks/{codebook_id}/themes")
+    def get_theme_frequencies(
+        self, codebook_id: str, application_run_id: str | None = None
+    ) -> list[dict]:
+        params = {"application_run_id": application_run_id} if application_run_id else None
+        return self._get(f"/codebooks/{codebook_id}/themes", params=params)
 
     def get_theme_tree(self, codebook_id: str) -> list[dict]:
         return self._get(f"/codebooks/{codebook_id}/themes/tree")
 
+    def get_theme_quotes(
+        self,
+        codebook_id: str,
+        theme_id: str,
+        page: int = 1,
+        page_size: int = 20,
+        application_run_id: str | None = None,
+    ) -> dict:
+        params = {"page": page, "page_size": page_size}
+        if application_run_id:
+            params["application_run_id"] = application_run_id
+        return self._get(
+            f"/codebooks/{codebook_id}/themes/{theme_id}/quotes",
+            params=params,
+        )
+
+    def get_theme_demographic_breakdown(
+        self,
+        codebook_id: str,
+        theme_id: str,
+        dimensions: list[str],
+        application_run_id: str | None = None,
+    ) -> dict:
+        """Break a theme's frequency down by the given demographic dimensions."""
+        params: dict = {"dimensions": ",".join(dimensions)}
+        if application_run_id:
+            params["application_run_id"] = application_run_id
+        return self._get(
+            f"/codebooks/{codebook_id}/themes/{theme_id}/demographic-breakdown",
+            params=params,
+        )
+
     # ---- Demographic --------------------------------------------------------
+
+    def get_demographic_dimensions(self, corpus_id: str) -> list[str]:
+        """List demographic variables available for breaking down a theme."""
+        return self._get(
+            f"/demographic/{corpus_id}/dimensions",
+            sub_key="dimensions",
+        )
 
     def upload_demographic(
         self, corpus_id: str, file: FileStorage, name: str | None = None,
@@ -313,6 +355,25 @@ class BackendClient:
             return result
         return result.get("items", result) if isinstance(result, dict) else []
 
+    def delete_codebook_application_run(self, run_id: str) -> None:
+        """Hard-delete an analysis run and its coded results."""
+        self._delete(f"/codebook-application-runs/{run_id}")
+
+    def fetch_run_export_csv(self, run_id: str, export_format: str) -> bytes:
+        """Fetch a run's CSV export as raw bytes.
+
+        The export endpoint returns raw CSV, not the JSON envelope, so this
+        bypasses _get / _unwrap.
+        """
+        path = f"/codebook-application-runs/{run_id}/export"
+        started_at = time.monotonic()
+        try:
+            r = self._client.get(path, params={"format": export_format})
+            r.raise_for_status()
+            return r.content
+        except httpx.HTTPError as exc:
+            self._handle_exc(exc, path, "GET", started_at)
+
     def get_codebook_application_run_documents(self, run_id: str) -> list[dict]:
         result = self._get(f"/codebook-application-runs/{run_id}/documents")
         if isinstance(result, list):
@@ -403,6 +464,20 @@ class BackendClient:
 
     def cancel_generation_job(self, job_id: str) -> dict:
         return self._post(f"/codebooks/generate-jobs/{job_id}/cancel")
+
+    # ---- Settings -----------------------------------------------------------
+
+    def get_llm_provider(self) -> dict:
+        """Return the active LLM provider plus available options and default.
+
+        Shape: {"active": str, "default": str, "available": [{id, label,
+        description, has_api_key}]}.
+        """
+        return self._get("/settings/llm-provider")
+
+    def set_llm_provider(self, provider: str) -> dict:
+        """Persist the active LLM provider; returns the updated provider state."""
+        return self._put("/settings/llm-provider", json={"provider": provider})
 
     # ---- Helpers ------------------------------------------------------------
 
@@ -535,13 +610,21 @@ def _parse_validation_detail(response: httpx.Response) -> str | None:
         return detail
 
     if not isinstance(detail, list):
-        # Our backend envelope for handled 422s is:
-        # {"success": false, "error": "...", "meta": {"detail": "..."}}
+        # Our backend envelope for handled 4xx errors is one of:
+        #   {"success": false, "error": "...", "meta": {"detail": "..."}}
+        #   {"success": false, "error": "...", "meta": null}   (e.g. validation
+        #     errors raised in services, where the message lives in `error`)
+        # Prefer the more specific meta.detail, then fall back to the top-level
+        # `error` so service-raised messages (e.g. "<provider> has no API key
+        # configured") reach the user instead of the generic default.
         meta = body.get("meta")
         if isinstance(meta, dict):
             meta_detail = meta.get("detail")
             if isinstance(meta_detail, str) and meta_detail.strip():
                 return meta_detail
+        error = body.get("error")
+        if isinstance(error, str) and error.strip():
+            return error
         return None
 
     messages: list[str] = []

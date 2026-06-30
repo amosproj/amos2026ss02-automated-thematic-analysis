@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     DEMOGRAPHIC_UPLOAD_TTL_SECONDS: int = 60 * 60
     UPLOAD_CLEANUP_INTERVAL_SECONDS: int = 5 * 60
 
+    # Demographic groups smaller than this are flagged as small samples in the
+    # per-theme demographic breakdown so percentages are read with caution.
+    DEMOGRAPHIC_SMALL_SAMPLE_THRESHOLD: int = 5
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV == "production" # Helper property to check if the app is running in production mode
@@ -52,6 +56,19 @@ class Settings(BaseSettings):
     LLM_API_KEY_FAU: str | None = None
     LLM_BASE_URL_FAU: str = "https://hub.nhr.fau.de/api/llmgw/v1"
     LLM_MODEL_FAU: str = "gpt-oss-120b"
+    EMBEDDING_MODEL_FAU: str = "intfloat/multilingual-e5-large"
+    EMBEDDING_BATCH_SIZE: int = 64
+    CODE_SIMILARITY_THRESHOLD: float = 0.86
+    CODE_PAIR_TOP_K: int = 6
+    CODE_PAIR_CLASSIFICATION_BATCH_SIZE: int = 12
+    CODE_PAIR_CLASSIFICATION_CONCURRENCY: int = 6
+    CODE_EQUIVALENT_MIN_CONFIDENCE: float = 0.82
+    CODE_SUBORDINATE_MIN_CONFIDENCE: float = 0.90
+    CODE_SUBORDINATE_MIN_SIMILARITY: float = 0.84
+    TRACEABLE_MIN_CODE_FREQUENCY: int = 1
+    TRACEABLE_HELDOUT_RATIO: float = 0.2
+    TRACEABLE_MAX_ITERATIONS: int = 5
+    TRACEABLE_REFINEMENT_JACCARD_THRESHOLD: float = 0.98
 
     # Select which provider is active: "FAU" | "ACADEMIC"
     SELECTED_API: str = "FAU"

@@ -5,6 +5,7 @@ from app.models.analysis import (
     DocumentCoding,
     ThemeAssignment,
 )
+from app.models.app_settings import ACTIVE_LLM_PROVIDER_KEY, AppSetting
 from app.models.base import Base, IdMixin, TimestampMixin
 from app.models.code import Code, CodebookCodeRelationship, ThemeCodeRelationship
 from app.models.codebook import Codebook
@@ -19,11 +20,14 @@ from app.models.themes import (
     Theme,
     ThemeHierarchyRelationship,
 )
+from app.models.traceable_analysis_job import TraceableAnalysisJob
 
 __all__ = [
     "Base",
     "IdMixin",
     "TimestampMixin",
+    "AppSetting",
+    "ACTIVE_LLM_PROVIDER_KEY",
     "Code",
     "Codebook",
     "CodebookGenerationJob",
@@ -41,4 +45,5 @@ __all__ = [
     "CodeAssignment",
     "DemographicFiles",
     "DemographicRow",
+    "TraceableAnalysisJob",
 ]

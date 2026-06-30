@@ -44,9 +44,15 @@ class ThemeGraphService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def validate_theme_dag(self, *, codebook_id: UUID) -> ThemeDagValidation:
+    async def validate_theme_dag(
+        self,
+        *,
+        codebook_id: UUID,
+        ensure_codebook_exists: bool = True,
+    ) -> ThemeDagValidation:
         """Validate active membership + hierarchy edges for tree constraints."""
-        await self._ensure_codebook_exists(codebook_id)
+        if ensure_codebook_exists:
+            await self._ensure_codebook_exists(codebook_id)
         nodes = await self._load_theme_nodes(codebook_id=codebook_id)
         edges = await self._load_hierarchy_edges(codebook_id=codebook_id, theme_ids=set(nodes))
 

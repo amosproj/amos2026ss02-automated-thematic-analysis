@@ -15,8 +15,10 @@ from app.schemas.demographic import (
     LinkRequest,
     UploadDemographicConfirmResponse,
 )
+from app.schemas.theme_views import DemographicDimensionsResponse
 from app.services.demographic import DemographicService
 from app.services.linking import set_document_link
+from app.services.theme_demographic_breakdown import ThemeDemographicBreakdownService
 
 router = APIRouter(prefix="/demographic/{corpus_id}", tags=["demographic"])
 
@@ -140,6 +142,28 @@ async def list_demographic_files(
             items=items,
             meta=PageMeta(total=total, page=page, page_size=page_size, pages=_pages(total, page_size)),
         )
+    )
+
+
+@router.get(
+    "/dimensions",
+    response_model=ResponseEnvelope[DemographicDimensionsResponse],
+    summary="List demographic dimensions available for breakdowns",
+    description=(
+        "Return the demographic variables present in the uploaded data for one "
+        "corpus (the username identifier column is excluded). Returns an empty "
+        "list when no demographic data has been uploaded."
+    ),
+)
+async def list_demographic_dimensions(
+    corpus_id: uuid.UUID,
+    session: DbSession,
+) -> ResponseEnvelope[DemographicDimensionsResponse]:
+    """Return the demographic variables that can be used to break down a theme."""
+    service = ThemeDemographicBreakdownService(session)
+    dimensions = await service.list_available_dimensions(corpus_id=corpus_id)
+    return ResponseEnvelope[DemographicDimensionsResponse].ok(
+        data=DemographicDimensionsResponse(dimensions=dimensions)
     )
 
 

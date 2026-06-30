@@ -562,6 +562,34 @@ async def test_generate_codebook_returns_404_for_unknown_corpus(client) -> None:
     assert response.json()["success"] is False
 
 
+async def test_sync_generate_uses_active_provider(client, db_engine, monkeypatch) -> None:
+    """The synchronous /generate endpoint must run on the UI-selected provider."""
+    from app.exceptions import UnprocessableError
+    from app.models.app_settings import ACTIVE_LLM_PROVIDER_KEY, AppSetting
+
+    factory = async_sessionmaker(db_engine, expire_on_commit=False, class_=AsyncSession)
+    async with factory() as setup_session:
+        setup_session.add(AppSetting(key=ACTIVE_LLM_PROVIDER_KEY, value="ACADEMIC"))
+        await setup_session.commit()
+
+    captured: dict = {}
+
+    async def _capture_generate(self, **kwargs):
+        captured.update(kwargs)
+        # Short-circuit before any real generation; we only assert the wiring.
+        raise UnprocessableError("stop after capturing provider")
+
+    monkeypatch.setattr(CodebookGenerationService, "generate_codebook", _capture_generate)
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate",
+        json={"codebook_name": "Provider Wiring", "corpus_id": str(uuid4())},
+    )
+
+    assert response.status_code == 422
+    assert captured["provider"] == "ACADEMIC"
+
+
 async def test_generate_codebook_uses_all_corpus_documents_when_ids_omitted(
     client,
     monkeypatch,
