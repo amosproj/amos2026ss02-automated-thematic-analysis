@@ -388,6 +388,12 @@ class BackendClient:
         except httpx.HTTPError as exc:
             self._handle_exc(exc, path, "GET", started_at)
 
+    def get_codebook_application_run_documents(self, run_id: str) -> list[dict]:
+        result = self._get(f"/codebook-application-runs/{run_id}/documents")
+        if isinstance(result, list):
+            return result
+        return result.get("items", result) if isinstance(result, dict) else []
+
     # ---- Codebook Upload & Parsing ------------------------------------------
 
     def parse_csv_preview(self, file: FileStorage) -> list[dict]:

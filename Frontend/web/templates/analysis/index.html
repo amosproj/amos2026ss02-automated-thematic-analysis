@@ -150,6 +150,7 @@
               <th>Codebook</th>
               <th>Status</th>
               <th>Date</th>
+              <th>Transcripts</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -178,6 +179,31 @@
                 {% endif %}
               </td>
               <td>{{ run.created_at[:10] }}</td>
+              <td>
+                {% if run.status == 'succeeded' and active_corpus_id and run.transcript_document_ids %}
+                  {% set doc_ids = run.transcript_document_ids %}
+                  <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                      {{ doc_ids | length }} transcript{{ 's' if doc_ids | length != 1 else '' }}
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" style="max-height: 260px; overflow-y: auto;">
+                      {% for doc_id in doc_ids %}
+                        {% set matched = transcripts | selectattr('id', 'equalto', doc_id) | list %}
+                        {% set doc_title = matched[0].title if matched else (doc_id[:8] + '…') %}
+                        <li>
+                          <a class="dropdown-item small"
+                             href="{{ url_for('ingestion.read_transcript', corpus_id=active_corpus_id, document_id=doc_id, run_id=run.id) }}">
+                            {{ doc_title }}
+                          </a>
+                        </li>
+                      {% endfor %}
+                    </ul>
+                  </div>
+                {% else %}
+                  <span class="text-muted small">—</span>
+                {% endif %}
+              </td>
               <td>
                 <a class="btn btn-sm btn-outline-primary"
                    href="{{ url_for('codebooks.codebook_themes_for_corpus', corpus_id=active_corpus_id, codebook_id=run.codebook_id, application_run_id=run.id) }}">
