@@ -38,8 +38,17 @@ class FakeBackend:
         ]
         self.last_created_corpus: dict | None = None
         self.documents: list[dict] = []
+        self.document_content: dict = {
+            "id": "doc-1",
+            "title": "Interview 1",
+            "filename": "interview1.txt",
+            "content": "Interviewer: Hello\nInterviewee: Hi",
+            "demographic_data": {},
+        }
         self.upload_results: list[dict] = []
         self.uploaded_files: list[str] = []
+        # Maps run_id -> list of DocumentCoding dicts (for get_codebook_application_run_documents)
+        self.run_documents: dict[str, list[dict]] = {}
         self.codebooks: list[dict] = []
         self.theme_frequencies: list[dict] = []
         self.theme_frequencies_by_run: dict[str, list[dict]] = {}
@@ -133,6 +142,10 @@ class FakeBackend:
     def list_documents(self, corpus_id, page_size: int = 50) -> list[dict]:
         self._maybe_raise("list_documents")
         return self.documents
+
+    def get_document_content(self, corpus_id, document_id) -> dict:
+        self._maybe_raise("get_document_content")
+        return self.document_content
 
     def delete_document(self, corpus_id, document_id) -> None:
         self._maybe_raise("delete_document")
@@ -351,6 +364,10 @@ class FakeBackend:
             run for run in self.application_runs
             if run.get("codebook_id") in (None, codebook_id)
         ]
+
+    def get_codebook_application_run_documents(self, run_id: str) -> list[dict]:
+        self._maybe_raise("get_codebook_application_run_documents")
+        return self.run_documents.get(run_id, [])
 
     def delete_codebook_application_run(self, run_id: str) -> None:
         self._maybe_raise("delete_codebook_application_run")
