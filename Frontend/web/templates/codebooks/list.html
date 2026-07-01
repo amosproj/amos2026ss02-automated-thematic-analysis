@@ -97,7 +97,9 @@
                 <td class="text-secondary">{{ cb.created_by }}</td>
                 <td class="text-secondary">
                   {% if cb.llm_tokens_input or cb.llm_tokens_output %}
-                    {{ cb.llm_tokens_input or 0 }} / {{ cb.llm_tokens_output or 0 }}
+                    <span title="{{ '{:,}'.format(cb.llm_tokens_input or 0) }} / {{ '{:,}'.format(cb.llm_tokens_output or 0) }} tokens" style="cursor: help;">
+                      {{ cb.llm_tokens_input | compact_number }} / {{ cb.llm_tokens_output | compact_number }}
+                    </span>
                   {% else %}
                     &mdash;
                   {% endif %}
