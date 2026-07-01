@@ -97,7 +97,10 @@
                 <td class="text-secondary">{{ cb.created_by }}</td>
                 <td class="text-secondary">
                   {% if cb.llm_tokens_input or cb.llm_tokens_output %}
-                    <span title="{{ '{:,}'.format(cb.llm_tokens_input or 0) }} / {{ '{:,}'.format(cb.llm_tokens_output or 0) }} tokens" style="cursor: help;">
+                    <span data-bs-toggle="tooltip" 
+                          title="{{ '{:,}'.format(cb.llm_tokens_input or 0) }} / {{ '{:,}'.format(cb.llm_tokens_output or 0) }} tokens (click to copy)" 
+                          style="cursor: pointer;"
+                          onclick="navigator.clipboard.writeText('{{ cb.llm_tokens_input or 0 }} / {{ cb.llm_tokens_output or 0 }}');">
                       {{ cb.llm_tokens_input | compact_number }} / {{ cb.llm_tokens_output | compact_number }}
                     </span>
                   {% else %}
@@ -126,6 +129,14 @@
 {% endblock %}
 {% block scripts %}
   {{ super() }}
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+      });
+    });
+  </script>
   {% if pending_analysis_delete %}
     <script>
       document.addEventListener("DOMContentLoaded", () => {
