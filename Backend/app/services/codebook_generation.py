@@ -17,11 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import NotFoundError, UnprocessableError
 from app.llm.pipelines import (
+    TokenTracker,
     build_codebook_generation_chain,
     consolidate_generated_codes,
     consolidate_generated_themes,
     generate_codebook_for_passages,
-    TokenTracker,
 )
 from app.models import (
     Code,

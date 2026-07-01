@@ -4,18 +4,8 @@ from typing import Any
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.language_models import BaseChatModel
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
-from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_core.outputs import LLMResult
-
-class TokenTracker(BaseCallbackHandler):
-    def __init__(self) -> None:
-        self.input_tokens = 0
-        self.output_tokens = 0
-    def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
-        if response.llm_output and "token_usage" in response.llm_output:
-            usage = response.llm_output["token_usage"]
-            self.input_tokens += usage.get("prompt_tokens", 0)
-            self.output_tokens += usage.get("completion_tokens", 0)
+from langchain_core.runnables import Runnable, RunnableConfig
 
 from app.llm.client import build_chat_model
 from app.llm.prompts import (
@@ -37,6 +27,18 @@ from app.schemas.llm import (
     PassageCodebookGeneration,
     ThemeConsolidationResult,
 )
+
+
+class TokenTracker(BaseCallbackHandler):
+    def __init__(self) -> None:
+        self.input_tokens = 0
+        self.output_tokens = 0
+
+    def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
+        if response.llm_output and "token_usage" in response.llm_output:
+            usage = response.llm_output["token_usage"]
+            self.input_tokens += usage.get("prompt_tokens", 0)
+            self.output_tokens += usage.get("completion_tokens", 0)
 
 
 # Run a single-shot thematic analysis over a transcript.
