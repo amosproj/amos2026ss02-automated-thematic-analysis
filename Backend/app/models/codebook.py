@@ -24,6 +24,8 @@ class Codebook(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
     version: Mapped[int] = mapped_column(Integer())
     created_by: Mapped[str] = mapped_column(String(64))
+    llm_tokens_input: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    llm_tokens_output: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Copied from the generation job so the query remains accessible after the job record is gone.
     research_query: Mapped[str | None] = mapped_column(Text(), nullable=True)
     researcher_topics: Mapped[str | None] = mapped_column(Text(), nullable=True)

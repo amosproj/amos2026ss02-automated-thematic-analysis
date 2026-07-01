@@ -14,10 +14,18 @@ async def alter_db():
     engine = _get_engine()
     async with engine.begin() as conn:
         try:
-            await conn.execute(text("ALTER TABLE themes ADD COLUMN description TEXT;"))
-            print("Successfully added 'description' column to 'themes' table.")
+            await conn.execute(text("ALTER TABLE codebooks ADD COLUMN llm_tokens_input INTEGER;"))
+            await conn.execute(text("ALTER TABLE codebooks ADD COLUMN llm_tokens_output INTEGER;"))
+            print("Successfully added token columns to 'codebooks' table.")
         except Exception as e:
-            print(f"Error (might already exist): {e}")
+            print(f"Error for codebooks (might already exist): {e}")
+
+        try:
+            await conn.execute(text("ALTER TABLE codebook_application_runs ADD COLUMN llm_tokens_input INTEGER;"))
+            await conn.execute(text("ALTER TABLE codebook_application_runs ADD COLUMN llm_tokens_output INTEGER;"))
+            print("Successfully added token columns to 'codebook_application_runs' table.")
+        except Exception as e:
+            print(f"Error for codebook_application_runs (might already exist): {e}")
 
 if __name__ == "__main__":
     asyncio.run(alter_db())

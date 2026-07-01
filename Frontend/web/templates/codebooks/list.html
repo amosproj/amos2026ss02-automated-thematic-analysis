@@ -78,6 +78,7 @@
               <th>Name</th>
               <th>Version</th>
               <th>Created by</th>
+              <th>Tokens (In/Out)</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -94,6 +95,13 @@
                 <td>{{ cb.name }}</td>
                 <td><span class="badge text-bg-secondary">v{{ cb.version }}</span></td>
                 <td class="text-secondary">{{ cb.created_by }}</td>
+                <td class="text-secondary">
+                  {% if cb.llm_tokens_input or cb.llm_tokens_output %}
+                    {{ cb.llm_tokens_input or 0 }} / {{ cb.llm_tokens_output or 0 }}
+                  {% else %}
+                    &mdash;
+                  {% endif %}
+                </td>
                 <td>
                   <a class="btn btn-sm btn-outline-primary"
                      href="{{ url_for('codebooks.codebook_themes_for_corpus', corpus_id=corpus_id, codebook_id=cb.id, name=cb.name, version=cb.version) }}">

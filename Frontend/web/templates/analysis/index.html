@@ -150,6 +150,7 @@
               <th>Codebook</th>
               <th>Status</th>
               <th>Date</th>
+              <th>Tokens (In/Out)</th>
               <th>Transcripts</th>
               <th>Actions</th>
             </tr>
@@ -179,6 +180,13 @@
                 {% endif %}
               </td>
               <td>{{ run.created_at[:10] }}</td>
+              <td class="text-secondary">
+                {% if run.llm_tokens_input or run.llm_tokens_output %}
+                  {{ run.llm_tokens_input or 0 }} / {{ run.llm_tokens_output or 0 }}
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
               <td>
                 {% if run.status == 'succeeded' and active_corpus_id and run.transcript_document_ids %}
                   {% set doc_ids = run.transcript_document_ids %}
