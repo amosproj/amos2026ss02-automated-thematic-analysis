@@ -1,8 +1,10 @@
 import json
 from typing import Any
 
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.language_models import BaseChatModel
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+from langchain_core.outputs import LLMResult
 from langchain_core.runnables import Runnable, RunnableConfig
 
 from app.llm.client import build_chat_model
@@ -25,6 +27,18 @@ from app.schemas.llm import (
     PassageCodebookGeneration,
     ThemeConsolidationResult,
 )
+
+
+class TokenTracker(BaseCallbackHandler):
+    def __init__(self) -> None:
+        self.input_tokens = 0
+        self.output_tokens = 0
+
+    def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
+        if response.llm_output and "token_usage" in response.llm_output:
+            usage = response.llm_output["token_usage"]
+            self.input_tokens += usage.get("prompt_tokens", 0)
+            self.output_tokens += usage.get("completion_tokens", 0)
 
 
 # Run a single-shot thematic analysis over a transcript.
@@ -104,6 +118,7 @@ async def apply_codebook_with_codes_to_transcripts(
     chain: Runnable[dict[str, str], dict[str, Any]] | None = None,
     model: BaseChatModel | None = None,
     max_concurrency: int | None = None,
+    tracker: TokenTracker | None = None,
 ) -> list[CodebookApplicationResult | Exception]:
     if not transcripts:
         return []
@@ -116,9 +131,11 @@ async def apply_codebook_with_codes_to_transcripts(
     # Reuse one Runnable across the batch; LangChain handles parallel execution
     # inside abatch according to the optional max_concurrency config below.
     runnable = chain or build_codebook_application_with_codes_chain(model=model)
-    config: RunnableConfig | None = (
-        {"max_concurrency": max_concurrency} if max_concurrency is not None else None
-    )
+    config: RunnableConfig = {}
+    if max_concurrency is not None:
+        config["max_concurrency"] = max_concurrency
+    if tracker is not None:
+        config["callbacks"] = [tracker]
     # return_exceptions=True preserves the input order and lets the service retry
     # only the documents that failed, instead of failing the whole batch.
     raw_results = await runnable.abatch(
@@ -189,6 +206,7 @@ async def generate_codebook_for_passages(
     max_concurrency: int | None = None,
     research_query: str | None = None,
     researcher_topics: str | None = None,
+    tracker: TokenTracker | None = None,
 ) -> list[PassageCodebookGeneration | Exception]:
     if not passages:
         return []
@@ -201,9 +219,11 @@ async def generate_codebook_for_passages(
     # Researcher focus is constant across the batch, so build the blocks once.
     research_query_block = _build_research_query_block(research_query or "")
     researcher_topics_block = _build_researcher_topics_block(researcher_topics or "")
-    config: RunnableConfig | None = (
-        {"max_concurrency": max_concurrency} if max_concurrency is not None else None
-    )
+    config: RunnableConfig = {}
+    if max_concurrency is not None:
+        config["max_concurrency"] = max_concurrency
+    if tracker is not None:
+        config["callbacks"] = [tracker]
     # abatch returns results in input order. Keeping exceptions as values lets
     # the generation service retry or record individual passage failures.
     raw_results = await runnable.abatch(
@@ -237,6 +257,7 @@ def consolidate_generated_codes(
     codes: list[CodeConsolidationItem],
     *,
     model: BaseChatModel | None = None,
+    tracker: TokenTracker | None = None,
 ) -> CodeConsolidationResult:
     """Merge overlapping generated codes into a smaller orthogonal set."""
     if not codes:
@@ -253,7 +274,10 @@ def consolidate_generated_codes(
     # Consolidation is a single prompt/model/parser chain because it merges an
     # already prepared JSON payload, not a list of independent inputs.
     chain = build_code_consolidation_prompt() | chat_model | parser
-    raw_result = chain.invoke({"codes": serialized_codes})
+    config: RunnableConfig = {}
+    if tracker is not None:
+        config["callbacks"] = [tracker]
+    raw_result = chain.invoke({"codes": serialized_codes}, config=config)
     return CodeConsolidationResult(**raw_result)
 
 
@@ -262,6 +286,7 @@ def consolidate_generated_themes(
     *,
     constraints: str | None = None,
     model: BaseChatModel | None = None,
+    tracker: TokenTracker | None = None,
 ) -> ThemeConsolidationResult:
     """Merge overlapping generated theme paths into a smaller coherent hierarchy."""
     if not themes:
@@ -278,12 +303,16 @@ def consolidate_generated_themes(
     # The constraints string is injected as one prompt variable so callers can
     # tune how aggressively LangChain asks the model to merge theme paths.
     chain = build_theme_consolidation_prompt() | chat_model | parser
+    config: RunnableConfig = {}
+    if tracker is not None:
+        config["callbacks"] = [tracker]
     raw_result = chain.invoke(
         {
             "themes": serialized_themes,
             "constraints": constraints
             or "- Use domain-level roots only.\n- Target 6-10 root themes.\n- Keep total themes compact and non-overlapping.",
-        }
+        },
+        config=config,
     )
     return ThemeConsolidationResult(**raw_result)
 

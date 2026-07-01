@@ -150,6 +150,7 @@
               <th>Codebook</th>
               <th>Status</th>
               <th>Date</th>
+              <th>Tokens (In/Out)</th>
               <th>Transcripts</th>
               <th>Actions</th>
             </tr>
@@ -179,6 +180,18 @@
                 {% endif %}
               </td>
               <td>{{ run.created_at[:10] }}</td>
+              <td class="text-secondary">
+                {% if run.llm_tokens_input or run.llm_tokens_output %}
+                  <span data-bs-toggle="tooltip" 
+                        title="{{ '{:,}'.format(run.llm_tokens_input or 0) }} / {{ '{:,}'.format(run.llm_tokens_output or 0) }} tokens (click to copy)" 
+                        style="cursor: pointer;"
+                        onclick="navigator.clipboard.writeText('{{ run.llm_tokens_input or 0 }} / {{ run.llm_tokens_output or 0 }}');">
+                    {{ run.llm_tokens_input | compact_number }} / {{ run.llm_tokens_output | compact_number }}
+                  </span>
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
               <td>
                 {% if run.status == 'succeeded' and active_corpus_id and run.transcript_document_ids %}
                   {% set doc_ids = run.transcript_document_ids %}

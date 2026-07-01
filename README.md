@@ -68,6 +68,16 @@ The recommended way to start the application is via Docker.
    - **Interactive API Docs (Swagger):** [http://localhost:8000/docs](http://localhost:8000/docs)
    - The application also serves a Demo UI and Codebook Selection templates to visually interact with the thematic graph.
 
+### Database Migrations for Existing Environments
+
+If you are updating an existing environment with a preexisting database, you must run the manual database migrations script to add any newly introduced schema columns.
+
+To apply schema migrations, run:
+```bash
+docker compose run --rm api uv run scripts/alter_db.py
+```
+*(If you are setting up the project for the first time, this is not needed since the backend automatically provisions a fresh schema on startup).*
+
 #### Common commands
 
 | Task | Linux/macOS | Windows PowerShell |

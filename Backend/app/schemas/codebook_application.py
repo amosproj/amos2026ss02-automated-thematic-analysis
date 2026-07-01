@@ -76,6 +76,8 @@ class CodebookApplicationRunSchema(BaseSchema):
     updated_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    llm_tokens_input: int | None = None
+    llm_tokens_output: int | None = None
     transcript_document_ids: list[UUID] = Field(default_factory=list)
 
 
