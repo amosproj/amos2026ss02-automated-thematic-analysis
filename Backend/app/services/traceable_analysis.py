@@ -12,6 +12,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.runnables import RunnableConfig
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -212,7 +213,7 @@ class TraceableAnalysisService:
     def llm_tokens_output(self) -> int:
         return self._token_tracker.output_tokens
 
-    def _llm_config(self) -> dict[str, object]:
+    def _llm_config(self) -> RunnableConfig:
         """Return the LangChain config needed for shared token accounting."""
 
         return {"callbacks": [self._token_tracker]}

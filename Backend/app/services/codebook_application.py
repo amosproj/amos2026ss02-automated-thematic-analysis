@@ -418,15 +418,15 @@ class CodebookApplicationService:
         synthesis_codes: list[SynthesizedCode] = []
         needs_fallback_theme = False
         for code in sorted(codes, key=lambda item: item.label.lower()):
-            theme = theme_by_id.get(code.theme_id) if code.theme_id is not None else None
-            if theme is None:
+            code_theme = theme_by_id.get(code.theme_id) if code.theme_id is not None else None
+            if code_theme is None:
                 # The old schema permits orphan codes. The traceable prompt
                 # needs a theme path, so keep these codes available under a
                 # neutral fallback instead of silently dropping them.
                 theme_path = ["Grounded Findings"]
                 needs_fallback_theme = True
             else:
-                theme_path = list(theme.path)
+                theme_path = list(code_theme.path)
             synthesis_codes.append(
                 SynthesizedCode(
                     code_label=code.label,
