@@ -64,6 +64,8 @@ async def test_generation_job_uses_traceable_pipeline_and_creates_application_ru
     )
 
     async def _fake_extract_quote_codes(self, *, documents, **_kwargs):
+        # Simulate generation-stage LLM usage so the test can verify that
+        # generate+apply persists full job totals, not just final application.
         self._token_tracker.input_tokens += 100
         self._token_tracker.output_tokens += 20
         document = documents[0]
@@ -118,6 +120,8 @@ async def test_generation_job_uses_traceable_pipeline_and_creates_application_ru
         )
 
     async def _fake_apply_codebook_to_documents(self, *, documents, **_kwargs):
+        # This helper is called during iteration evaluation and final
+        # application, so its tokens should be counted twice for this job.
         self._token_tracker.input_tokens += 30
         self._token_tracker.output_tokens += 7
         document = documents[0]

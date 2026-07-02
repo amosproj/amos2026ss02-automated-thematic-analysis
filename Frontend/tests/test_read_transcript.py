@@ -13,7 +13,6 @@ Covers:
 - Unit test for the _flatten_theme_tree helper.
 """
 
-import pytest
 
 CORPUS = "test-corpus-id"
 DOCUMENT_ID = "doc-1"

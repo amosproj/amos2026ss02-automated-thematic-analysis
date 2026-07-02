@@ -30,11 +30,16 @@ from app.schemas.llm import (
 
 
 class TokenTracker(BaseCallbackHandler):
+    """Accumulate token usage reported by LangChain chat model callbacks."""
+
     def __init__(self) -> None:
         self.input_tokens = 0
         self.output_tokens = 0
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
+        # LiteLLM/OpenAI-compatible providers usually expose aggregate usage in
+        # llm_output. Prefer that single source so message metadata does not
+        # double-count the same response.
         usage: dict[str, Any] = {}
         if response.llm_output and "token_usage" in response.llm_output:
             usage = response.llm_output["token_usage"] or {}
@@ -42,6 +47,9 @@ class TokenTracker(BaseCallbackHandler):
             usage = response.llm_output["usage"] or {}
 
         if not usage:
+            # Some LangChain chat models only attach usage to the returned
+            # AIMessage. Walk the first populated generation as a provider
+            # fallback.
             for generation_group in response.generations:
                 for generation in generation_group:
                     message = getattr(generation, "message", None)
@@ -61,6 +69,8 @@ class TokenTracker(BaseCallbackHandler):
 
     @staticmethod
     def _usage_value(usage: dict[str, Any], *keys: str) -> int:
+        # Providers disagree on names: OpenAI uses prompt/completion tokens,
+        # LangChain normalizes those as input/output tokens.
         for key in keys:
             value = usage.get(key)
             if isinstance(value, int):

@@ -116,6 +116,9 @@ class CodebookApplicationService:
             raise UnprocessableError("The selected codebook has no active themes to apply.")
         themes_by_label = {self._label_key(theme.label): theme for theme in themes}
         codes_by_label = {self._label_key(code.label): code for code in codes}
+        # The traceable application method expects an in-memory synthesis, not
+        # ORM rows. Build that adapter once so standalone application and
+        # generate+apply use the same deductive coding implementation.
         synthesis = self._build_traceable_synthesis(themes=themes, codes=codes)
 
         application_run = CodebookApplicationRun(
@@ -137,7 +140,8 @@ class CodebookApplicationService:
         if on_run_created is not None:
             await on_run_created(application_run_id)
 
-        # End the setup transaction before long LLM calls.
+        # Keep the run row visible to polling clients, then leave the session
+        # outside a long transaction while the LLM work runs.
         await self._session.rollback()
 
         if on_phase is not None:
@@ -145,6 +149,8 @@ class CodebookApplicationService:
 
         traceable_service = TraceableAnalysisService(self._session)
         try:
+            # Reuse the paper-style application pass without invoking the
+            # generation/refinement loop.
             application_result = await traceable_service._apply_codebook_to_documents(
                 documents=[
                     _TraceableDocumentText(
@@ -179,6 +185,9 @@ class CodebookApplicationService:
             documents_coded=documents_coded,
             documents_failed=len(failed_documents),
             status="succeeded",
+            # Standalone application reports the tokens spent by this one
+            # application job. Generate+apply handles full-job totals in
+            # TraceableAnalysisService.
             llm_tokens_input=traceable_service.llm_tokens_input,
             llm_tokens_output=traceable_service.llm_tokens_output,
         )
@@ -377,6 +386,8 @@ class CodebookApplicationService:
         themes: list[_ThemeRef],
         codes: list[_CodeRef],
     ) -> CodebookSynthesisResult:
+        """Adapt persisted codebook rows into the traceable application shape."""
+
         theme_by_id = {theme.id: theme for theme in themes}
         description_by_label = {
             CodebookApplicationService._label_key(theme.label): theme.description
@@ -409,6 +420,9 @@ class CodebookApplicationService:
         for code in sorted(codes, key=lambda item: item.label.lower()):
             theme = theme_by_id.get(code.theme_id) if code.theme_id is not None else None
             if theme is None:
+                # The old schema permits orphan codes. The traceable prompt
+                # needs a theme path, so keep these codes available under a
+                # neutral fallback instead of silently dropping them.
                 theme_path = ["Grounded Findings"]
                 needs_fallback_theme = True
             else:
@@ -446,6 +460,8 @@ class CodebookApplicationService:
         themes_by_label: dict[str, _ThemeRef],
         codes_by_label: dict[str, _CodeRef],
     ) -> tuple[int, list[dict[str, str]]]:
+        """Persist traceable evidence into the legacy application tables."""
+
         evidence_by_document: dict[UUID, list[_AppliedEvidence]] = defaultdict(list)
         for evidence in applied_evidence:
             evidence_by_document[evidence.document_id].append(evidence)
@@ -499,6 +515,9 @@ class CodebookApplicationService:
             for evidence in document_evidence:
                 code = codes_by_label.get(self._label_key(evidence.code_label))
                 if code is None:
+                    # The LLM is instructed to use exact labels, but this guard
+                    # keeps persistence robust if a provider returns a renamed
+                    # or malformed code after retries.
                     continue
                 theme_id = code.theme_id
                 if evidence.theme_label:
@@ -520,6 +539,8 @@ class CodebookApplicationService:
                     )
                 )
                 if theme_id is not None and theme_id not in seen_theme_ids:
+                    # Store one positive theme assignment per document/theme
+                    # even if several code assignments under that theme match.
                     seen_theme_ids.add(theme_id)
                     self._session.add(
                         ThemeAssignment(
@@ -545,6 +566,7 @@ class CodebookApplicationService:
 
         await self._session.commit()
         return documents_coded, failed_documents
+
     async def _update_run_counts(
         self,
         *,

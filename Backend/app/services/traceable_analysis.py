@@ -200,6 +200,8 @@ class TraceableAnalysisService:
         self._provider: str | None = None
         self._code_relationship_chain: Any | None = None
         self._batch_code_relationship_chain: Any | None = None
+        # One tracker per service run keeps token totals consistent across
+        # cached chains, retries, evaluation passes, and final application.
         self._token_tracker = TokenTracker()
 
     @property
@@ -211,6 +213,8 @@ class TraceableAnalysisService:
         return self._token_tracker.output_tokens
 
     def _llm_config(self) -> dict[str, object]:
+        """Return the LangChain config needed for shared token accounting."""
+
         return {"callbacks": [self._token_tracker]}
 
     async def run_analysis(
@@ -234,6 +238,8 @@ class TraceableAnalysisService:
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> TraceableAnalysisResult:
         self._provider = provider
+        # A TraceableAnalysisService instance can be reused in tests or by a
+        # caller. Reset the accumulator so each run reports only its own calls.
         self._token_tracker = TokenTracker()
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
         logger.info(
@@ -447,6 +453,9 @@ class TraceableAnalysisService:
                 applied_evidence=applied_evidence,
                 failed_document_ids=final_failed_document_ids,
                 persisted=persisted,
+                # Generate+apply is one user-visible job. Persist the full job
+                # total on both artifacts so list/detail views do not show only
+                # a phase-specific subtotal.
                 llm_tokens_input=self.llm_tokens_input,
                 llm_tokens_output=self.llm_tokens_output,
             )
@@ -3462,6 +3471,9 @@ class TraceableAnalysisService:
             created_by="system-llm",
             research_query=research_query,
             researcher_topics=researcher_topics,
+            # At this point only generation, evaluation, and refinement calls
+            # have run. If final application is enabled, the row is updated
+            # after that pass with the full combined total.
             llm_tokens_input=self.llm_tokens_input,
             llm_tokens_output=self.llm_tokens_output,
         )
@@ -3578,6 +3590,8 @@ class TraceableAnalysisService:
         llm_tokens_input: int,
         llm_tokens_output: int,
     ) -> None:
+        """Overwrite codebook token fields after optional final application."""
+
         codebook = await self._session.get(Codebook, codebook_id)
         if codebook is None:
             return
@@ -3607,6 +3621,9 @@ class TraceableAnalysisService:
             documents_total=len(documents),
             documents_coded=0,
             documents_failed=0,
+            # For generate+apply this is the full combined job total; standalone
+            # application uses CodebookApplicationService and records only that
+            # standalone application job.
             llm_tokens_input=llm_tokens_input,
             llm_tokens_output=llm_tokens_output,
             started_at=_utc_now_naive(),

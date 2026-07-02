@@ -335,6 +335,9 @@ class CodebookService:
             description=codebook.description,
             version=codebook.version,
             created_by=codebook.created_by,
+            # The list and detail endpoints share CodebookSchema fields; map
+            # the metadata explicitly here because this builder constructs the
+            # detail response manually instead of using model validation.
             research_query=codebook.research_query,
             researcher_topics=codebook.researcher_topics,
             llm_tokens_input=codebook.llm_tokens_input,
