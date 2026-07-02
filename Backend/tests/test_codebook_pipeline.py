@@ -7,8 +7,13 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
+from langchain_core.outputs import ChatGeneration, LLMResult
 
-from app.llm.pipelines import apply_codebook_to_interview, apply_codebook_with_codes_to_transcripts
+from app.llm.pipelines import (
+    TokenTracker,
+    apply_codebook_to_interview,
+    apply_codebook_with_codes_to_transcripts,
+)
 from app.schemas.llm import CodebookApplicationResult, InterviewAnalysisResult
 
 # ---------------------------------------------------------------------------
@@ -77,6 +82,61 @@ class TestApplyCodebookInputValidation:
     def test_whitespace_only_codebook_raises(self) -> None:
         with pytest.raises(ValueError, match="Codebook context is empty"):
             apply_codebook_to_interview(SAMPLE_TRANSCRIPT, "  \n  ")
+
+
+class TestTokenTracker:
+    def test_counts_openai_compatible_top_level_usage(self) -> None:
+        tracker = TokenTracker()
+        tracker.on_llm_end(
+            LLMResult(
+                generations=[[ChatGeneration(message=AIMessage(content="{}"))]],
+                llm_output={"token_usage": {"prompt_tokens": 17, "completion_tokens": 5}},
+            )
+        )
+
+        assert tracker.input_tokens == 17
+        assert tracker.output_tokens == 5
+
+    def test_counts_langchain_usage_metadata_when_top_level_usage_missing(self) -> None:
+        tracker = TokenTracker()
+        tracker.on_llm_end(
+            LLMResult(
+                generations=[
+                    [
+                        ChatGeneration(
+                            message=AIMessage(
+                                content="{}",
+                                usage_metadata={"input_tokens": 11, "output_tokens": 3, "total_tokens": 14},
+                            )
+                        )
+                    ]
+                ],
+            )
+        )
+
+        assert tracker.input_tokens == 11
+        assert tracker.output_tokens == 3
+
+    def test_prefers_top_level_usage_to_avoid_double_counting(self) -> None:
+        tracker = TokenTracker()
+        tracker.on_llm_end(
+            LLMResult(
+                generations=[
+                    [
+                        ChatGeneration(
+                            message=AIMessage(
+                                content="{}",
+                                usage_metadata={"input_tokens": 100, "output_tokens": 50, "total_tokens": 150},
+                            )
+                        )
+                    ]
+                ],
+                llm_output={"token_usage": {"prompt_tokens": 17, "completion_tokens": 5}},
+            )
+        )
+
+        assert tracker.input_tokens == 17
+        assert tracker.output_tokens == 5
 
 
 # ---------------------------------------------------------------------------

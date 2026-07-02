@@ -284,6 +284,10 @@ class FakeBackend:
         transcript_document_ids: list[str] | None = None,
         research_query: str | None = None,
         researcher_topics: str | None = None,
+        analysis_name: str | None = None,
+        custom_id: str | None = None,
+        max_refinement_rounds: int | None = None,
+        apply_after_generation: bool | None = None,
     ) -> dict:
         self._maybe_raise("create_generation_job")
         self.last_generation_job_request = {
@@ -292,18 +296,33 @@ class FakeBackend:
             "transcript_document_ids": transcript_document_ids,
             "research_query": research_query,
             "researcher_topics": researcher_topics,
+            "analysis_name": analysis_name,
+            "custom_id": custom_id,
+            "max_refinement_rounds": max_refinement_rounds,
+            "apply_after_generation": apply_after_generation,
         }
         job_id = f"job-{len(self.generation_jobs) + 1}"
         job = {
             "id": job_id,
             "status": "queued",
+            "phase": "queued",
+            "progress_percent": 0,
             "codebook_name": codebook_name,
+            "analysis_name": analysis_name,
+            "custom_id": custom_id,
             "corpus_id": corpus_id,
             "transcript_document_ids": transcript_document_ids or [],
             "cancel_requested": False,
             "codebook_id": None,
+            "application_run_id": None,
+            "documents_total": 0,
+            "documents_done": 0,
+            "analysis_units_total": 0,
+            "analysis_units_done": 0,
             "passages_total": 0,
             "passages_done": 0,
+            "max_refinement_rounds": max_refinement_rounds or 5,
+            "apply_after_generation": True if apply_after_generation is None else apply_after_generation,
         }
         self.generation_jobs[job_id] = job
         return job

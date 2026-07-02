@@ -44,7 +44,7 @@ def _deserialize_document_ids(document_ids_json: str) -> list[UUID]:
 
 
 def _to_job_schema(job: CodebookGenerationJob) -> CodebookGenerationJobSchema:
-    phase = codebook_generation_job_runner.get_phase(job.id, status=job.status)
+    phase = job.phase or codebook_generation_job_runner.get_phase(job.id, status=job.status)
     progress_percent = _compute_job_progress_percent(job, phase=phase)
     return CodebookGenerationJobSchema(
         id=job.id,
@@ -52,19 +52,33 @@ def _to_job_schema(job: CodebookGenerationJob) -> CodebookGenerationJobSchema:
         phase=phase,
         progress_percent=progress_percent,
         codebook_name=job.codebook_name,
+        analysis_name=job.analysis_name,
+        custom_id=job.custom_id,
         corpus_id=job.corpus_id,
         transcript_document_ids=_deserialize_document_ids(job.transcript_document_ids_json),
         cancel_requested=job.cancel_requested,
         research_query=job.research_query,
         researcher_topics=job.researcher_topics,
         codebook_id=job.codebook_id,
+        application_run_id=job.application_run_id,
+        documents_total=job.documents_total,
+        documents_done=job.documents_done,
+        analysis_units_total=job.analysis_units_total,
+        analysis_units_done=job.analysis_units_done,
         passages_total=job.passages_total,
         passages_done=job.passages_done,
         transcripts_processed=job.transcripts_processed,
         passages_processed=job.passages_processed,
+        quotes_created=job.quotes_created,
         themes_created=job.themes_created,
         codes_created=job.codes_created,
+        documents_coded=job.documents_coded,
+        documents_failed=job.documents_failed,
+        max_refinement_rounds=job.max_refinement_rounds,
+        apply_after_generation=job.apply_after_generation,
         error_message=job.error_message,
+        provenance_json=job.provenance_json,
+        action_log_json=job.action_log_json,
         created_at=job.created_at,
         updated_at=job.updated_at,
         started_at=job.started_at,
@@ -77,15 +91,24 @@ def _compute_job_progress_percent(job: CodebookGenerationJob, *, phase: str) -> 
         return 100
     if job.status == "queued":
         return 0
-    if phase == "consolidating":
-        return 95
-    if phase == "persisting":
-        return 98
-    if job.passages_total <= 0:
-        return 1
-    # Keep room for non-passage phases before terminal completion.
-    passage_progress = int((job.passages_done * 90) / job.passages_total)
-    return max(1, min(90, passage_progress))
+    if phase == "extracting_quote_codes" and job.analysis_units_total > 0:
+        unit_progress = int((job.analysis_units_done * 35) / job.analysis_units_total)
+        return max(5, min(40, 5 + unit_progress))
+    if phase == "consolidating_codes" and job.analysis_units_total > 0:
+        unit_progress = int((job.analysis_units_done * 20) / job.analysis_units_total)
+        return max(40, min(60, 40 + unit_progress))
+    if phase == "applying_codebook" and job.analysis_units_total > 0:
+        unit_progress = int((job.analysis_units_done * 9) / job.analysis_units_total)
+        return max(90, min(99, 90 + unit_progress))
+    phase_progress = {
+        "extracting_quote_codes": 5,
+        "consolidating_codes": 45,
+        "synthesizing_themes": 65,
+        "evaluating_iterations": 75,
+        "persisting_codebook": 85,
+        "applying_codebook": 90,
+    }
+    return phase_progress.get(phase, 1)
 
 
 @router.get(
@@ -128,8 +151,12 @@ async def generate_codebook(
         codebook_name=payload.codebook_name,
         corpus_id=payload.corpus_id,
         transcript_document_ids=payload.transcript_document_ids,
+        analysis_name=payload.analysis_name,
+        custom_id=payload.custom_id,
         research_query=payload.research_query,
         researcher_topics=payload.researcher_topics,
+        max_refinement_rounds=payload.max_refinement_rounds,
+        apply_after_generation=payload.apply_after_generation,
         provider=active_provider,
     )
     return JSONResponse(
@@ -156,14 +183,23 @@ async def create_generate_codebook_job(
     job = CodebookGenerationJob(
         id=uuid4(),
         status="queued",
+        phase="queued",
         codebook_name=payload.codebook_name,
+        analysis_name=payload.analysis_name or payload.codebook_name,
+        custom_id=payload.custom_id,
         corpus_id=payload.corpus_id,
         transcript_document_ids_json=_serialize_document_ids(payload.transcript_document_ids),
         cancel_requested=False,
+        documents_total=0,
+        documents_done=0,
+        analysis_units_total=0,
+        analysis_units_done=0,
         passages_total=0,
         passages_done=0,
         research_query=payload.research_query,
         researcher_topics=payload.researcher_topics,
+        max_refinement_rounds=payload.max_refinement_rounds,
+        apply_after_generation=payload.apply_after_generation,
     )
     session.add(job)
     await session.commit()
@@ -255,6 +291,7 @@ async def cancel_generate_codebook_job(
     job.cancel_requested = True
     if job.status == "queued":
         job.status = "cancelled"
+        job.phase = "cancelled"
         codebook_generation_job_runner.set_phase(job.id, "cancelled")
         job.finished_at = datetime.now(UTC).replace(tzinfo=None)
     await session.commit()

@@ -99,9 +99,10 @@
   function paintProgress(jobId, status) {
     const bar = document.querySelector(`[data-job-progress="${jobId}"]`);
     if (!bar) return;
-    const total = status.passages_total || 0;
-    const done = status.passages_done || 0;
-    const pct = total > 0 ? Math.min(99, Math.max(2, Math.round(done / total * 100))) : 2;
+    const total = status.documents_total || status.analysis_units_total || status.passages_total || 0;
+    const done = status.documents_done || status.analysis_units_done || status.passages_done || 0;
+    const raw = status.progress_percent || (total > 0 ? Math.round(done / total * 100) : 2);
+    const pct = Math.min(99, Math.max(2, raw));
     bar.style.width = pct + "%";
     bar.textContent = pct + "%";
   }
@@ -111,9 +112,14 @@
     untrackJob(job.id);
     const cbId = status.codebook_id;
     if (status.status === "succeeded" && cbId) {
+      const runQuery = status.application_run_id
+        ? `?application_run_id=${encodeURIComponent(status.application_run_id)}`
+        : "";
       const link = job.mode === "semi"
         ? `/codebooks/${cbId}/review`
-        : `/codebooks/${cbId}/themes`;
+        : (status.corpus_id
+            ? `/codebooks/${status.corpus_id}/${cbId}/themes${runQuery}`
+            : `/codebooks/${cbId}/themes${runQuery}`);
       const verb = job.mode === "semi" ? "ready for review" : "ready";
       showToast({
         title: "Codebook ready",

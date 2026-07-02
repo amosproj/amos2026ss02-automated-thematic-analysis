@@ -30,15 +30,52 @@ from app.schemas.llm import (
 
 
 class TokenTracker(BaseCallbackHandler):
+    """Accumulate token usage reported by LangChain chat model callbacks."""
+
     def __init__(self) -> None:
         self.input_tokens = 0
         self.output_tokens = 0
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
+        # LiteLLM/OpenAI-compatible providers usually expose aggregate usage in
+        # llm_output. Prefer that single source so message metadata does not
+        # double-count the same response.
+        usage: dict[str, Any] = {}
         if response.llm_output and "token_usage" in response.llm_output:
-            usage = response.llm_output["token_usage"]
-            self.input_tokens += usage.get("prompt_tokens", 0)
-            self.output_tokens += usage.get("completion_tokens", 0)
+            usage = response.llm_output["token_usage"] or {}
+        elif response.llm_output and "usage" in response.llm_output:
+            usage = response.llm_output["usage"] or {}
+
+        if not usage:
+            # Some LangChain chat models only attach usage to the returned
+            # AIMessage. Walk the first populated generation as a provider
+            # fallback.
+            for generation_group in response.generations:
+                for generation in generation_group:
+                    message = getattr(generation, "message", None)
+                    if message is None:
+                        continue
+                    usage_metadata = getattr(message, "usage_metadata", None) or {}
+                    response_metadata = getattr(message, "response_metadata", None) or {}
+                    metadata_usage = response_metadata.get("token_usage") or response_metadata.get("usage") or {}
+                    usage = usage_metadata or metadata_usage
+                    if usage:
+                        break
+                if usage:
+                    break
+
+        self.input_tokens += self._usage_value(usage, "input_tokens", "prompt_tokens")
+        self.output_tokens += self._usage_value(usage, "output_tokens", "completion_tokens")
+
+    @staticmethod
+    def _usage_value(usage: dict[str, Any], *keys: str) -> int:
+        # Providers disagree on names: OpenAI uses prompt/completion tokens,
+        # LangChain normalizes those as input/output tokens.
+        for key in keys:
+            value = usage.get(key)
+            if isinstance(value, int):
+                return value
+        return 0
 
 
 # Run a single-shot thematic analysis over a transcript.
