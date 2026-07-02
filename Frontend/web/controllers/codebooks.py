@@ -846,18 +846,24 @@ def _demo_job_state(job_id: str) -> dict:
     total = 8  # cosmetic; matches the number of themes+codes in the payload
     if elapsed < 1:
         return {"id": job_id, "status": "queued",
+                "phase": "queued",
                 "documents_total": 0, "documents_done": 0,
                 "passages_total": 0, "passages_done": 0}
     if elapsed < _DEMO_TIMELINE_SECONDS:
         done = min(total, int((elapsed - 1) / (_DEMO_TIMELINE_SECONDS - 1) * total))
+        phase = "extracting_quote_codes" if done < total // 2 else "synthesizing_themes"
         return {"id": job_id, "status": "running",
+                "phase": phase,
                 "progress_percent": max(2, min(99, int((done / total) * 100))),
                 "documents_total": total, "documents_done": done,
-                "passages_total": total, "passages_done": done}
+                "passages_total": total, "passages_done": done,
+                "analysis_units_total": total, "analysis_units_done": done}
     return {"id": job_id, "status": "succeeded",
+            "phase": "succeeded",
             "progress_percent": 100,
             "documents_total": total, "documents_done": total,
             "passages_total": total, "passages_done": total,
+            "quotes_created": 8, "themes_created": 6, "codes_created": 4,
             "codebook_id": entry["codebook_id"]}
 
 

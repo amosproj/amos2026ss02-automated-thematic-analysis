@@ -21,14 +21,40 @@
        data-review-base="/codebooks/"
        id="progress-app">
 
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span id="progress-step" class="badge text-bg-light border text-secondary">Preparing</span>
+      <span id="progress-percent" class="small fw-semibold text-secondary">0%</span>
+    </div>
+
     <div class="progress mb-3" role="progressbar" aria-label="Generation progress">
       <div id="progress-bar"
            class="progress-bar progress-bar-striped progress-bar-animated"
-           style="width: 0%">0%</div>
+           style="width: 0%"></div>
     </div>
 
-    <div class="text-secondary small mb-3">
+    <div class="text-secondary small mb-3" aria-live="polite">
       <span id="progress-counts">Preparing&hellip;</span>
+    </div>
+
+    <div class="row g-2 mb-3" aria-label="Job metrics">
+      <div class="col-12 col-sm-4">
+        <div class="border rounded-2 px-3 py-2 h-100">
+          <div class="small text-secondary">Transcripts</div>
+          <div id="metric-documents" class="fw-semibold">Waiting</div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-4">
+        <div class="border rounded-2 px-3 py-2 h-100">
+          <div class="small text-secondary">Evidence</div>
+          <div id="metric-evidence" class="fw-semibold">Pending</div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-4">
+        <div class="border rounded-2 px-3 py-2 h-100">
+          <div class="small text-secondary">Codebook</div>
+          <div id="metric-codebook" class="fw-semibold">Pending</div>
+        </div>
+      </div>
     </div>
 
     <div id="progress-error" class="alert alert-danger d-none" role="alert"></div>
@@ -51,7 +77,12 @@
       const statusLine = document.getElementById("status-line");
       const statusSpinner = document.getElementById("status-spinner");
       const bar = document.getElementById("progress-bar");
+      const percentLabel = document.getElementById("progress-percent");
+      const stepLabel = document.getElementById("progress-step");
       const counts = document.getElementById("progress-counts");
+      const metricDocuments = document.getElementById("metric-documents");
+      const metricEvidence = document.getElementById("metric-evidence");
+      const metricCodebook = document.getElementById("metric-codebook");
       const errorEl = document.getElementById("progress-error");
       const cancelBtn = document.getElementById("cancel-btn");
 
@@ -69,14 +100,73 @@
 
       function setBar(pct) {
         bar.style.width = pct + "%";
-        bar.textContent = pct + "%";
         bar.setAttribute("aria-valuenow", String(pct));
+        percentLabel.textContent = pct + "%";
+      }
+
+      function formatCount(value) {
+        if (value === null || value === undefined) return "0";
+        return Number(value).toLocaleString();
+      }
+
+      function phaseLabel(job) {
+        const phase = job.phase || job.status || "queued";
+        const labels = {
+          queued: "Queued",
+          loading: "Preparing",
+          extracting_quote_codes: "Finding evidence",
+          consolidating_codes: "Consolidating codes",
+          synthesizing_themes: "Building themes",
+          evaluating_iterations: "Evaluating fit",
+          persisting_codebook: "Saving codebook",
+          applying_codebook: "Applying codebook",
+          succeeded: "Complete",
+          failed: "Failed",
+          cancelled: "Cancelled",
+        };
+        return labels[phase] || phase.replaceAll("_", " ");
+      }
+
+      function activeCounter(job) {
+        if (job.phase === "consolidating_codes" && job.analysis_units_total > 0) {
+          return `${formatCount(job.analysis_units_done)} of ${formatCount(job.analysis_units_total)} relationships checked`;
+        }
+        if (job.phase === "applying_codebook" && job.analysis_units_total > 0) {
+          return `${formatCount(job.analysis_units_done)} of ${formatCount(job.analysis_units_total)} transcripts coded`;
+        }
+        if (job.documents_total > 0) {
+          return `${formatCount(job.documents_done)} of ${formatCount(job.documents_total)} transcripts reviewed`;
+        }
+        return "Worker is preparing the analysis";
+      }
+
+      function updateMetrics(job) {
+        const docsDone = job.documents_done || 0;
+        const docsTotal = job.documents_total || 0;
+        metricDocuments.textContent = docsTotal > 0
+          ? `${formatCount(docsDone)} / ${formatCount(docsTotal)}`
+          : "Waiting";
+
+        metricEvidence.textContent = job.quotes_created !== null && job.quotes_created !== undefined
+          ? `${formatCount(job.quotes_created)} quotes`
+          : (job.analysis_units_done > 0 ? `${formatCount(job.analysis_units_done)} reviewed` : "Pending");
+
+        const pieces = [];
+        if (job.codes_created !== null && job.codes_created !== undefined) {
+          pieces.push(`${formatCount(job.codes_created)} codes`);
+        }
+        if (job.themes_created !== null && job.themes_created !== undefined) {
+          pieces.push(`${formatCount(job.themes_created)} themes`);
+        }
+        metricCodebook.textContent = pieces.length ? pieces.join(" / ") : "Pending";
       }
 
       function paint(job) {
-        const total = job.documents_total || job.analysis_units_total || job.passages_total || 0;
-        const done = job.documents_done || job.analysis_units_done || job.passages_done || 0;
-        const phase = (job.phase || "").replaceAll("_", " ");
+        const total = job.documents_total || job.analysis_units_total || 0;
+        const done = job.documents_done || job.analysis_units_done || 0;
+        const step = phaseLabel(job);
+        stepLabel.textContent = step;
+        updateMetrics(job);
 
         if (job.status === "queued") {
           setBar(0);
@@ -87,10 +177,8 @@
 
         if (job.status === "running" && done === 0) {
           setBar(job.progress_percent || 2);
-          counts.textContent = total > 0
-            ? ("0 / " + total + " documents")
-            : "Connected — " + (phase || "starting") + "…";
-          statusLine.textContent = "Connected to worker — " + (phase || "starting traceable analysis") + "…";
+          counts.textContent = activeCounter(job);
+          statusLine.textContent = `${step}…`;
           return;
         }
 
@@ -99,16 +187,17 @@
           const raw = job.progress_percent || (total > 0 ? Math.round((done / total) * 100) : 2);
           const pct = Math.min(99, Math.max(2, raw));
           setBar(pct);
-          counts.textContent = done + " / " + total + " documents";
-          statusLine.textContent = total > 0
-            ? "Traceable analysis — " + (phase || "running") + ", " + done + " of " + total + " documents…"
-            : "Traceable analysis — " + (phase || "running") + "…";
+          counts.textContent = activeCounter(job);
+          statusLine.textContent = `${step}…`;
           return;
         }
 
         if (job.status === "succeeded") {
           setBar(100);
-          counts.textContent = (done || total) + " / " + (total || done) + " documents";
+          stepLabel.textContent = "Complete";
+          counts.textContent = job.application_run_id
+            ? "Codebook generated and applied."
+            : "Codebook generated.";
           statusLine.textContent = "Done. Opening results…";
         } else {
           statusLine.textContent = "Status: " + job.status;
