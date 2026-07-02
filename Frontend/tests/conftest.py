@@ -38,8 +38,17 @@ class FakeBackend:
         ]
         self.last_created_corpus: dict | None = None
         self.documents: list[dict] = []
+        self.document_content: dict = {
+            "id": "doc-1",
+            "title": "Interview 1",
+            "filename": "interview1.txt",
+            "content": "Interviewer: Hello\nInterviewee: Hi",
+            "demographic_data": {},
+        }
         self.upload_results: list[dict] = []
         self.uploaded_files: list[str] = []
+        # Maps run_id -> list of DocumentCoding dicts (for get_codebook_application_run_documents)
+        self.run_documents: dict[str, list[dict]] = {}
         self.codebooks: list[dict] = []
         self.theme_frequencies: list[dict] = []
         self.theme_frequencies_by_run: dict[str, list[dict]] = {}
@@ -48,9 +57,16 @@ class FakeBackend:
         # Analysis runs (Previous Analysis Runs box)
         self.application_runs: list[dict] = []
         self.deleted_run_ids: list[str] = []
+        self.cancelled_analysis_job_ids: list[str] = []
+        self.force_deleted_documents: list[tuple[str, str]] = []
+        self.force_deleted_codebooks: list[str] = []
+        self.force_deleted_corpora: list[str] = []
         # Demographic data
         self.demographic_files: list[dict] = []
         self.demographic_rows: list[dict] = []
+        self.demographic_dimensions: list[str] = []
+        self.theme_demographic_breakdown: dict = {"theme_id": None, "dimensions": []}
+        self.last_breakdown_request: dict | None = None
         self.demographic_link_summary: dict = {
             "total_transcripts": 0,
             "matched": 0,
@@ -117,8 +133,10 @@ class FakeBackend:
         self.last_created_corpus = created
         return created
 
-    def delete_corpus(self, corpus_id: str) -> None:
+    def delete_corpus(self, corpus_id: str, *, force: bool = False) -> None:
         self._maybe_raise("delete_corpus")
+        if force:
+            self.force_deleted_corpora.append(corpus_id)
         self.corpora = [c for c in self.corpora if c.get("id") != corpus_id]
 
     def upload_files(self, corpus_id, files) -> list[dict]:
@@ -131,14 +149,22 @@ class FakeBackend:
         self._maybe_raise("list_documents")
         return self.documents
 
-    def delete_document(self, corpus_id, document_id) -> None:
+    def get_document_content(self, corpus_id, document_id) -> dict:
+        self._maybe_raise("get_document_content")
+        return self.document_content
+
+    def delete_document(self, corpus_id, document_id, *, force: bool = False) -> None:
         self._maybe_raise("delete_document")
+        if force:
+            self.force_deleted_documents.append((corpus_id, document_id))
         self.documents = [d for d in self.documents if d["id"] != document_id]
 
     # ---- Codebooks / themes -------------------------------------------------
 
-    def delete_codebook(self, codebook_id: str) -> None:
+    def delete_codebook(self, codebook_id: str, *, force: bool = False) -> None:
         self._maybe_raise("delete_codebook")
+        if force:
+            self.force_deleted_codebooks.append(codebook_id)
         self.codebooks = [cb for cb in self.codebooks if cb.get("id") != codebook_id]
 
     def list_codebooks(self, corpus_id: str | None = None) -> list[dict]:
@@ -172,6 +198,26 @@ class FakeBackend:
     def get_theme_tree(self, codebook_id: str) -> list[dict]:
         self._maybe_raise("get_theme_tree")
         return self.theme_tree
+
+    def get_demographic_dimensions(self, corpus_id: str) -> list[str]:
+        self._maybe_raise("get_demographic_dimensions")
+        return self.demographic_dimensions
+
+    def get_theme_demographic_breakdown(
+        self,
+        codebook_id: str,
+        theme_id: str,
+        dimensions: list[str],
+        application_run_id: str | None = None,
+    ) -> dict:
+        self._maybe_raise("get_theme_demographic_breakdown")
+        self.last_breakdown_request = {
+            "codebook_id": codebook_id,
+            "theme_id": theme_id,
+            "dimensions": dimensions,
+            "application_run_id": application_run_id,
+        }
+        return self.theme_demographic_breakdown
 
     def create_codebook(self, *, corpus_id: str, name: str, themes: list[dict]) -> dict:
         self._maybe_raise("create_codebook")
@@ -341,12 +387,25 @@ class FakeBackend:
             return {"id": job_id, "status": "succeeded", "documents_total": 5, "documents_done": 5}
         return self.analysis_jobs[job_id]
 
+    def cancel_analysis_job(self, job_id: str) -> dict:
+        self._maybe_raise("cancel_analysis_job")
+        self.cancelled_analysis_job_ids.append(job_id)
+        if not hasattr(self, "analysis_jobs"):
+            self.analysis_jobs = {}
+        job = self.analysis_jobs.setdefault(job_id, {"id": job_id, "status": "running"})
+        job["cancel_requested"] = True
+        return job
+
     def list_codebook_application_runs(self, codebook_id: str) -> list[dict]:
         self._maybe_raise("list_codebook_application_runs")
         return [
             run for run in self.application_runs
             if run.get("codebook_id") in (None, codebook_id)
         ]
+
+    def get_codebook_application_run_documents(self, run_id: str) -> list[dict]:
+        self._maybe_raise("get_codebook_application_run_documents")
+        return self.run_documents.get(run_id, [])
 
     def delete_codebook_application_run(self, run_id: str) -> None:
         self._maybe_raise("delete_codebook_application_run")
@@ -368,6 +427,8 @@ class FakeBackend:
             and self.raise_on[0] == method
         ):
             exc_class = self.raise_on[1]
+            if exc_class.__name__ == "BackendConflictError":
+                raise exc_class("Deleting this item would interrupt a running analysis.")
             raise exc_class()
 
 

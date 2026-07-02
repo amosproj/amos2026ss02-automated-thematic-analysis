@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import NotFoundError, UnprocessableError
 from app.llm.pipelines import (
+    TokenTracker,
     build_codebook_generation_chain,
     consolidate_generated_codes,
     consolidate_generated_themes,
@@ -233,6 +234,7 @@ class CodebookGenerationService:
         provider: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
+        tracker: TokenTracker | None = None,
     ) -> tuple[list[PassageCodebookGeneration], list[GeneratedCodebookResponse.PassageFailure]]:
         started_at = time.monotonic()
 
@@ -264,6 +266,7 @@ class CodebookGenerationService:
                     max_concurrency=_PASSAGE_GENERATION_MAX_CONCURRENCY,
                     research_query=research_query,
                     researcher_topics=researcher_topics,
+                    tracker=tracker,
                 )
                 for local_index, result in enumerate(batch_results):
                     passage_index = chunk_indexes[local_index]
@@ -386,6 +389,7 @@ class CodebookGenerationService:
         *,
         theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
+        tracker: TokenTracker | None = None,
     ) -> list[_CodeDraft]:
         """Consolidate generated codes and keep a deterministic fallback."""
         await self._raise_if_cancelled(should_cancel)
@@ -419,6 +423,7 @@ class CodebookGenerationService:
             consolidated = await asyncio.to_thread(
                 consolidate_generated_codes,
                 consolidation_payload,
+                tracker=tracker,
             )
             await self._raise_if_cancelled(should_cancel)
         except CodebookGenerationCancelledError:
@@ -642,6 +647,7 @@ class CodebookGenerationService:
         theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
         hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
+        tracker: TokenTracker | None = None,
     ) -> tuple[dict[tuple[str, ...], _ThemeNodeDraft], list[tuple[tuple[str, ...], tuple[str, ...]]]]:
         """Consolidate theme paths and rebuild the theme tree from consolidated paths."""
         await self._raise_if_cancelled(should_cancel)
@@ -668,6 +674,7 @@ class CodebookGenerationService:
                 consolidate_generated_themes,
                 theme_paths,
                 constraints=first_pass_constraints,
+                tracker=tracker,
             )
             await self._raise_if_cancelled(should_cancel)
         except CodebookGenerationCancelledError:
@@ -701,6 +708,7 @@ class CodebookGenerationService:
                     consolidate_generated_themes,
                     consolidated.themes,
                     constraints=strict_constraints,
+                    tracker=tracker,
                 )
                 await self._raise_if_cancelled(should_cancel)
                 strict_nodes, strict_edges = self._build_theme_graph_from_paths(strict_consolidated.themes)
@@ -1020,6 +1028,7 @@ class CodebookGenerationService:
         theme_nodes: dict[tuple[str, ...], _ThemeNodeDraft],
         code_nodes: list[_CodeDraft],
         hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
+        tracker: TokenTracker | None = None,
     ) -> tuple[Codebook, int, int]:
         try:
             version = await self._next_codebook_version(corpus_id=corpus_id)
@@ -1032,6 +1041,8 @@ class CodebookGenerationService:
                 created_by="system-llm",
                 research_query=research_query,
                 researcher_topics=researcher_topics,
+                llm_tokens_input=tracker.input_tokens if tracker else None,
+                llm_tokens_output=tracker.output_tokens if tracker else None,
             )
             self._session.add(codebook)
             await self._session.flush()

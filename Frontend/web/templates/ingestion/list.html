@@ -20,6 +20,8 @@
     {% endif %}
   </div>
 
+  {% include "_analysis_delete_confirm_modal.html" %}
+
   {% if error %}
     <p class="text-secondary">Couldn't load transcripts right now.</p>
   {% elif documents %}
@@ -93,4 +95,12 @@
 {% endblock %}
 {% block scripts %}
   {{ super() }}
+  {% if pending_analysis_delete %}
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const modalEl = document.getElementById("confirmAnalysisDeleteModal");
+        if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      });
+    </script>
+  {% endif %}
 {% endblock %}

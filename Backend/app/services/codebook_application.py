@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import NotFoundError, UnprocessableError
 from app.llm.pipelines import (
+    TokenTracker,
     apply_codebook_with_codes_to_transcripts,
     build_codebook_application_with_codes_chain,
 )
@@ -100,6 +101,7 @@ class CodebookApplicationService:
         on_run_created: Callable[[UUID], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> CodebookApplicationSummary:
+        tracker = TokenTracker()
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
         await self._load_corpus(corpus_id)
         codebook = await self._load_codebook(codebook_id=codebook_id, corpus_id=corpus_id)
@@ -162,6 +164,7 @@ class CodebookApplicationService:
                 codebook_context=codebook_context,
                 chain=chain,
                 should_cancel=should_cancel,
+                tracker=tracker,
             )
             for local_index, result in enumerate(batch_results):
                 document = documents[document_indexes[local_index]]
@@ -223,6 +226,7 @@ class CodebookApplicationService:
             documents_coded=documents_coded,
             documents_failed=len(failed_documents),
             status="succeeded",
+            tracker=tracker,
         )
         return CodebookApplicationSummary(
             application_run=application_run,
@@ -459,6 +463,7 @@ class CodebookApplicationService:
         codebook_context: str,
         chain: Runnable[dict[str, str], dict[str, Any]],
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
+        tracker: TokenTracker | None = None,
     ) -> list[CodebookApplicationResult | Exception]:
         started_at = time.monotonic()
 
@@ -487,6 +492,7 @@ class CodebookApplicationService:
                 codebook_context,
                 chain=chain,
                 max_concurrency=_APPLICATION_MAX_CONCURRENCY,
+                tracker=tracker,
             )
             for local_index, result in enumerate(batch_results):
                 document_index = pending_indexes[local_index]
@@ -680,6 +686,7 @@ class CodebookApplicationService:
         documents_coded: int,
         documents_failed: int,
         status: str,
+        tracker: TokenTracker | None = None,
     ) -> CodebookApplicationRun:
         run = await self._session.get(CodebookApplicationRun, application_run_id)
         if run is None:
@@ -688,6 +695,9 @@ class CodebookApplicationService:
         run.documents_failed = documents_failed
         run.status = status
         run.finished_at = _utc_now_naive()
+        if tracker is not None:
+            run.llm_tokens_input = tracker.input_tokens
+            run.llm_tokens_output = tracker.output_tokens
         await self._session.commit()
         return run
 

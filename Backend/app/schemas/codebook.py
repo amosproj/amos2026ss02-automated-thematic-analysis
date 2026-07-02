@@ -97,6 +97,8 @@ class CodebookSchema(BaseSchema):
     created_by: str
     research_query: str | None = None
     researcher_topics: str | None = None
+    llm_tokens_input: int | None = None
+    llm_tokens_output: int | None = None
 
 
 class CodebookGenerateRequest(BaseSchema):

@@ -1,9 +1,18 @@
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+import io
+import zipfile
+
+from flask import Blueprint, Response, flash, jsonify, redirect, render_template, request, url_for
 
 from web.services.corpus_context import resolve_active_corpus
-from web.services.backend_client import BackendError, get_backend_client as _backend
+from web.services.backend_client import (
+    BackendError,
+    BackendNotFoundError,
+    get_backend_client as _backend,
+)
 
 bp = Blueprint("analysis", __name__)
+
+EXPORT_FORMATS = ("theme-based", "participant-based")
 
 
 @bp.get("/")
@@ -125,6 +134,49 @@ def job_status(job_id: str):
         return jsonify(job)
     except BackendError as exc:
         return jsonify({"error": exc.user_message}), 500
+
+
+@bp.post("/job/<job_id>/cancel")
+def cancel_job(job_id: str):
+    try:
+        job = _backend().cancel_analysis_job(job_id)
+    except BackendError as exc:
+        return jsonify({"error": exc.user_message}), 400
+    return jsonify(job)
+
+@bp.post("/runs/export")
+def export_selected_runs() -> Response | str:
+    """Export the selected runs as one ZIP with a CSV per run, per chosen format."""
+    corpus_id = request.args.get("corpus_id")
+    run_ids = [item_id for item_id in request.form.getlist("item_ids") if item_id]
+    formats = [fmt for fmt in request.form.getlist("formats") if fmt in EXPORT_FORMATS]
+    if not run_ids:
+        flash("Select at least one analysis run to export.", "warning")
+        return redirect(url_for("analysis.index", corpus_id=corpus_id))
+    if not formats:
+        flash("Select at least one export format.", "warning")
+        return redirect(url_for("analysis.index", corpus_id=corpus_id))
+
+    client = _backend()
+    try:
+        archive_buffer = io.BytesIO()
+        with zipfile.ZipFile(archive_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for run_id in run_ids:
+                for export_format in formats:
+                    csv_bytes = client.fetch_run_export_csv(run_id, export_format)
+                    archive.writestr(f"run-{run_id}-{export_format}.csv", csv_bytes)
+        archive_buffer.seek(0)
+        return Response(
+            archive_buffer.getvalue(),
+            mimetype="application/zip",
+            headers={"Content-Disposition": 'attachment; filename="analysis-runs-export.zip"'},
+        )
+    except BackendNotFoundError:
+        flash("One of the selected runs couldn't be found. It may have been deleted.", "danger")
+        return redirect(url_for("analysis.index", corpus_id=corpus_id))
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return redirect(url_for("analysis.index", corpus_id=corpus_id))
 
 
 @bp.post("/runs/delete")

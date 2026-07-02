@@ -375,7 +375,7 @@ async def test_generate_codebook_post_processes_codes_with_llm_consolidation(
             ],
         )
 
-    def _fake_consolidate_generated_codes(_):
+    def _fake_consolidate_generated_codes(_, **kwargs):
         return CodeConsolidationResult(
             codes=[
                 {

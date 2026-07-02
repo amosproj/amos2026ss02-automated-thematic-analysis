@@ -142,6 +142,27 @@ def create_app(config: Config | None = None) -> Flask:
 
         return Markup("".join(result))
 
+    @app.template_filter('compact_number')
+    def compact_number_filter(value):
+        """Format large numbers compactly (e.g. 142412 -> 142.4k)."""
+        if value is None:
+            return ""
+        try:
+            num = float(value)
+        except (TypeError, ValueError):
+            return str(value)
+
+        if num >= 1_000_000:
+            return f"{num / 1_000_000:.1f}M"
+        elif num >= 1_000:
+            return f"{num / 1_000:.1f}k"
+        
+        # Strip trailing .0 if present for whole numbers
+        formatted = f"{num:.1f}"
+        if formatted.endswith(".0"):
+            formatted = formatted[:-2]
+        return formatted
+
     _register_error_handlers(app)
 
     return app

@@ -1,0 +1,37 @@
+{% if pending_analysis_delete %}
+  <div class="modal fade text-start"
+       id="confirmAnalysisDeleteModal"
+       tabindex="-1"
+       aria-labelledby="confirmAnalysisDeleteModalLabel"
+       aria-hidden="true"
+       data-pending-delete-modal>
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form method="POST" action="{{ pending_analysis_delete.action }}">
+          <div class="modal-header {{ pending_analysis_delete.header_class | default('text-danger') }}">
+            <h5 class="modal-title" id="confirmAnalysisDeleteModalLabel">
+              {{ pending_analysis_delete.title }}
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>{{ pending_analysis_delete.message }}</p>
+            <p class="text-muted small mb-0">
+              Confirming will cancel the affected analysis run and continue with deletion.
+            </p>
+            <input type="hidden" name="force_delete" value="1">
+            {% for item_id in pending_analysis_delete.item_ids %}
+              <input type="hidden" name="item_ids" value="{{ item_id }}">
+            {% endfor %}
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-danger">
+              {{ pending_analysis_delete.confirm_label }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endif %}

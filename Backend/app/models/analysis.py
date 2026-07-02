@@ -37,6 +37,8 @@ class CodebookApplicationRun(Base, TimestampMixin):
     documents_total: Mapped[int] = mapped_column(Integer, default=0)
     documents_coded: Mapped[int] = mapped_column(Integer, default=0)
     documents_failed: Mapped[int] = mapped_column(Integer, default=0)
+    llm_tokens_input: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    llm_tokens_output: Mapped[int | None] = mapped_column(Integer, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
 
