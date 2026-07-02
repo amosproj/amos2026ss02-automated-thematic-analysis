@@ -335,6 +335,10 @@ class CodebookService:
             description=codebook.description,
             version=codebook.version,
             created_by=codebook.created_by,
+            research_query=codebook.research_query,
+            researcher_topics=codebook.researcher_topics,
+            llm_tokens_input=codebook.llm_tokens_input,
+            llm_tokens_output=codebook.llm_tokens_output,
             themes=root_themes,
             codes=code_schemas,
         )

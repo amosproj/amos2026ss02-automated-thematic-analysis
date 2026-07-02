@@ -64,6 +64,8 @@ async def test_generation_job_uses_traceable_pipeline_and_creates_application_ru
     )
 
     async def _fake_extract_quote_codes(self, *, documents, **_kwargs):
+        self._token_tracker.input_tokens += 100
+        self._token_tracker.output_tokens += 20
         document = documents[0]
         quote = "manual handoffs slow"
         start = document.content.index(quote)
@@ -116,6 +118,8 @@ async def test_generation_job_uses_traceable_pipeline_and_creates_application_ru
         )
 
     async def _fake_apply_codebook_to_documents(self, *, documents, **_kwargs):
+        self._token_tracker.input_tokens += 30
+        self._token_tracker.output_tokens += 7
         document = documents[0]
         quote = "manual handoffs slow"
         start = document.content.index(quote)
@@ -199,6 +203,8 @@ async def test_generation_job_uses_traceable_pipeline_and_creates_application_ru
     assert codebook_response.status_code == 200
     codebook = codebook_response.json()["data"]
     assert codebook["name"] == "Traceable Generated"
+    assert codebook["llm_tokens_input"] == 160
+    assert codebook["llm_tokens_output"] == 34
     assert codebook["themes"][0]["name"] == "Workflow Friction"
     assert codebook["codes"][0]["name"] == "Manual handoffs slow work"
 
@@ -206,5 +212,7 @@ async def test_generation_job_uses_traceable_pipeline_and_creates_application_ru
     assert run_response.status_code == 200
     run = run_response.json()["data"]
     assert run["status"] == "succeeded"
+    assert run["llm_tokens_input"] == 160
+    assert run["llm_tokens_output"] == 34
     assert run["document_codings"][0]["code_assignments"][0]["quote"] == "manual handoffs slow"
     assert run["document_codings"][0]["code_assignments"][0]["quote_match_status"] == "exact"

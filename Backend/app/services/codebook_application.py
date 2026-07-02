@@ -1,26 +1,16 @@
 from __future__ import annotations
 
-import asyncio
-import random
-import time
 import uuid
+from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 from uuid import UUID
 
-from langchain_core.runnables import Runnable
-from loguru import logger
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import NotFoundError, UnprocessableError
-from app.llm.pipelines import (
-    TokenTracker,
-    apply_codebook_with_codes_to_transcripts,
-    build_codebook_application_with_codes_chain,
-)
 from app.models import (
     Code,
     CodeAssignment,
@@ -35,14 +25,20 @@ from app.models import (
     ThemeCodeRelationship,
     ThemeHierarchyRelationship,
 )
-from app.schemas.llm import CodebookApplicationResult
-from app.services.quote_matching import locate_quote_span
-
-_APPLICATION_MAX_ATTEMPTS = 3
-_APPLICATION_MAX_CONCURRENCY = 8
-_APPLICATION_BATCH_SIZE = 16
-_APPLICATION_RETRY_BASE_DELAY_S = 0.5
-_APPLICATION_RETRY_MAX_DELAY_S = 5.0
+from app.schemas.traceable_llm import (
+    CodebookSynthesisResult,
+    SynthesizedCode,
+    SynthesizedThemeNode,
+    SynthesizedThemePath,
+)
+from app.services.traceable_analysis import (
+    TraceableAnalysisCancelledError,
+    TraceableAnalysisService,
+    _AppliedEvidence,
+)
+from app.services.traceable_analysis import (
+    _DocumentText as _TraceableDocumentText,
+)
 
 
 class CodebookApplicationCancelledError(Exception):
@@ -101,7 +97,6 @@ class CodebookApplicationService:
         on_run_created: Callable[[UUID], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> CodebookApplicationSummary:
-        tracker = TokenTracker()
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
         await self._load_corpus(corpus_id)
         codebook = await self._load_codebook(codebook_id=codebook_id, corpus_id=corpus_id)
@@ -119,9 +114,9 @@ class CodebookApplicationService:
         themes, codes = await self._load_codebook_nodes(codebook_id=codebook.id)
         if not themes:
             raise UnprocessableError("The selected codebook has no active themes to apply.")
-        codebook_context = self._build_codebook_context(themes=themes, codes=codes)
         themes_by_label = {self._label_key(theme.label): theme for theme in themes}
         codes_by_label = {self._label_key(code.label): code for code in codes}
+        synthesis = self._build_traceable_synthesis(themes=themes, codes=codes)
 
         application_run = CodebookApplicationRun(
             id=uuid.uuid4(),
@@ -145,88 +140,47 @@ class CodebookApplicationService:
         # End the setup transaction before long LLM calls.
         await self._session.rollback()
 
-        if on_progress is not None:
-            await on_progress(0, len(documents))
         if on_phase is not None:
             await on_phase("coding_documents")
 
-        chain = build_codebook_application_with_codes_chain(provider=provider)
-        documents_done = 0
-        documents_coded = 0
-        failed_documents: list[dict[str, str]] = []
-
-        # Process fixed-size index batches so result order can be mapped back to
-        # the original document list after LangChain returns the batched output.
-        for document_indexes in self._chunked(list(range(len(documents))), _APPLICATION_BATCH_SIZE):
-            await self._raise_if_cancelled(should_cancel)
-            batch_results = await self._apply_document_batch_with_retries(
-                documents=[documents[index] for index in document_indexes],
-                codebook_context=codebook_context,
-                chain=chain,
+        traceable_service = TraceableAnalysisService(self._session)
+        try:
+            application_result = await traceable_service._apply_codebook_to_documents(
+                documents=[
+                    _TraceableDocumentText(
+                        id=document.id,
+                        title=document.title,
+                        content=document.content,
+                    )
+                    for document in documents
+                ],
+                synthesis=synthesis,
                 should_cancel=should_cancel,
-                tracker=tracker,
+                provider=provider,
+                on_progress=on_progress,
             )
-            for local_index, result in enumerate(batch_results):
-                document = documents[document_indexes[local_index]]
-                await self._raise_if_cancelled(should_cancel)
-                try:
-                    # Batch calls return exceptions as values so one failed
-                    # document does not prevent successful documents persisting.
-                    if isinstance(result, Exception):
-                        raise result
-                    await self._persist_successful_document_coding(
-                        application_run_id=application_run_id,
-                        codebook_id=codebook_id,
-                        document=document,
-                        result=result,
-                        themes_by_label=themes_by_label,
-                        codes_by_label=codes_by_label,
-                    )
-                    documents_coded += 1
-                except CodebookApplicationCancelledError:
-                    raise
-                except Exception as exc:
-                    await self._session.rollback()
-                    logger.warning(
-                        "Codebook application failed for document {} after retries: {}",
-                        document.id,
-                        exc,
-                    )
-                    await self._persist_failed_document_coding(
-                        application_run_id=application_run_id,
-                        codebook_id=codebook_id,
-                        document=document,
-                        error_message=str(exc),
-                    )
-                    failed_documents.append(
-                        {
-                            "document_id": str(document.id),
-                            "title": document.title,
-                            "error": str(exc),
-                        }
-                    )
-
-                # Persist progress after each document, not after each batch, so
-                # the job endpoint remains accurate during long application runs.
-                documents_done += 1
-                await self._update_run_counts(
-                    application_run_id=application_run_id,
-                    documents_coded=documents_coded,
-                    documents_failed=len(failed_documents),
-                    status="running",
-                )
-                if on_progress is not None:
-                    await on_progress(documents_done, len(documents))
+        except TraceableAnalysisCancelledError as exc:
+            raise CodebookApplicationCancelledError("Codebook application was cancelled") from exc
 
         await self._raise_if_cancelled(should_cancel)
         if on_phase is not None:
             await on_phase("persisting")
+        documents_coded, failed_documents = await self._persist_traceable_application_result(
+            application_run_id=application_run_id,
+            codebook_id=codebook_id,
+            documents=documents,
+            applied_evidence=application_result.evidence,
+            failed_document_ids=application_result.failed_document_ids,
+            themes_by_label=themes_by_label,
+            codes_by_label=codes_by_label,
+        )
         application_run = await self._finish_run(
             application_run_id=application_run_id,
             documents_coded=documents_coded,
             documents_failed=len(failed_documents),
             status="succeeded",
-            tracker=tracker,
+            llm_tokens_input=traceable_service.llm_tokens_input,
+            llm_tokens_output=traceable_service.llm_tokens_output,
         )
         return CodebookApplicationSummary(
             application_run=application_run,
@@ -418,251 +372,179 @@ class CodebookApplicationService:
         return paths
 
     @staticmethod
-    def _build_codebook_context(*, themes: list[_ThemeRef], codes: list[_CodeRef]) -> str:
-        theme_by_id = {theme.id: theme for theme in themes}
-        codes_by_theme_id: dict[UUID, list[_CodeRef]] = {}
-        orphan_codes: list[_CodeRef] = []
-        for code in codes:
-            if code.theme_id is not None and code.theme_id in theme_by_id:
-                codes_by_theme_id.setdefault(code.theme_id, []).append(code)
-            else:
-                orphan_codes.append(code)
-
-        lines = [
-            "Use only the exact theme and code labels listed below.",
-            "",
-            "THEMES AND CODES:",
-        ]
-        for theme in sorted(themes, key=lambda item: item.path):
-            path = " > ".join(theme.path)
-            lines.append(f"- Theme path: {path}")
-            lines.append(f"  Theme label: {theme.label}")
-            if theme.description:
-                lines.append(f"  Theme definition: {theme.description}")
-            theme_codes = sorted(codes_by_theme_id.get(theme.id, []), key=lambda item: item.label.lower())
-            if theme_codes:
-                lines.append("  Codes:")
-                for code in theme_codes:
-                    lines.append(f"    - Code label: {code.label}")
-                    if code.description:
-                        lines.append(f"      Code definition: {code.description}")
-            lines.append("")
-
-        if orphan_codes:
-            lines.append("UNSCOPED CODES:")
-            for code in sorted(orphan_codes, key=lambda item: item.label.lower()):
-                lines.append(f"- Code label: {code.label}")
-                if code.description:
-                    lines.append(f"  Code definition: {code.description}")
-        return "\n".join(lines).strip()
-
-    async def _apply_document_batch_with_retries(
-        self,
+    def _build_traceable_synthesis(
         *,
-        documents: list[_DocumentText],
-        codebook_context: str,
-        chain: Runnable[dict[str, str], dict[str, Any]],
-        should_cancel: Callable[[], Awaitable[bool]] | None = None,
-        tracker: TokenTracker | None = None,
-    ) -> list[CodebookApplicationResult | Exception]:
-        started_at = time.monotonic()
+        themes: list[_ThemeRef],
+        codes: list[_CodeRef],
+    ) -> CodebookSynthesisResult:
+        theme_by_id = {theme.id: theme for theme in themes}
+        description_by_label = {
+            CodebookApplicationService._label_key(theme.label): theme.description
+            for theme in themes
+            if theme.description
+        }
 
-        total = len(documents)
-        results_by_index: dict[int, CodebookApplicationResult] = {}
-        failures_by_index: dict[int, Exception] = {}
-        attempts_by_index: dict[int, int] = {index: 0 for index in range(total)}
-        pending_indexes: list[int] = []
-
-        # Empty transcripts are deterministic input errors, so they are recorded
-        # immediately and skipped instead of being sent to the LLM.
-        for index, document in enumerate(documents):
-            if not document.content.strip():
-                failures_by_index[index] = ValueError("Transcript is empty.")
-            else:
-                pending_indexes.append(index)
-
-        while pending_indexes:
-            await self._raise_if_cancelled(should_cancel)
-            retry_indexes: list[int] = []
-
-            # Only unresolved documents are sent on each attempt. Successful
-            # documents stay in results_by_index and are never billed again.
-            batch_results = await apply_codebook_with_codes_to_transcripts(
-                [documents[index].content for index in pending_indexes],
-                codebook_context,
-                chain=chain,
-                max_concurrency=_APPLICATION_MAX_CONCURRENCY,
-                tracker=tracker,
+        synthesis_themes: list[SynthesizedThemePath] = []
+        seen_paths: set[tuple[str, ...]] = set()
+        for theme in sorted(themes, key=lambda item: item.path):
+            if theme.path in seen_paths:
+                continue
+            seen_paths.add(theme.path)
+            synthesis_themes.append(
+                SynthesizedThemePath(
+                    path=[
+                        SynthesizedThemeNode(
+                            label=label,
+                            description=description_by_label.get(
+                                CodebookApplicationService._label_key(label)
+                            ),
+                        )
+                        for label in theme.path
+                    ]
+                )
             )
-            for local_index, result in enumerate(batch_results):
-                document_index = pending_indexes[local_index]
-                attempts_by_index[document_index] += 1
-                attempt_count = attempts_by_index[document_index]
 
-                if isinstance(result, CodebookApplicationResult):
-                    results_by_index[document_index] = result
-                    continue
-
-                if attempt_count < _APPLICATION_MAX_ATTEMPTS:
-                    retry_indexes.append(document_index)
-                    logger.warning(
-                        "Codebook application LLM call failed on attempt {}/{} for document {}: {}",
-                        attempt_count,
-                        _APPLICATION_MAX_ATTEMPTS,
-                        documents[document_index].id,
-                        result,
-                    )
-                    continue
-
-                failures_by_index[document_index] = UnprocessableError(
-                    f"LLM codebook application failed after {_APPLICATION_MAX_ATTEMPTS} attempts: {result}"
-                )
-
-            if not retry_indexes:
-                break
-            pending_indexes = retry_indexes
-
-            # The retry set may contain documents with different attempt counts;
-            # use the highest count so the shared sleep never under-backs off.
-            retry_attempt = max(attempts_by_index[index] for index in retry_indexes)
-            retry_delay = self._compute_retry_delay(attempt=retry_attempt)
-            if retry_delay > 0:
-                await asyncio.sleep(retry_delay)
-
-        ordered_results: list[CodebookApplicationResult | Exception] = []
-        for index in range(total):
-            successful_result = results_by_index.get(index)
-            if successful_result is not None:
-                ordered_results.append(successful_result)
+        synthesis_codes: list[SynthesizedCode] = []
+        needs_fallback_theme = False
+        for code in sorted(codes, key=lambda item: item.label.lower()):
+            theme = theme_by_id.get(code.theme_id) if code.theme_id is not None else None
+            if theme is None:
+                theme_path = ["Grounded Findings"]
+                needs_fallback_theme = True
             else:
-                # This fallback protects the caller from impossible states such
-                # as a shortened LangChain result list.
-                ordered_results.append(
-                    failures_by_index.get(index) or UnprocessableError("Codebook application produced no result.")
+                theme_path = list(theme.path)
+            synthesis_codes.append(
+                SynthesizedCode(
+                    code_label=code.label,
+                    code_description=code.description,
+                    theme_path=theme_path,
                 )
+            )
 
-        logger.info(
-            "Codebook application batch complete: documents={}, succeeded={}, failed={}, total_attempts={}, "
-            "max_concurrency={}, batch_size={}, elapsed_s={:.2f}",
-            total,
-            len(results_by_index),
-            total - len(results_by_index),
-            sum(attempts_by_index.values()),
-            _APPLICATION_MAX_CONCURRENCY,
-            _APPLICATION_BATCH_SIZE,
-            time.monotonic() - started_at,
-        )
-        return ordered_results
+        if needs_fallback_theme and ("Grounded Findings",) not in seen_paths:
+            synthesis_themes.append(
+                SynthesizedThemePath(
+                    path=[
+                        SynthesizedThemeNode(
+                            label="Grounded Findings",
+                            description="Codes without an active theme relationship.",
+                        )
+                    ]
+                )
+            )
 
-    @staticmethod
-    def _chunked(items: list[int], chunk_size: int) -> list[list[int]]:
-        return [items[index:index + chunk_size] for index in range(0, len(items), chunk_size)]
+        return CodebookSynthesisResult(themes=synthesis_themes, codes=synthesis_codes)
 
-    async def _persist_successful_document_coding(
+    async def _persist_traceable_application_result(
         self,
         *,
         application_run_id: UUID,
         codebook_id: UUID,
-        document: _DocumentText,
-        result: CodebookApplicationResult,
+        documents: list[_DocumentText],
+        applied_evidence: list[_AppliedEvidence],
+        failed_document_ids: list[UUID],
         themes_by_label: dict[str, _ThemeRef],
         codes_by_label: dict[str, _CodeRef],
-    ) -> None:
-        document_coding = DocumentCoding(
-            id=uuid.uuid4(),
-            application_run_id=application_run_id,
-            document_id=document.id,
-            codebook_id=codebook_id,
-            status="coded",
-            summary=result.summary,
-            researcher_notes=result.researcher_notes,
-        )
-        self._session.add(document_coding)
-        await self._session.flush()
+    ) -> tuple[int, list[dict[str, str]]]:
+        evidence_by_document: dict[UUID, list[_AppliedEvidence]] = defaultdict(list)
+        for evidence in applied_evidence:
+            evidence_by_document[evidence.document_id].append(evidence)
 
-        seen_theme_ids: set[UUID] = set()
-        for theme_result in result.themes:
-            theme = themes_by_label.get(self._label_key(theme_result.theme_label))
-            if theme is None or theme.id in seen_theme_ids:
-                continue
-            seen_theme_ids.add(theme.id)
-            quote_match = locate_quote_span(document.content, theme_result.quote) if theme_result.quote else None
-            self._session.add(
-                ThemeAssignment(
-                    id=uuid.uuid4(),
-                    document_coding_id=document_coding.id,
-                    theme_id=theme.id,
-                    is_present=theme_result.present,
-                    confidence=self._clamp_confidence(theme_result.confidence),
-                    quote=quote_match.quote if quote_match else None,
-                    start_char=quote_match.start_char if quote_match else None,
-                    end_char=quote_match.end_char if quote_match else None,
-                    quote_match_status=quote_match.quote_match_status if quote_match else None,
-                )
-            )
-
-        for code_result in result.codes:
-            code = codes_by_label.get(self._label_key(code_result.code_label))
-            if code is None or not code_result.quote.strip():
-                continue
-            theme_id = code.theme_id
-            if code_result.theme_label:
-                theme = themes_by_label.get(self._label_key(code_result.theme_label))
-                if theme is not None:
-                    theme_id = theme.id
-            quote_match = locate_quote_span(document.content, code_result.quote)
-            self._session.add(
-                CodeAssignment(
-                    id=uuid.uuid4(),
-                    document_coding_id=document_coding.id,
-                    code_id=code.id,
-                    theme_id=theme_id,
-                    quote=quote_match.quote,
-                    start_char=quote_match.start_char,
-                    end_char=quote_match.end_char,
-                    quote_match_status=quote_match.quote_match_status,
-                    confidence=self._clamp_confidence(code_result.confidence),
-                    rationale=code_result.rationale,
-                )
-            )
-            if theme_id is not None and theme_id not in seen_theme_ids:
-                seen_theme_ids.add(theme_id)
-                self._session.add(
-                    ThemeAssignment(
-                        id=uuid.uuid4(),
-                        document_coding_id=document_coding.id,
-                        theme_id=theme_id,
-                        is_present=True,
-                        confidence=self._clamp_confidence(code_result.confidence),
-                        quote=quote_match.quote,
-                        start_char=quote_match.start_char,
-                        end_char=quote_match.end_char,
-                        quote_match_status=quote_match.quote_match_status,
-                    )
-                )
-
-        await self._session.commit()
-
-    async def _persist_failed_document_coding(
-        self,
-        *,
-        application_run_id: UUID,
-        codebook_id: UUID,
-        document: _DocumentText,
-        error_message: str,
-    ) -> None:
-        self._session.add(
-            DocumentCoding(
+        failed_ids = set(failed_document_ids)
+        documents_coded = 0
+        failed_documents: list[dict[str, str]] = []
+        for document in documents:
+            document_evidence = evidence_by_document.get(document.id, [])
+            document_failed = document.id in failed_ids
+            document_coding = DocumentCoding(
                 id=uuid.uuid4(),
                 application_run_id=application_run_id,
                 document_id=document.id,
                 codebook_id=codebook_id,
-                status="failed",
-                error_message=error_message,
+                status="failed" if document_failed else "coded",
+                summary=next(
+                    (evidence.summary for evidence in document_evidence if evidence.summary),
+                    f"Traceable application assigned {len(document_evidence)} grounded quote-code pairs.",
+                ),
+                researcher_notes=next(
+                    (evidence.researcher_notes for evidence in document_evidence if evidence.researcher_notes),
+                    None,
+                ),
+                error_message=(
+                    "Traceable application response could not be parsed after retries."
+                    if document_failed
+                    else None
+                ),
             )
-        )
-        await self._session.commit()
+            self._session.add(document_coding)
+            await self._session.flush()
 
+            if document_failed:
+                failed_documents.append(
+                    {
+                        "document_id": str(document.id),
+                        "title": document.title,
+                        "error": document_coding.error_message or "Application failed.",
+                    }
+                )
+                await self._update_run_counts(
+                    application_run_id=application_run_id,
+                    documents_coded=documents_coded,
+                    documents_failed=len(failed_documents),
+                    status="running",
+                )
+                continue
+
+            seen_theme_ids: set[UUID] = set()
+            for evidence in document_evidence:
+                code = codes_by_label.get(self._label_key(evidence.code_label))
+                if code is None:
+                    continue
+                theme_id = code.theme_id
+                if evidence.theme_label:
+                    theme = themes_by_label.get(self._label_key(evidence.theme_label))
+                    if theme is not None:
+                        theme_id = theme.id
+                self._session.add(
+                    CodeAssignment(
+                        id=uuid.uuid4(),
+                        document_coding_id=document_coding.id,
+                        code_id=code.id,
+                        theme_id=theme_id,
+                        quote=evidence.quote,
+                        start_char=evidence.start_char,
+                        end_char=evidence.end_char,
+                        quote_match_status=evidence.quote_match_status,
+                        confidence=self._clamp_confidence(evidence.confidence),
+                        rationale=evidence.rationale,
+                    )
+                )
+                if theme_id is not None and theme_id not in seen_theme_ids:
+                    seen_theme_ids.add(theme_id)
+                    self._session.add(
+                        ThemeAssignment(
+                            id=uuid.uuid4(),
+                            document_coding_id=document_coding.id,
+                            theme_id=theme_id,
+                            is_present=True,
+                            confidence=self._clamp_confidence(evidence.confidence),
+                            quote=evidence.quote,
+                            start_char=evidence.start_char,
+                            end_char=evidence.end_char,
+                            quote_match_status=evidence.quote_match_status,
+                        )
+                    )
+
+            documents_coded += 1
+            await self._update_run_counts(
+                application_run_id=application_run_id,
+                documents_coded=documents_coded,
+                documents_failed=len(failed_documents),
+                status="running",
+            )
+
+        await self._session.commit()
+        return documents_coded, failed_documents
     async def _update_run_counts(
         self,
         *,
@@ -686,7 +568,8 @@ class CodebookApplicationService:
         documents_coded: int,
         documents_failed: int,
         status: str,
-        tracker: TokenTracker | None = None,
+        llm_tokens_input: int | None = None,
+        llm_tokens_output: int | None = None,
     ) -> CodebookApplicationRun:
         run = await self._session.get(CodebookApplicationRun, application_run_id)
         if run is None:
@@ -695,9 +578,8 @@ class CodebookApplicationService:
         run.documents_failed = documents_failed
         run.status = status
         run.finished_at = _utc_now_naive()
-        if tracker is not None:
-            run.llm_tokens_input = tracker.input_tokens
-            run.llm_tokens_output = tracker.output_tokens
+        run.llm_tokens_input = llm_tokens_input
+        run.llm_tokens_output = llm_tokens_output
         await self._session.commit()
         return run
 
@@ -719,12 +601,6 @@ class CodebookApplicationService:
         except (TypeError, ValueError):
             return 0.0
         return max(0.0, min(1.0, numeric))
-
-    @staticmethod
-    def _compute_retry_delay(*, attempt: int) -> float:
-        backoff = _APPLICATION_RETRY_BASE_DELAY_S * (2 ** max(0, attempt - 1))
-        jitter = random.uniform(0.8, 1.2)
-        return float(min(_APPLICATION_RETRY_MAX_DELAY_S, backoff * jitter))
 
 
 def _utc_now_naive() -> datetime:
