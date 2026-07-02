@@ -42,6 +42,10 @@ from app.schemas.llm import (
     PassageCodebookGeneration,
 )
 from app.services.theme_graph import ThemeGraphService
+from app.services.traceable_analysis import (
+    TraceableAnalysisCancelledError,
+    TraceableAnalysisService,
+)
 
 _PASSAGE_GENERATION_MAX_CONCURRENCY = 8
 _PASSAGE_GENERATION_BATCH_SIZE = 16
@@ -69,7 +73,7 @@ class CodebookGenerationCancelledError(Exception):
 
 
 class CodebookGenerationService:
-    """Generate and persist a new codebook from selected transcript chunks."""
+    """Generate and persist a new codebook through the traceable pipeline."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -80,96 +84,57 @@ class CodebookGenerationService:
         codebook_name: str,
         corpus_id: UUID,
         transcript_document_ids: list[UUID] | None,
+        analysis_name: str | None = None,
+        custom_id: str | None = None,
         research_query: str | None = None,
         researcher_topics: str | None = None,
+        max_refinement_rounds: int = 5,
+        apply_after_generation: bool = True,
         provider: str | None = None,
         on_progress: Callable[[int, int], Awaitable[None]] | None = None,
+        on_phase_progress: Callable[[str, int, int], Awaitable[None]] | None = None,
         on_phase: Callable[[str], Awaitable[None]] | None = None,
+        on_codebook_created: Callable[[UUID], Awaitable[None]] | None = None,
+        on_application_run_created: Callable[[UUID], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> GeneratedCodebookResponse:
-        tracker = TokenTracker()
-        normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
-
-        await self._load_corpus(corpus_id)
-        documents = await self._load_documents(
-            corpus_id=corpus_id,
-            transcript_document_ids=normalized_document_ids,
-        )
-        if not documents:
-            raise UnprocessableError(
-                "No transcripts found in the selected corpus. "
-                "Please upload transcripts before generating a codebook."
+        try:
+            result = await TraceableAnalysisService(self._session).run_analysis(
+                codebook_name=codebook_name,
+                analysis_name=analysis_name or codebook_name,
+                custom_id=custom_id,
+                corpus_id=corpus_id,
+                transcript_document_ids=transcript_document_ids,
+                research_query=research_query,
+                researcher_topics=researcher_topics,
+                max_refinement_rounds=max_refinement_rounds,
+                apply_after_generation=apply_after_generation,
+                provider=provider,
+                on_unit_progress=on_progress,
+                on_phase_progress=on_phase_progress,
+                on_phase=on_phase,
+                on_codebook_created=on_codebook_created,
+                on_application_run_created=on_application_run_created,
+                should_cancel=should_cancel,
             )
-        passages = await self._load_passages(
-            corpus_id=corpus_id,
-            transcript_document_ids=[document.id for document in documents],
-        )
-        if not passages:
-            raise UnprocessableError(
-                "The transcripts in the selected corpus contain no processable text. "
-                "Please check that your uploads completed successfully and contain text content."
-            )
+        except TraceableAnalysisCancelledError as exc:
+            raise CodebookGenerationCancelledError("Codebook generation was cancelled") from exc
 
-        # End the read transaction before long-running LLM calls so the session
-        # does not keep a checked-out DB connection during inference.
-        await self._session.rollback()
-
-        if on_phase is not None:
-            await on_phase("generating_passages")
-        generation_results, failed_passages = await self._generate_per_passage(
-            passages,
-            research_query=research_query,
-            researcher_topics=researcher_topics,
-            provider=provider,
-            on_progress=on_progress,
-            should_cancel=should_cancel,
-            tracker=tracker,
-        )
-        if on_phase is not None:
-            await on_phase("consolidating")
-        await self._raise_if_cancelled(should_cancel)
-        theme_nodes, code_nodes, hierarchy_edges = self._deduplicate_generation(generation_results)
-        code_nodes = await self._post_process_codes(
-            code_nodes,
-            theme_nodes=theme_nodes,
-            should_cancel=should_cancel,
-            tracker=tracker,
-        )
-        await self._raise_if_cancelled(should_cancel)
-        theme_nodes, hierarchy_edges = await self._post_process_themes(
-            theme_nodes=theme_nodes,
-            hierarchy_edges=hierarchy_edges,
-            should_cancel=should_cancel,
-            tracker=tracker,
-        )
-        code_nodes = self._remap_code_parent_keys(code_nodes, theme_nodes=theme_nodes)
-        await self._raise_if_cancelled(should_cancel)
-        if not theme_nodes:
-            raise UnprocessableError(
-                "Codebook generation produced no themes from selected passages "
-                f"(failed passages: {len(failed_passages)})"
-            )
-
-        if on_phase is not None:
-            await on_phase("persisting")
-        created_codebook, themes_created, codes_created = await self._persist_generated_codebook(
-            codebook_name=codebook_name,
-            corpus_id=corpus_id,
-            research_query=research_query,
-            researcher_topics=researcher_topics,
-            theme_nodes=theme_nodes,
-            code_nodes=code_nodes,
-            hierarchy_edges=hierarchy_edges,
-            tracker=tracker,
-        )
+        created_codebook = await self._session.get(Codebook, result.codebook_id)
+        if created_codebook is None:
+            raise NotFoundError(f"Generated codebook '{result.codebook_id}' not found")
         return GeneratedCodebookResponse(
             codebook=CodebookSchema.model_validate(created_codebook),
-            transcripts_processed=len(documents),
-            passages_processed=len(passages),
-            themes_created=themes_created,
-            codes_created=codes_created,
-            passages_failed=len(failed_passages),
-            failed_passages=failed_passages,
+            application_run_id=result.application_run_id,
+            transcripts_processed=result.documents_processed,
+            passages_processed=result.analysis_units_processed,
+            themes_created=result.themes_created,
+            codes_created=result.codes_created,
+            documents_coded=result.documents_coded,
+            documents_failed=result.documents_failed,
+            quotes_created=result.quotes_created,
+            provenance=result.provenance,
+            action_log=result.action_log,
         )
 
     @staticmethod

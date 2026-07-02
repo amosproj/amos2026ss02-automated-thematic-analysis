@@ -129,13 +129,15 @@ class CodebookGenerationJobRunner:
             if job.cancel_requested:
                 # A queued job can be cancelled before the worker starts it.
                 job.status = "cancelled"
+                job.phase = "cancelled"
                 self.set_phase(job_id, "cancelled")
                 job.finished_at = _utc_now_naive()
                 await session.commit()
                 return
 
             job.status = "running"
-            self.set_phase(job_id, "generating_passages")
+            job.phase = "extracting_quote_codes"
+            self.set_phase(job_id, job.phase)
             job.started_at = _utc_now_naive()
             await session.commit()
 
@@ -155,6 +157,22 @@ class CodebookGenerationJobRunner:
                     progress_job = await progress_session.get(CodebookGenerationJob, job_id)
                     if progress_job is None:
                         return
+                    progress_job.documents_done = done
+                    progress_job.documents_total = total
+                    progress_job.analysis_units_done = done
+                    progress_job.analysis_units_total = total
+                    progress_job.passages_done = done
+                    progress_job.passages_total = total
+                    await progress_session.commit()
+
+            async def _on_phase_progress(phase: str, done: int, total: int) -> None:
+                async with session_factory() as progress_session:
+                    progress_job = await progress_session.get(CodebookGenerationJob, job_id)
+                    if progress_job is None:
+                        return
+                    progress_job.phase = phase
+                    progress_job.analysis_units_done = done
+                    progress_job.analysis_units_total = total
                     progress_job.passages_done = done
                     progress_job.passages_total = total
                     await progress_session.commit()
@@ -167,29 +185,74 @@ class CodebookGenerationJobRunner:
 
             async def _on_phase(phase: str) -> None:
                 self.set_phase(job_id, phase)
+                async with session_factory() as phase_session:
+                    phase_job = await phase_session.get(CodebookGenerationJob, job_id)
+                    if phase_job is None:
+                        return
+                    phase_job.phase = phase
+                    phase_job.analysis_units_done = 0
+                    phase_job.analysis_units_total = 0
+                    phase_job.passages_done = 0
+                    phase_job.passages_total = 0
+                    await phase_session.commit()
+
+            async def _on_codebook_created(codebook_id: UUID) -> None:
+                async with session_factory() as codebook_session:
+                    codebook_job = await codebook_session.get(CodebookGenerationJob, job_id)
+                    if codebook_job is None:
+                        return
+                    codebook_job.codebook_id = codebook_id
+                    await codebook_session.commit()
+
+            async def _on_application_run_created(application_run_id: UUID) -> None:
+                async with session_factory() as run_session:
+                    run_job = await run_session.get(CodebookGenerationJob, job_id)
+                    if run_job is None:
+                        return
+                    run_job.application_run_id = application_run_id
+                    await run_session.commit()
 
             try:
                 generated = await service.generate_codebook(
                     codebook_name=job.codebook_name,
                     corpus_id=job.corpus_id,
                     transcript_document_ids=transcript_document_ids,
+                    analysis_name=job.analysis_name,
+                    custom_id=job.custom_id,
                     research_query=job.research_query,
                     researcher_topics=job.researcher_topics,
+                    max_refinement_rounds=job.max_refinement_rounds,
+                    apply_after_generation=job.apply_after_generation,
                     provider=active_provider,
                     on_progress=_on_progress,
+                    on_phase_progress=_on_phase_progress,
                     on_phase=_on_phase,
+                    on_codebook_created=_on_codebook_created,
+                    on_application_run_created=_on_application_run_created,
                     should_cancel=_should_cancel,
                 )
                 await session.refresh(job)
                 job.status = "succeeded"
+                job.phase = "succeeded"
                 self.set_phase(job_id, "succeeded")
                 job.codebook_id = generated.codebook.id
+                job.application_run_id = generated.application_run_id
+                job.documents_total = generated.transcripts_processed
+                job.documents_done = generated.transcripts_processed
+                job.analysis_units_total = generated.passages_processed
+                job.analysis_units_done = generated.passages_processed
                 job.transcripts_processed = generated.transcripts_processed
                 job.passages_processed = generated.passages_processed
+                job.quotes_created = generated.quotes_created
                 job.themes_created = generated.themes_created
                 job.codes_created = generated.codes_created
+                job.documents_coded = generated.documents_coded
+                job.documents_failed = generated.documents_failed
                 job.passages_done = generated.passages_processed
                 job.passages_total = max(job.passages_total, generated.passages_processed)
+                if generated.provenance is not None:
+                    job.provenance_json = json.dumps(generated.provenance, ensure_ascii=False)
+                job.action_log_json = json.dumps(generated.action_log, ensure_ascii=False)
                 if generated.failed_passages:
                     # Successful jobs can still report passages skipped after
                     # repeated parser or validation failures.
@@ -209,6 +272,7 @@ class CodebookGenerationJobRunner:
                 await session.rollback()
                 await session.refresh(job)
                 job.status = "cancelled"
+                job.phase = "cancelled"
                 self.set_phase(job_id, "cancelled")
                 job.finished_at = _utc_now_naive()
                 await session.commit()
@@ -216,6 +280,7 @@ class CodebookGenerationJobRunner:
                 await session.rollback()
                 await session.refresh(job)
                 job.status = "failed"
+                job.phase = "failed"
                 self.set_phase(job_id, "failed")
                 job.error_message = str(exc)
                 job.finished_at = _utc_now_naive()

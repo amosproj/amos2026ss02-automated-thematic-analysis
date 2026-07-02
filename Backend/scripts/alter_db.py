@@ -12,7 +12,7 @@ from app.database import _get_engine
 
 async def alter_db():
     engine = _get_engine()
-    
+
     # We use IF NOT EXISTS so this is safe to run multiple times,
     # and we commit after each statement so a failure in one
     # doesn't poison the transaction for the rest.

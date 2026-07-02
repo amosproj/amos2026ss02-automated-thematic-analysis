@@ -74,8 +74,9 @@
       }
 
       function paint(job) {
-        const total = job.passages_total || 0;
-        const done = job.passages_done || 0;
+        const total = job.documents_total || job.analysis_units_total || job.passages_total || 0;
+        const done = job.documents_done || job.analysis_units_done || job.passages_done || 0;
+        const phase = (job.phase || "").replaceAll("_", " ");
 
         if (job.status === "queued") {
           setBar(0);
@@ -85,30 +86,29 @@
         }
 
         if (job.status === "running" && done === 0) {
-          // 2% signals "we have a worker" without claiming any output yet.
-          setBar(2);
+          setBar(job.progress_percent || 2);
           counts.textContent = total > 0
-            ? ("0 / " + total + " passages")
-            : "Connected — waiting for first passage…";
-          statusLine.textContent = "Connected to worker — waiting for first passage from the LLM…";
+            ? ("0 / " + total + " documents")
+            : "Connected — " + (phase || "starting") + "…";
+          statusLine.textContent = "Connected to worker — " + (phase || "starting traceable analysis") + "…";
           return;
         }
 
         if (job.status === "running") {
           // Clamp at 99% so the bar can't read "100%" before status flips.
-          const raw = total > 0 ? Math.round((done / total) * 100) : 2;
+          const raw = job.progress_percent || (total > 0 ? Math.round((done / total) * 100) : 2);
           const pct = Math.min(99, Math.max(2, raw));
           setBar(pct);
-          counts.textContent = done + " / " + total + " passages";
+          counts.textContent = done + " / " + total + " documents";
           statusLine.textContent = total > 0
-            ? "Generating themes and codes — " + done + " of " + total + " passages processed…"
-            : "Generating themes and codes…";
+            ? "Traceable analysis — " + (phase || "running") + ", " + done + " of " + total + " documents…"
+            : "Traceable analysis — " + (phase || "running") + "…";
           return;
         }
 
         if (job.status === "succeeded") {
           setBar(100);
-          counts.textContent = (done || total) + " / " + (total || done) + " passages";
+          counts.textContent = (done || total) + " / " + (total || done) + " documents";
           statusLine.textContent = "Done. Opening results…";
         } else {
           statusLine.textContent = "Status: " + job.status;
@@ -124,7 +124,12 @@
         if (mode === "semi") {
           window.location = reviewBase + job.codebook_id + "/review";
         } else {
-          window.location = listUrl;
+          const run = job.application_run_id ? "?application_run_id=" + encodeURIComponent(job.application_run_id) : "";
+          if (job.corpus_id && job.codebook_id) {
+            window.location = "/codebooks/" + job.corpus_id + "/" + job.codebook_id + "/themes" + run;
+          } else {
+            window.location = listUrl;
+          }
         }
       }
 

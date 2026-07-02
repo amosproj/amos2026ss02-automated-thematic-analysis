@@ -19,6 +19,13 @@ from app.models import (
 )
 from app.schemas.llm import AppliedCodeAssignment, AppliedThemeAssignment, CodebookApplicationResult
 from app.services.codebook_application import CodebookApplicationService
+from app.services.quote_matching import locate_quote_span
+from app.services.traceable_analysis import (
+    TraceableAnalysisCancelledError,
+    TraceableAnalysisService,
+    _ApplicationPassResult,
+    _AppliedEvidence,
+)
 
 API_CODEBOOKS = "/api/v1/codebooks"
 
@@ -133,29 +140,50 @@ def _application_result(quote: str = "manual handoffs slow") -> CodebookApplicat
 
 
 def _patch_application(monkeypatch, single_transcript_fn) -> None:
-    async def _fake_apply_batch(transcripts: list[str], codebook_context: str, *_, **__):
-        del codebook_context
-        results = []
-        for transcript in transcripts:
-            try:
-                results.append(single_transcript_fn(transcript))
-            except Exception as exc:
-                results.append(exc)
-        return results
+    async def _fake_apply_documents(self, *, documents, on_progress=None, should_cancel=None, **_kwargs):
+        del self
+        evidence: list[_AppliedEvidence] = []
+        failed_document_ids: list[UUID] = []
+        if on_progress is not None:
+            await on_progress(0, len(documents))
+        for document_index, document in enumerate(documents, start=1):
+            if should_cancel is not None and await should_cancel():
+                raise TraceableAnalysisCancelledError("cancelled")
+            result: CodebookApplicationResult | None = None
+            last_error: Exception | None = None
+            for _ in range(3):
+                try:
+                    result = single_transcript_fn(document.content)
+                    break
+                except Exception as exc:
+                    last_error = exc
+            if result is None:
+                failed_document_ids.append(document.id)
+            else:
+                for code in result.codes:
+                    match = locate_quote_span(document.content, code.quote)
+                    evidence.append(
+                        _AppliedEvidence(
+                            document_id=document.id,
+                            code_label=code.code_label,
+                            theme_label=code.theme_label,
+                            quote=match.quote,
+                            start_char=match.start_char,
+                            end_char=match.end_char,
+                            quote_match_status=match.quote_match_status,
+                            confidence=code.confidence,
+                            rationale=code.rationale,
+                            summary=result.summary,
+                            researcher_notes=result.researcher_notes,
+                        )
+                    )
+            if on_progress is not None:
+                await on_progress(document_index, len(documents))
+            if last_error is not None and result is None:
+                continue
+        return _ApplicationPassResult(evidence=evidence, failed_document_ids=failed_document_ids)
 
-    monkeypatch.setattr(
-        "app.services.codebook_application.apply_codebook_with_codes_to_transcripts",
-        _fake_apply_batch,
-    )
-    monkeypatch.setattr(
-        "app.services.codebook_application.build_codebook_application_with_codes_chain",
-        lambda **_: object(),
-    )
-    monkeypatch.setattr(
-        CodebookApplicationService,
-        "_compute_retry_delay",
-        staticmethod(lambda *, attempt: 0.0),
-    )
+    monkeypatch.setattr(TraceableAnalysisService, "_apply_codebook_to_documents", _fake_apply_documents)
 
 
 async def test_apply_codebook_job_persists_coding_and_quote_spans(client, db_engine, monkeypatch) -> None:
@@ -233,35 +261,41 @@ async def test_apply_codebook_job_retries_llm_and_fails_only_one_transcript(clie
     assert statuses == {"coded", "failed"}
 
 
-async def test_apply_codebook_uses_application_parallelization_settings(db_engine, monkeypatch) -> None:
+async def test_apply_codebook_uses_traceable_application_method(db_engine, monkeypatch) -> None:
     corpus_id, codebook_id, document_ids = await _seed_corpus_codebook(
         db_engine,
         texts=[f"Participant: The manual handoffs slow team {index}." for index in range(17)],
     )
 
-    batch_sizes: list[int] = []
-    max_concurrency_values: list[int | None] = []
+    document_counts: list[int] = []
 
-    async def _fake_apply_batch(
-        transcripts: list[str],
-        codebook_context: str,
-        *_,
-        max_concurrency: int | None = None,
-        **__,
-    ):
-        del codebook_context
-        batch_sizes.append(len(transcripts))
-        max_concurrency_values.append(max_concurrency)
-        return [_application_result(quote="manual handoffs slow") for _ in transcripts]
+    async def _fake_apply_documents(self, *, documents, on_progress=None, **_kwargs):
+        self._token_tracker.input_tokens += 101
+        self._token_tracker.output_tokens += 13
+        document_counts.append(len(documents))
+        evidence = []
+        if on_progress is not None:
+            await on_progress(0, len(documents))
+        for document_index, document in enumerate(documents, start=1):
+            match = locate_quote_span(document.content, "manual handoffs slow")
+            evidence.append(
+                _AppliedEvidence(
+                    document_id=document.id,
+                    code_label="Manual Handoffs",
+                    theme_label="Workflow Friction",
+                    quote=match.quote,
+                    start_char=match.start_char,
+                    end_char=match.end_char,
+                    quote_match_status=match.quote_match_status,
+                    confidence=0.95,
+                    rationale="The quote directly describes slow manual handoffs.",
+                )
+            )
+            if on_progress is not None:
+                await on_progress(document_index, len(documents))
+        return _ApplicationPassResult(evidence=evidence, failed_document_ids=[])
 
-    monkeypatch.setattr(
-        "app.services.codebook_application.apply_codebook_with_codes_to_transcripts",
-        _fake_apply_batch,
-    )
-    monkeypatch.setattr(
-        "app.services.codebook_application.build_codebook_application_with_codes_chain",
-        lambda **_: object(),
-    )
+    monkeypatch.setattr(TraceableAnalysisService, "_apply_codebook_to_documents", _fake_apply_documents)
 
     session_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
     async with session_factory() as session:
@@ -273,8 +307,9 @@ async def test_apply_codebook_uses_application_parallelization_settings(db_engin
 
     assert summary.documents_coded == 17
     assert summary.documents_failed == 0
-    assert batch_sizes == [16, 1]
-    assert max_concurrency_values == [8, 8]
+    assert summary.application_run.llm_tokens_input == 101
+    assert summary.application_run.llm_tokens_output == 13
+    assert document_counts == [17]
 
 
 async def test_apply_codebook_job_creates_new_run_without_overwrite(client, db_engine, monkeypatch) -> None:
@@ -312,24 +347,16 @@ async def test_apply_codebook_job_can_be_cancelled_while_running(client, db_engi
     )
     del corpus_id
 
-    async def _slow_apply_batch(transcripts: list[str], codebook_context: str, *_, **__):
-        del codebook_context
+    async def _slow_apply_documents(self, *, documents, on_progress=None, should_cancel=None, **_kwargs):
+        del self
+        if on_progress is not None:
+            await on_progress(0, len(documents))
         await asyncio.sleep(0.05)
-        return [_application_result() for _ in transcripts]
+        if should_cancel is not None and await should_cancel():
+            raise TraceableAnalysisCancelledError("cancelled")
+        return _ApplicationPassResult(evidence=[], failed_document_ids=[])
 
-    monkeypatch.setattr(
-        "app.services.codebook_application.apply_codebook_with_codes_to_transcripts",
-        _slow_apply_batch,
-    )
-    monkeypatch.setattr(
-        "app.services.codebook_application.build_codebook_application_with_codes_chain",
-        lambda **_: object(),
-    )
-    monkeypatch.setattr(
-        CodebookApplicationService,
-        "_compute_retry_delay",
-        staticmethod(lambda *, attempt: 0.0),
-    )
+    monkeypatch.setattr(TraceableAnalysisService, "_apply_codebook_to_documents", _slow_apply_documents)
 
     create_response = await client.post(
         f"{API_CODEBOOKS}/{codebook_id}/apply-jobs",

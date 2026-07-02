@@ -445,14 +445,26 @@ class BackendClient:
         research_query: str | None = None,
         researcher_topics: str | None = None,
         transcript_document_ids: list[str] | None = None,
+        analysis_name: str | None = None,
+        custom_id: str | None = None,
+        max_refinement_rounds: int | None = None,
+        apply_after_generation: bool | None = None,
     ) -> dict:
         payload: dict = {"codebook_name": codebook_name, "corpus_id": corpus_id}
+        if analysis_name:
+            payload["analysis_name"] = analysis_name
+        if custom_id:
+            payload["custom_id"] = custom_id
         if research_query:
             payload["research_query"] = research_query
         if researcher_topics:
             payload["researcher_topics"] = researcher_topics
         if transcript_document_ids:
             payload["transcript_document_ids"] = transcript_document_ids
+        if max_refinement_rounds is not None:
+            payload["max_refinement_rounds"] = max_refinement_rounds
+        if apply_after_generation is not None:
+            payload["apply_after_generation"] = apply_after_generation
         return self._post("/codebooks/generate-jobs", json=payload)
 
     def list_generation_jobs(

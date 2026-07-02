@@ -12,6 +12,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.runnables import RunnableConfig
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.exceptions import NotFoundError, UnprocessableError
 from app.llm.client import build_chat_model
+from app.llm.pipelines import TokenTracker
 from app.llm.traceable_prompts import (
     build_batch_code_relationship_prompt,
     build_code_relationship_prompt,
@@ -186,7 +188,7 @@ def _object_list(value: object) -> list[object]:
 
 
 class TraceableAnalysisService:
-    """Experimental quote-grounded codebook generation plus application.
+    """Quote-grounded codebook generation plus optional application.
 
     The pipeline follows the paper's overall shape while adapting persistence to
     the existing codebook/application tables: quote-code evidence first, code
@@ -199,6 +201,22 @@ class TraceableAnalysisService:
         self._provider: str | None = None
         self._code_relationship_chain: Any | None = None
         self._batch_code_relationship_chain: Any | None = None
+        # One tracker per service run keeps token totals consistent across
+        # cached chains, retries, evaluation passes, and final application.
+        self._token_tracker = TokenTracker()
+
+    @property
+    def llm_tokens_input(self) -> int:
+        return self._token_tracker.input_tokens
+
+    @property
+    def llm_tokens_output(self) -> int:
+        return self._token_tracker.output_tokens
+
+    def _llm_config(self) -> RunnableConfig:
+        """Return the LangChain config needed for shared token accounting."""
+
+        return {"callbacks": [self._token_tracker]}
 
     async def run_analysis(
         self,
@@ -211,6 +229,7 @@ class TraceableAnalysisService:
         research_query: str | None = None,
         researcher_topics: str | None = None,
         max_refinement_rounds: int = 1,
+        apply_after_generation: bool = True,
         provider: str | None = None,
         on_unit_progress: Callable[[int, int], Awaitable[None]] | None = None,
         on_phase_progress: Callable[[str, int, int], Awaitable[None]] | None = None,
@@ -220,14 +239,19 @@ class TraceableAnalysisService:
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> TraceableAnalysisResult:
         self._provider = provider
+        # A TraceableAnalysisService instance can be reused in tests or by a
+        # caller. Reset the accumulator so each run reports only its own calls.
+        self._token_tracker = TokenTracker()
         normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
         logger.info(
             "Traceable analysis started: corpus_id={}, selected_documents={}, codebook_name='{}', "
-            "max_refinement_rounds={}, research_query_present={}, researcher_topics_present={}",
+            "max_refinement_rounds={}, apply_after_generation={}, research_query_present={}, "
+            "researcher_topics_present={}",
             corpus_id,
             len(normalized_document_ids) if normalized_document_ids else "all",
             codebook_name,
             max_refinement_rounds,
+            apply_after_generation,
             bool(research_query),
             bool(researcher_topics),
         )
@@ -386,50 +410,73 @@ class TraceableAnalysisService:
             len(persisted.code_by_label),
         )
 
-        if on_phase is not None:
-            await on_phase("applying_codebook")
-        # Final paper-style application: after refinement, apply only the fixed
-        # generated codebook. Generation quotes are provenance, not assignments.
-        application_result = await self._apply_codebook_to_documents(
-            documents=documents,
-            synthesis=synthesis,
-            should_cancel=should_cancel,
-        )
-        applied_evidence = application_result.evidence
-        if application_result.action_log:
-            action_log.extend(application_result.action_log)
-        action_log.append(
-            {
-                "action": "apply_final_codebook",
-                "documents": len(documents),
-                "assignments": len(applied_evidence),
-                "documents_failed": len(application_result.failed_document_ids),
-            }
-        )
-        logger.info(
-            "Traceable final application complete: documents={}, assignments={}, failed_documents={}",
-            len(documents),
-            len(applied_evidence),
-            len(application_result.failed_document_ids),
-        )
-        application_run = await self._persist_application(
-            analysis_name=analysis_name,
-            custom_id=custom_id,
-            corpus_id=corpus_id,
-            documents=documents,
-            applied_evidence=applied_evidence,
-            failed_document_ids=application_result.failed_document_ids,
-            persisted=persisted,
-        )
-        if on_application_run_created is not None:
-            await on_application_run_created(application_run.id)
+        applied_evidence: list[_AppliedEvidence] = []
+        final_failed_document_ids: list[UUID] = []
+        application_run: CodebookApplicationRun | None = None
+        if apply_after_generation:
+            if on_phase is not None:
+                await on_phase("applying_codebook")
+            # Final paper-style application: after refinement, apply only the fixed
+            # generated codebook. Generation quotes are provenance, not assignments.
+            application_result = await self._apply_codebook_to_documents(
+                documents=documents,
+                synthesis=synthesis,
+                should_cancel=should_cancel,
+            )
+            applied_evidence = application_result.evidence
+            final_failed_document_ids = application_result.failed_document_ids
+            if application_result.action_log:
+                action_log.extend(application_result.action_log)
+            action_log.append(
+                {
+                    "action": "apply_final_codebook",
+                    "documents": len(documents),
+                    "assignments": len(applied_evidence),
+                    "documents_failed": len(final_failed_document_ids),
+                }
+            )
+            logger.info(
+                "Traceable final application complete: documents={}, assignments={}, failed_documents={}",
+                len(documents),
+                len(applied_evidence),
+                len(final_failed_document_ids),
+            )
+            await self._update_codebook_token_totals(
+                codebook_id=persisted.codebook.id,
+                llm_tokens_input=self.llm_tokens_input,
+                llm_tokens_output=self.llm_tokens_output,
+            )
+            application_run = await self._persist_application(
+                analysis_name=analysis_name,
+                custom_id=custom_id,
+                corpus_id=corpus_id,
+                documents=documents,
+                applied_evidence=applied_evidence,
+                failed_document_ids=final_failed_document_ids,
+                persisted=persisted,
+                # Generate+apply is one user-visible job. Persist the full job
+                # total on both artifacts so list/detail views do not show only
+                # a phase-specific subtotal.
+                llm_tokens_input=self.llm_tokens_input,
+                llm_tokens_output=self.llm_tokens_output,
+            )
+            if on_application_run_created is not None:
+                await on_application_run_created(application_run.id)
+        else:
+            action_log.append(
+                {
+                    "action": "skip_final_application",
+                    "reason": "apply_after_generation=false",
+                }
+            )
+
         logger.info(
             "Traceable analysis finished: codebook_id={}, application_run_id={}, documents_coded={}, "
             "documents_failed={}, final_themes={}, final_codes={}",
             persisted.codebook.id,
-            application_run.id,
-            application_run.documents_coded,
-            application_run.documents_failed,
+            application_run.id if application_run is not None else None,
+            application_run.documents_coded if application_run is not None else 0,
+            application_run.documents_failed if application_run is not None else 0,
             len(persisted.theme_by_label),
             len(persisted.code_by_label),
         )
@@ -442,19 +489,19 @@ class TraceableAnalysisService:
             iteration_artifacts=iteration_artifacts,
             selected_iteration=selected_iteration.iteration,
             used_heldout_evaluation=bool(heldout_documents),
-            final_failed_document_ids=application_result.failed_document_ids,
+            final_failed_document_ids=final_failed_document_ids,
         )
         action_log = self._with_action_ids(action_log)
         return TraceableAnalysisResult(
             codebook_id=persisted.codebook.id,
-            application_run_id=application_run.id,
+            application_run_id=application_run.id if application_run is not None else None,
             documents_processed=len(documents),
             analysis_units_processed=len(documents),
             quotes_created=len(quote_evidence),
             codes_created=len(persisted.code_by_label),
             themes_created=len(persisted.theme_by_label),
-            documents_coded=application_run.documents_coded,
-            documents_failed=application_run.documents_failed,
+            documents_coded=application_run.documents_coded if application_run is not None else 0,
+            documents_failed=application_run.documents_failed if application_run is not None else 0,
             provenance=provenance,
             action_log=action_log,
         )
@@ -564,7 +611,8 @@ class TraceableAnalysisService:
                     "transcript": document.content,
                     "research_query_block": build_research_query_block(research_query),
                     "researcher_topics_block": build_researcher_topics_block(researcher_topics),
-                }
+                },
+                config=self._llm_config(),
             )
             result = QuoteCodeExtractionResult(**raw_result)
             document_pairs_before = len(evidence)
@@ -638,7 +686,7 @@ class TraceableAnalysisService:
         }
         for attempt in range(1, _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS + 1):
             try:
-                raw_result = await self._code_relationship_chain.ainvoke(payload)
+                raw_result = await self._code_relationship_chain.ainvoke(payload, config=self._llm_config())
                 return CodeRelationshipResult(**raw_result)
             except Exception as exc:
                 if attempt >= _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS:
@@ -696,7 +744,7 @@ class TraceableAnalysisService:
         payload = {"pairs_json": json.dumps(pairs_payload, ensure_ascii=False)}
         for attempt in range(1, _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS + 1):
             try:
-                raw_result = await self._batch_code_relationship_chain.ainvoke(payload)
+                raw_result = await self._batch_code_relationship_chain.ainvoke(payload, config=self._llm_config())
                 parsed = BatchCodeRelationshipResults(**raw_result)
                 return {
                     item.pair_id: CodeRelationshipResult(
@@ -757,7 +805,8 @@ class TraceableAnalysisService:
                 "codes": json.dumps(payload, ensure_ascii=True, indent=2),
                 "research_query_block": build_research_query_block(research_query),
                 "researcher_topics_block": build_researcher_topics_block(researcher_topics),
-            }
+            },
+            config=self._llm_config(),
         )
         subthemes = SubthemeSynthesisResult(**raw_subthemes)
         subthemes = self._ensure_subthemes_cover_codes(subthemes, consolidated_codes)
@@ -778,7 +827,8 @@ class TraceableAnalysisService:
                 "subthemes": json.dumps(subthemes.model_dump(mode="json"), ensure_ascii=True, indent=2),
                 "research_query_block": build_research_query_block(research_query),
                 "researcher_topics_block": build_researcher_topics_block(researcher_topics),
-            }
+            },
+            config=self._llm_config(),
         )
         themes = ThemeSynthesisResult(**raw_themes)
         themes = self._ensure_themes_cover_subthemes(themes, subthemes)
@@ -1249,7 +1299,7 @@ class TraceableAnalysisService:
                     | build_chat_model(provider=self._provider, temperature=0.0)
                     | parser
                 )
-                raw_result = await chain.ainvoke(chain_payload)
+                raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
                 polish = (
                     raw_result
                     if isinstance(raw_result, CodebookPolishResult)
@@ -1583,7 +1633,7 @@ class TraceableAnalysisService:
         }
         for attempt in range(1, _EVALUATION_MAX_ATTEMPTS + 1):
             try:
-                raw_result = await chain.ainvoke(chain_payload)
+                raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
                 result = CodebookQualityEvaluationResult(**raw_result)
                 result.fitness_score = self._clamp_confidence(result.fitness_score)
                 result.coverage_score = self._clamp_confidence(result.coverage_score)
@@ -2795,7 +2845,8 @@ class TraceableAnalysisService:
                     indent=2,
                 ),
                 "quote_evidence": json.dumps(evidence_payload, ensure_ascii=True, indent=2),
-            }
+            },
+            config=self._llm_config(),
         )
         result = MissingCodeGenerationResult(**raw_result)
         missing: list[ConsolidatedCode] = []
@@ -2922,7 +2973,7 @@ class TraceableAnalysisService:
         chain_payload = {"codebook": json.dumps(payload, ensure_ascii=True, indent=2)}
         for attempt in range(1, _REVIEW_MAX_ATTEMPTS + 1):
             try:
-                raw_result = await chain.ainvoke(chain_payload)
+                raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
                 return self._coerce_review_result(raw_result)
             except Exception as exc:
                 if attempt >= _REVIEW_MAX_ATTEMPTS:
@@ -3416,11 +3467,16 @@ class TraceableAnalysisService:
             id=uuid.uuid4(),
             corpus_id=corpus_id,
             name=codebook_name,
-            description="Generated by experimental traceable analysis.",
+            description="Generated by traceable analysis.",
             version=version,
-            created_by="traceable-analysis",
+            created_by="system-llm",
             research_query=research_query,
             researcher_topics=researcher_topics,
+            # At this point only generation, evaluation, and refinement calls
+            # have run. If final application is enabled, the row is updated
+            # after that pass with the full combined total.
+            llm_tokens_input=self.llm_tokens_input,
+            llm_tokens_output=self.llm_tokens_output,
         )
         self._session.add(codebook)
         await self._session.flush()
@@ -3528,6 +3584,21 @@ class TraceableAnalysisService:
             theme_id_by_code_label=theme_id_by_code_label,
         )
 
+    async def _update_codebook_token_totals(
+        self,
+        *,
+        codebook_id: UUID,
+        llm_tokens_input: int,
+        llm_tokens_output: int,
+    ) -> None:
+        """Overwrite codebook token fields after optional final application."""
+
+        codebook = await self._session.get(Codebook, codebook_id)
+        if codebook is None:
+            return
+        codebook.llm_tokens_input = llm_tokens_input
+        codebook.llm_tokens_output = llm_tokens_output
+
     async def _persist_application(
         self,
         *,
@@ -3538,6 +3609,8 @@ class TraceableAnalysisService:
         applied_evidence: list[_AppliedEvidence],
         failed_document_ids: list[UUID],
         persisted: _PersistedCodebookRefs,
+        llm_tokens_input: int | None = None,
+        llm_tokens_output: int | None = None,
     ) -> CodebookApplicationRun:
         run = CodebookApplicationRun(
             id=uuid.uuid4(),
@@ -3549,6 +3622,11 @@ class TraceableAnalysisService:
             documents_total=len(documents),
             documents_coded=0,
             documents_failed=0,
+            # For generate+apply this is the full combined job total; standalone
+            # application uses CodebookApplicationService and records only that
+            # standalone application job.
+            llm_tokens_input=llm_tokens_input,
+            llm_tokens_output=llm_tokens_output,
             started_at=_utc_now_naive(),
         )
         self._session.add(run)
@@ -3645,15 +3723,18 @@ class TraceableAnalysisService:
         documents: list[_DocumentText],
         synthesis: CodebookSynthesisResult,
         should_cancel: Callable[[], Awaitable[bool]] | None,
+        provider: str | None = None,
+        on_progress: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> _ApplicationPassResult:
         # This is the deductive application pass. It intentionally ignores the
         # initial open-coding assignments and asks the model to use the finalized
         # codebook labels only.
         codebook_context = self._build_application_codebook_context(synthesis)
         parser = JsonOutputParser(pydantic_object=TraceableApplicationResult)
+        selected_provider = provider if provider is not None else self._provider
         chain = (
             build_traceable_application_prompt()
-            | build_chat_model(provider=self._provider, temperature=0.0)
+            | build_chat_model(provider=selected_provider, temperature=0.0)
             | parser
         )
         allowed_codes = {self._label_key(code.code_label): code.code_label for code in synthesis.codes}
@@ -3665,7 +3746,9 @@ class TraceableAnalysisService:
         applied: list[_AppliedEvidence] = []
         action_log: list[dict[str, object]] = []
         failed_document_ids: list[UUID] = []
-        for document in documents:
+        if on_progress is not None:
+            await on_progress(0, len(documents))
+        for document_index, document in enumerate(documents, start=1):
             await self._raise_if_cancelled(should_cancel)
             result: TraceableApplicationResult | None = None
             payload = {
@@ -3674,7 +3757,7 @@ class TraceableAnalysisService:
             }
             for attempt in range(1, _APPLICATION_MAX_ATTEMPTS + 1):
                 try:
-                    raw_result = await chain.ainvoke(payload)
+                    raw_result = await chain.ainvoke(payload, config=self._llm_config())
                     result = TraceableApplicationResult(**raw_result)
                     break
                 except Exception as exc:
@@ -3695,6 +3778,8 @@ class TraceableAnalysisService:
                     )
                     await asyncio.sleep(0.5 * attempt)
             if result is None:
+                if on_progress is not None:
+                    await on_progress(document_index, len(documents))
                 continue
             document_assignments_before = len(applied)
             document_assignment_keys: set[tuple[str, int | None, int | None, str]] = set()
@@ -3728,7 +3813,7 @@ class TraceableAnalysisService:
                 }
                 for attempt in range(1, _APPLICATION_MAX_ATTEMPTS + 1):
                     try:
-                        raw_recall = await chain.ainvoke(recall_payload)
+                        raw_recall = await chain.ainvoke(recall_payload, config=self._llm_config())
                         recall_result = TraceableApplicationResult(**raw_recall)
                         recalled = self._append_application_assignments(
                             document=document,
@@ -3793,6 +3878,8 @@ class TraceableAnalysisService:
                 document.id,
                 len(applied) - document_assignments_before,
             )
+            if on_progress is not None:
+                await on_progress(document_index, len(documents))
         return _ApplicationPassResult(
             evidence=applied,
             failed_document_ids=failed_document_ids,
@@ -3993,7 +4080,7 @@ class TraceableAnalysisService:
         used_heldout_evaluation: bool = False,
         final_failed_document_ids: list[UUID] | None = None,
     ) -> dict[str, object]:
-        # Store paper-like artifact provenance as JSON on the experimental job
+        # Store paper-like artifact provenance as JSON on the generation job
         # instead of adding normalized provenance tables during this test phase.
         theme_artifacts: dict[str, dict[str, object]] = {}
         subtheme_artifacts: dict[str, dict[str, object]] = {}

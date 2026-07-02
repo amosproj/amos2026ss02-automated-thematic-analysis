@@ -846,12 +846,17 @@ def _demo_job_state(job_id: str) -> dict:
     total = 8  # cosmetic; matches the number of themes+codes in the payload
     if elapsed < 1:
         return {"id": job_id, "status": "queued",
+                "documents_total": 0, "documents_done": 0,
                 "passages_total": 0, "passages_done": 0}
     if elapsed < _DEMO_TIMELINE_SECONDS:
         done = min(total, int((elapsed - 1) / (_DEMO_TIMELINE_SECONDS - 1) * total))
         return {"id": job_id, "status": "running",
+                "progress_percent": max(2, min(99, int((done / total) * 100))),
+                "documents_total": total, "documents_done": done,
                 "passages_total": total, "passages_done": done}
     return {"id": job_id, "status": "succeeded",
+            "progress_percent": 100,
+            "documents_total": total, "documents_done": total,
             "passages_total": total, "passages_done": total,
             "codebook_id": entry["codebook_id"]}
 
