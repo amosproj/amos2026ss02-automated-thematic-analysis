@@ -38,9 +38,9 @@
       {% set selectable_list_delete_message = 'Are you sure you want to permanently delete the selected transcripts?<br><span class="text-muted small">This action cannot be undone. Associated themes and linkings will also be affected.</span>' %}
       {% set selectable_list_delete_confirm_label = 'Yes, Delete Transcripts' %}
       {% include "_selectable_list_toolbar.html" %}
-      <div class="table-responsive">
+      <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
         <table class="table table-sm table-hover align-middle mb-0">
-          <thead class="table-light">
+          <thead class="table-light sticky-top">
             <tr>
               <th class="ata-selectable-list__checkbox-cell" scope="col">
                 Select
