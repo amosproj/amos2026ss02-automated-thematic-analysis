@@ -1,5 +1,7 @@
 import io
+import time
 import zipfile
+from uuid import uuid4
 
 from flask import Blueprint, Response, flash, jsonify, redirect, render_template, request, url_for
 
@@ -128,6 +130,8 @@ def wait(job_id: str) -> str:
 
 @bp.get("/job/<job_id>/status")
 def job_status(job_id: str):
+    if job_id.startswith(_DEMO_ANALYSIS_PREFIX):
+        return jsonify(_demo_analysis_state(job_id))
     client = _backend()
     try:
         job = client.get_analysis_job(job_id)
@@ -138,11 +142,60 @@ def job_status(job_id: str):
 
 @bp.post("/job/<job_id>/cancel")
 def cancel_job(job_id: str):
+    entry = _DEMO_ANALYSIS_JOBS.get(job_id)
+    if entry is not None:
+        entry["cancelled"] = True
+        return jsonify({"id": job_id, "status": "cancelled", "phase": "cancelled"})
     try:
         job = _backend().cancel_analysis_job(job_id)
     except BackendError as exc:
         return jsonify({"error": exc.user_message}), 400
     return jsonify(job)
+
+
+# Demo flow: scripted /analysis/demo run (no backend) 
+_DEMO_ANALYSIS_PREFIX = "demo-analysis-"
+_DEMO_ANALYSIS_DOCS = 10
+_DEMO_ANALYSIS_PHASES = [
+    (1.0, "queued"), (2.5, "loading_codebook"),
+    (9.0, "coding_documents"), (10.5, "persisting"),
+]
+_DEMO_ANALYSIS_JOBS: dict[str, dict] = {}
+
+
+def _demo_analysis_state(job_id: str) -> dict:
+    entry = _DEMO_ANALYSIS_JOBS.get(job_id)
+    if entry is None:
+        return {"error": "Demo run expired — start a new one from the Analysis page."}
+    if entry.get("cancelled"):
+        return {"id": job_id, "status": "cancelled", "phase": "cancelled"}
+    elapsed = time.monotonic() - entry["started_at"]
+    total = _DEMO_ANALYSIS_DOCS
+    phase = next((name for end, name in _DEMO_ANALYSIS_PHASES if elapsed < end), "succeeded")
+
+    if phase == "queued":
+        return {"id": job_id, "status": "queued", "phase": "queued",
+                "progress_percent": 0, "documents_total": 0, "documents_done": 0}
+
+    # documents_done ramps through coding; one transcript fails so both cards stream.
+    ramp = max(0.0, min(1.0, (elapsed - 2.5) / 6.5))
+    done = total if phase in ("persisting", "succeeded") else round(ramp * total)
+    failed = 1 if done >= 7 else 0
+    terminal = phase == "succeeded"
+    return {
+        "id": job_id, "status": "succeeded" if terminal else "running", "phase": phase,
+        "progress_percent": 100 if terminal else max(2, min(99, round(done / total * 99))),
+        "documents_total": total, "documents_done": done,
+        "documents_coded": done - failed, "documents_failed": failed,
+    }
+
+
+@bp.get("/demo")
+def analysis_demo():
+    """Play a scripted analysis-progress run without touching the backend."""
+    job_id = f"{_DEMO_ANALYSIS_PREFIX}{uuid4().hex}"
+    _DEMO_ANALYSIS_JOBS[job_id] = {"started_at": time.monotonic()}
+    return redirect(url_for("analysis.wait", job_id=job_id))
 
 @bp.post("/runs/export")
 def export_selected_runs() -> Response | str:

@@ -107,6 +107,40 @@ def test_analysis_job_cancel(client, fake_backend):
     assert resp.json["cancel_requested"] is True
 
 
+# Scripted demo run (analysis progress preview) ------------------------------
+
+
+def test_analysis_demo_streams_and_reaches_succeeded(client):
+    from web.controllers.analysis import _DEMO_ANALYSIS_JOBS, _DEMO_ANALYSIS_PHASES
+
+    resp = client.get("/analysis/demo")
+    assert resp.status_code == 302
+    job_id = resp.headers["Location"].rsplit("/", 1)[1]
+
+    # Mid-run: the coding phase streams coded/failed counts with one failed transcript.
+    _DEMO_ANALYSIS_JOBS[job_id]["started_at"] -= 8.5
+    running = client.get(f"/analysis/job/{job_id}/status").json
+    assert running["status"] == "running" and running["phase"] == "coding_documents"
+    assert running["documents_coded"] + running["documents_failed"] == running["documents_done"]
+    assert running["documents_failed"] == 1
+
+    # Fast-forward past the timeline: terminal, failure retained.
+    _DEMO_ANALYSIS_JOBS[job_id]["started_at"] -= _DEMO_ANALYSIS_PHASES[-1][0] + 1
+    final = client.get(f"/analysis/job/{job_id}/status").json
+    assert (final["status"], final["documents_coded"], final["documents_failed"]) == ("succeeded", 9, 1)
+
+
+def test_analysis_demo_can_be_cancelled(client):
+    job_id = client.get("/analysis/demo").headers["Location"].rsplit("/", 1)[1]
+    assert client.post(f"/analysis/job/{job_id}/cancel").json["status"] == "cancelled"
+    assert client.get(f"/analysis/job/{job_id}/status").json["status"] == "cancelled"
+
+
+def test_analysis_index_shows_demo_link(client, fake_backend):
+    resp = client.get("/analysis/")
+    assert b"/analysis/demo" in resp.data and b"Preview with sample data" in resp.data
+
+
 # Delete Analysis Runs (issue #203) ------------------------------------------
 
 
