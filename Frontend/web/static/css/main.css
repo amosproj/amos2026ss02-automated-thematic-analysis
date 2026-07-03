@@ -934,3 +934,73 @@
   max-height: 70vh;
   overflow-y: auto;
 }
+
+/* ── Analysis run transcripts popup (View Transcripts) ─────────────────────
+   Teal family — matches .btn-teal / .metric-card--teal — so the trigger and
+   modal read as their own feature, distinct from the indigo View Analysis. */
+.btn-outline-teal {
+    color: #0d9488;
+    border: 1px solid #0d9488;
+    background: transparent;
+    font-weight: 500;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.18s ease;
+}
+.btn-outline-teal:hover,
+.btn-outline-teal:focus {
+    background: #0d9488;
+    color: #fff;
+    box-shadow: 0 6px 14px -6px rgba(13, 148, 136, 0.45);
+}
+.btn-outline-teal:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
+.transcripts-modal-header {
+    background: linear-gradient(135deg, #0f766e, #14b8a6);
+    border-bottom: 0;
+}
+.transcripts-modal-header .modal-title { color: #fff; }
+
+/* Pill count — same recipe as .analysis-run-badge on the theme page. */
+.transcripts-modal-count {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    white-space: nowrap;
+}
+
+/* Search sits on the gradient; mirror the .analysis-run-control treatment. */
+.transcripts-modal-search {
+    border-color: rgba(255, 255, 255, 0.38);
+    box-shadow: none;
+}
+.transcripts-modal-search:focus {
+    border-color: #fff;
+    box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.24);
+}
+
+.transcript-link {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-left: 3px solid transparent;
+    border-radius: 0.5rem;
+    color: #334155;
+    background: #fff;
+    text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease,
+                color 0.15s ease, transform 0.12s ease;
+}
+.transcript-link:hover,
+.transcript-link:focus {
+    background: #f0fdfa;
+    border-color: #99f6e4;
+    border-left-color: #0d9488;
+    color: #0f766e;
+    transform: translateX(2px);
+}

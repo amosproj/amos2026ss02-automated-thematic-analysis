@@ -68,12 +68,24 @@ def index() -> str:
                 else:
                     can_run_analysis = True
                 
+                # Resolve transcript titles once; runs reference documents by id.
+                title_by_id = {d["id"]: d.get("title") for d in transcripts}
+
                 # Fetch runs for all codebooks
                 for cb in codebooks:
                     runs = client.list_codebook_application_runs(cb["id"])
-                    # Attach codebook name to each run for display
+                    # Attach codebook name and resolved transcript titles to
+                    # each run for display (count column + View Transcripts
+                    # modal; also serialized into the page's previousRuns JS).
                     for r in runs:
                         r["codebook_name"] = cb["name"]
+                        r["transcript_docs"] = [
+                            {
+                                "id": doc_id,
+                                "title": title_by_id.get(doc_id) or f"{doc_id[:8]}…",
+                            }
+                            for doc_id in (r.get("transcript_document_ids") or [])
+                        ]
                     previous_runs.extend(runs)
                 
                 # Sort runs by created_at descending
