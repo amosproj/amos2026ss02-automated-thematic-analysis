@@ -102,19 +102,48 @@
     filter: brightness(0.82);
   }
   /* When the toggle is off, make highlights transparent without shifting layout */
-  .highlights-hidden .theme-highlight {
+  .highlights-hidden .theme-highlight, .theme-hidden {
     background-color: transparent !important;
     outline: none !important;
+    pointer-events: none !important;
   }
 
-  /* Theme legend swatch */
-  .theme-swatch {
-    display: inline-block;
-    width: 0.85em;
-    height: 0.85em;
-    border-radius: 2px;
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    flex-shrink: 0;
+  /* Theme legend swatch custom checkbox */
+  .theme-swatch-toggle {
+    width: 1.15em;
+    height: 1.15em;
+    border-radius: 4px;
+    border: 2px solid var(--theme-color);
+    background-color: var(--theme-color);
+    transition: all 0.15s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 0.1em;
+  }
+  .theme-filter-checkbox:checked + label .theme-swatch-toggle::after {
+    content: '';
+    width: 0.35em;
+    height: 0.6em;
+    border: solid rgba(0,0,0,0.7);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    margin-bottom: 0.15em;
+  }
+  .theme-filter-checkbox:not(:checked) + label .theme-swatch-toggle {
+    background-color: transparent;
+  }
+  .theme-filter-checkbox:not(:checked) + label {
+    opacity: 0.55;
+  }
+  .theme-legend-label {
+    transition: all 0.15s ease-in-out;
+    margin: 0 -0.5rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+  }
+  .theme-legend-label:hover {
+    background-color: rgba(0,0,0,0.03);
   }
 </style>
 
@@ -284,7 +313,7 @@
    * silently skipped — the transcript is still readable, just un-highlighted
    * for that particular quote.
    */
-  function highlightQuote(container, quote, bgColor, tooltipText) {
+  function highlightQuote(container, quote, bgColor, tooltipText, themeId) {
     if (!quote) return false;
 
     const fullText = container.textContent;
@@ -330,6 +359,7 @@
       mark.setAttribute('data-bs-toggle', 'tooltip');
       mark.setAttribute('data-bs-placement', 'top');
       mark.setAttribute('title', tooltipText);
+      mark.setAttribute('data-theme-id', themeId);
 
       range.surroundContents(mark);
       return true;
@@ -361,7 +391,7 @@
       const tooltipText = themeInfo.description
         ? label + ': ' + themeInfo.description
         : label;
-      highlightQuote(container, ca.quote.trim(), color, tooltipText);
+      highlightQuote(container, ca.quote.trim(), color, tooltipText, ca.theme_id);
     }
 
     /* Initialise Bootstrap tooltips on all freshly created marks */
@@ -392,12 +422,29 @@
       const info  = THEMES[themeId] || {};
       const label = info.label || themeId.slice(0, 8) + '…';
       const row   = document.createElement('div');
-      row.className = 'd-flex align-items-center gap-2 small';
+      row.className = 'mb-1';
       row.innerHTML =
-        '<span class="theme-swatch" style="background:' + color + ';"></span>' +
-        '<span>' + escapeHtml(label) + '</span>';
+        '<input class="d-none theme-filter-checkbox" type="checkbox" value="' + escapeHtml(themeId) + '" checked id="chk-theme-' + escapeHtml(themeId) + '">' +
+        '<label class="theme-legend-label d-flex align-items-start gap-2 lh-sm small" style="cursor:pointer;" for="chk-theme-' + escapeHtml(themeId) + '">' +
+        '<span class="theme-swatch-toggle flex-shrink-0" style="--theme-color: ' + color + ';"></span>' +
+        '<span>' + escapeHtml(label) + '</span>' +
+        '</label>';
       legend.appendChild(row);
     }
+
+    legend.addEventListener('change', function(e) {
+      if (e.target.classList.contains('theme-filter-checkbox')) {
+        const themeId = e.target.value;
+        const isChecked = e.target.checked;
+        document.querySelectorAll('mark.theme-highlight[data-theme-id="' + themeId + '"]').forEach(mark => {
+          if (isChecked) {
+            mark.classList.remove('theme-hidden');
+          } else {
+            mark.classList.add('theme-hidden');
+          }
+        });
+      }
+    });
 
     legend.style.removeProperty('display');
   }
