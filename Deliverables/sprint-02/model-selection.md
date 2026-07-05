@@ -1,5 +1,24 @@
 # Model Selection for Automated Thematic Analysis
 
+## Runtime Provider Selection
+
+The application has one runtime provider selection for AI processing: `FAU` or
+`ACADEMIC`. This is the same Home page "LLM Provider" setting used by codebook
+generation and analysis. Embeddings do not have a separate provider selection;
+they always use the currently selected provider.
+
+Provider-specific model names are configured in `Backend/.env`:
+
+| Selected provider | Chat model setting | Embedding model setting | Credentials / base URL |
+| --- | --- | --- | --- |
+| `FAU` | `LLM_MODEL_FAU` | `EMBEDDING_MODEL_FAU` | `LLM_API_KEY_FAU`, `LLM_BASE_URL_FAU` |
+| `ACADEMIC` | `LLM_MODEL` | `EMBEDDING_MODEL` | `LLM_API_KEY`, `LLM_BASE_URL` |
+
+`SELECTED_API` is only the initial default. Once a provider is selected in the
+UI, the active provider is stored in the backend `app_settings` table and read
+at job start. Long-running jobs keep using the provider they started with, even
+if the Home page setting changes while the job is running.
+
 ## Hardware Availability at FAU Cluster
 
 The Friedrich-Alexander-Universität (FAU) provides access to various GPU clusters suitable for different computational needs:

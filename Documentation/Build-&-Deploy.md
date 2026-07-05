@@ -117,6 +117,8 @@ The full list of variables is documented in [`Backend/.env.example`](../Backend/
 | `SELECTED_API` | no | `FAU` | **Default** provider (`FAU` or `ACADEMIC`). Used only when no provider has been selected in the UI — the active provider can be switched live from the Home page (**LLM Provider** card) and is stored server-side in the `app_settings` table. Any AI task (codebook generation / analysis) reads the active provider at run start. |
 | `LLM_MODEL_FAU` | no | `gpt-oss-120b` | Override to use a different FAU-hosted model |
 | `LLM_MODEL` | no | `gemma-3-27b-it` | Override for Academic Cloud |
+| `EMBEDDING_MODEL_FAU` | no | `intfloat/multilingual-e5-large` | Embedding model used when the selected provider is `FAU` |
+| `EMBEDDING_MODEL` | no | `text-embedding-3-large` | Embedding model used when the selected provider is `ACADEMIC` |
 | `LLM_REQUEST_TIMEOUT_S` | no | `120.0` | Raise if you hit timeouts on large corpora |
 | `DATABASE_URL` | no inside Docker | `postgresql+asyncpg://postgres:postgres@localhost:5433/appdb` | Compose overrides this with `db:5432` automatically |
 | `CORS_ALLOWED_ORIGINS` | no | `["http://localhost:3000"]` | JSON array of allowed origins |

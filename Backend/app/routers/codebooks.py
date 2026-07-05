@@ -143,8 +143,8 @@ async def generate_codebook(
     session: DbSession,
 ) -> JSONResponse:
     # Use the globally selected LLM provider, matching the async generate-jobs
-    # path, so this endpoint never silently runs on a different provider than
-    # the one chosen in the UI.
+    # path. Embeddings use the same provider, so this endpoint never silently
+    # runs on different AI providers than the one chosen in the UI.
     active_provider = await get_active_provider(session)
     service = CodebookGenerationService(session)
     generated_codebook = await service.generate_codebook(

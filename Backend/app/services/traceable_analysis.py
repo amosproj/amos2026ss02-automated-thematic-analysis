@@ -317,6 +317,7 @@ class TraceableAnalysisService:
             candidates,
             classifier=self._classify_code_pair,
             batch_classifier=self._classify_code_pairs,
+            provider=self._provider,
             on_pair_progress=(
                 (lambda done, total: on_phase_progress("consolidating_codes", done, total))
                 if on_phase_progress is not None

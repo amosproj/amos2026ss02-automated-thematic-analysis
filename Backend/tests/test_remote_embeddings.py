@@ -13,6 +13,7 @@ async def test_remote_embeddings_batches_requests_and_preserves_order() -> None:
 
     async def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
+        assert payload["model"] == "intfloat/multilingual-e5-large"
         batch = list(payload["input"])
         seen_batches.append(batch)
         return httpx.Response(
@@ -32,9 +33,49 @@ async def test_remote_embeddings_batches_requests_and_preserves_order() -> None:
         EMBEDDING_BATCH_SIZE=2,
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-        client = RemoteEmbeddingClient(settings=settings, client=http_client)
+        client = RemoteEmbeddingClient(
+            settings=settings,
+            client=http_client,
+            provider="FAU",
+        )
 
         embeddings = await client.embed([f"text-{index}" for index in range(5)])
 
     assert seen_batches == [["text-0", "text-1"], ["text-2", "text-3"], ["text-4"]]
     assert embeddings == [[0.0], [1.0], [2.0], [3.0], [4.0]]
+
+
+async def test_remote_embeddings_uses_academic_cloud_when_provider_selected() -> None:
+    seen: dict[str, object] = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        seen["url"] = str(request.url)
+        seen["authorization"] = request.headers["authorization"]
+        seen["model"] = payload["model"]
+        return httpx.Response(
+            200,
+            json={"data": [{"index": 0, "embedding": [1.0, 2.0]}]},
+        )
+
+    settings = Settings(
+        DATABASE_URL="sqlite+aiosqlite:///:memory:",
+        LLM_API_KEY="academic-key",
+        LLM_BASE_URL="https://academic.example.test/v1",
+        EMBEDDING_MODEL="academic-embedding-model",
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = RemoteEmbeddingClient(
+            settings=settings,
+            client=http_client,
+            provider="ACADEMIC",
+        )
+
+        embeddings = await client.embed(["text"])
+
+    assert embeddings == [[1.0, 2.0]]
+    assert seen == {
+        "url": "https://academic.example.test/v1/embeddings",
+        "authorization": "Bearer academic-key",
+        "model": "academic-embedding-model",
+    }

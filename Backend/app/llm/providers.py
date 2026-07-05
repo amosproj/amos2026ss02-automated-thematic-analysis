@@ -29,6 +29,7 @@ class ProviderSpec:
     api_key_attr: str  # Settings attribute holding the API key
     base_url_attr: str  # Settings attribute holding the base URL
     model_attr: str  # Settings attribute holding the default model name
+    embedding_model_attr: str  # Settings attribute holding the embedding model name
 
 
 # Order matters: the first entry is treated as the built-in default when no
@@ -44,6 +45,7 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         api_key_attr="LLM_API_KEY_FAU",
         base_url_attr="LLM_BASE_URL_FAU",
         model_attr="LLM_MODEL_FAU",
+        embedding_model_attr="EMBEDDING_MODEL_FAU",
     ),
     ProviderSpec(
         id="ACADEMIC",
@@ -55,6 +57,7 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         api_key_attr="LLM_API_KEY",
         base_url_attr="LLM_BASE_URL",
         model_attr="LLM_MODEL",
+        embedding_model_attr="EMBEDDING_MODEL",
     ),
 )
 

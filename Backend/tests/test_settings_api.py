@@ -18,7 +18,7 @@ from app.config import Settings
 
 pytestmark = pytest.mark.asyncio
 
-PREFIX = "/api/v1/settings/llm-provider"
+LLM_PREFIX = "/api/v1/settings/llm-provider"
 
 
 def _settings(**overrides) -> Settings:
@@ -66,7 +66,7 @@ async def provider_client(db_engine) -> AsyncGenerator[tuple[AsyncClient, Settin
 
 async def test_get_returns_default_and_options(provider_client) -> None:
     client, _ = provider_client
-    resp = await client.get(PREFIX)
+    resp = await client.get(LLM_PREFIX)
     assert resp.status_code == 200
     body = resp.json()
     assert body["success"] is True
@@ -80,18 +80,18 @@ async def test_get_returns_default_and_options(provider_client) -> None:
 
 async def test_put_switches_active_provider(provider_client) -> None:
     client, _ = provider_client
-    resp = await client.put(PREFIX, json={"provider": "academic"})
+    resp = await client.put(LLM_PREFIX, json={"provider": "academic"})
     assert resp.status_code == 200
     assert resp.json()["data"]["active"] == "ACADEMIC"
 
     # Persisted: a follow-up GET reflects the new active provider.
-    follow_up = await client.get(PREFIX)
+    follow_up = await client.get(LLM_PREFIX)
     assert follow_up.json()["data"]["active"] == "ACADEMIC"
 
 
 async def test_put_unknown_provider_is_422(provider_client) -> None:
     client, _ = provider_client
-    resp = await client.put(PREFIX, json={"provider": "litellm"})
+    resp = await client.put(LLM_PREFIX, json={"provider": "litellm"})
     assert resp.status_code == 422
     assert resp.json()["success"] is False
 
@@ -121,6 +121,6 @@ async def test_put_provider_without_key_is_422(db_engine) -> None:
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            resp = await client.put(PREFIX, json={"provider": "ACADEMIC"})
+            resp = await client.put(LLM_PREFIX, json={"provider": "ACADEMIC"})
             assert resp.status_code == 422
             assert "no api key" in resp.json()["error"].lower()
