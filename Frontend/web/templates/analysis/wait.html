@@ -2,14 +2,7 @@
 {% block title %}Applying Codebook{% endblock %}
 {% block content %}
   <div class="mb-4">
-    <h1 class="h3 mb-1">Applying Codebook</h1>
-    <p class="text-secondary mb-0 d-flex align-items-center gap-2">
-      <span id="status-spinner"
-            class="spinner-border spinner-border-sm text-secondary"
-            role="status"
-            aria-hidden="true"></span>
-      <span id="status-line">Starting analysis run&hellip;</span>
-    </p>
+    <h1 class="h3 mb-0">Applying Codebook</h1>
   </div>
 
   <div class="bg-white border rounded-2 p-4" style="max-width: 640px;"
@@ -20,7 +13,13 @@
        id="progress-app">
 
     <div class="d-flex justify-content-between align-items-center mb-2">
-      <span id="progress-step" class="badge text-bg-light border text-secondary">Preparing</span>
+      <span class="text-secondary small d-flex align-items-center gap-2">
+        <span id="status-spinner"
+              class="spinner-border spinner-border-sm text-secondary"
+              role="status"
+              aria-hidden="true"></span>
+        <span id="status-line">Starting analysis run&hellip;</span>
+      </span>
       <span id="progress-percent" class="small fw-semibold text-secondary">0%</span>
     </div>
 
@@ -74,7 +73,6 @@
       const statusSpinner = document.getElementById("status-spinner");
       const bar = document.getElementById("progress-bar");
       const percentLabel = document.getElementById("progress-percent");
-      const stepLabel = document.getElementById("progress-step");
       const counts = document.getElementById("progress-counts");
       const metricProcessed = document.getElementById("metric-processed");
       const metricCoded = document.getElementById("metric-coded");
@@ -134,7 +132,6 @@
         const total = job.documents_total || 0;
         const done = job.documents_done || 0;
         const step = phaseLabel(job);
-        stepLabel.textContent = step;
         updateMetrics(job);
 
         if (job.status === "queued") {
@@ -166,7 +163,6 @@
 
         if (job.status === "succeeded") {
           setBar(100);
-          stepLabel.textContent = "Complete";
           counts.textContent = `${formatCount(job.documents_coded || done || total)} transcripts coded`;
           statusLine.textContent = "Done. Redirecting to results…";
         } else {
