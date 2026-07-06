@@ -75,12 +75,19 @@ async def client(db_engine) -> AsyncGenerator[AsyncClient, None]:
     factory = async_sessionmaker(db_engine, expire_on_commit=False, class_=AsyncSession)
 
     async def override_session() -> AsyncGenerator[AsyncSession, None]:
-        async with factory() as session:
+        session = factory()
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
             try:
-                yield session
-            except Exception:
-                await session.rollback()
-                raise
+                await session.close()
+            except OperationalError:
+                # Ignore OperationalError during session cleanup. This avoids failing tests
+                # when ASGI background tasks race the pytest SQLite engine teardown.
+                pass
 
     # Patch startup/shutdown so the app doesn't try to connect to a real DB
     with (

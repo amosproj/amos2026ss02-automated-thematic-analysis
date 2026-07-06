@@ -55,7 +55,7 @@ def index() -> str:
     else:
         try:
             # Fetch all documents to populate the dropdown
-            docs_resp = client.list_documents(active_corpus_id, page_size=1000)
+            docs_resp = client.list_documents(active_corpus_id, page_size=10000)
             transcripts = docs_resp
             transcripts_count = len(transcripts)
             
