@@ -8,7 +8,13 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.models import Base
+from app.models import (
+    Base,
+    CodebookApplicationRun,
+    CorpusDocument,
+    DocumentCoding,
+    ThemeAssignment,
+)
 from app.services.theme_frequency import ThemeFrequencyService
 from app.services.theme_graph import ThemeNotFoundError
 from tests.fixtures.theme_graph_fixtures import (
@@ -58,16 +64,17 @@ class ThemeFrequencyServiceTests(unittest.IsolatedAsyncioTestCase):
             seed = await seed_three_theme_codebook(session)
             service = ThemeFrequencyService(session)
 
-            counts_by_theme_id = {
-                seed.theme_ids_by_label["Delivery Confidence"]: 2,
-                seed.theme_ids_by_label["Planning Clarity"]: 5,
-                seed.theme_ids_by_label["Scope Stability"]: 5,
+            d1, d2, d3 = uuid4(), uuid4(), uuid4()
+            document_ids_by_theme_id = {
+                seed.theme_ids_by_label["Delivery Confidence"]: {d1},
+                seed.theme_ids_by_label["Planning Clarity"]: {d1, d2},
+                seed.theme_ids_by_label["Scope Stability"]: {d2, d3},
             }
             with (
                 patch.object(
                     ThemeFrequencyService,
-                    "_load_occurrence_count_by_theme_id",
-                    new=AsyncMock(return_value=counts_by_theme_id),
+                    "_load_document_ids_by_theme_id",
+                    new=AsyncMock(return_value=document_ids_by_theme_id),
                 ),
                 patch.object(
                     ThemeFrequencyService,
@@ -82,8 +89,83 @@ class ThemeFrequencyServiceTests(unittest.IsolatedAsyncioTestCase):
                 ["Planning Clarity", "Scope Stability", "Delivery Confidence"],
             )
             self.assertEqual(
+                [item.occurrence_count for item in payload],
+                [2, 2, 1],
+            )
+            self.assertEqual(
                 [item.interview_coverage_percentage for item in payload],
-                [50.0, 50.0, 20.0],
+                [20.0, 20.0, 10.0],
+            )
+            self.assertEqual(
+                [item.parent_occurrence_count for item in payload],
+                [2, 2, 3],
+            )
+            self.assertEqual(
+                [item.parent_interview_coverage_percentage for item in payload],
+                [20.0, 20.0, 30.0],
+            )
+
+    async def test_parent_occurrence_is_union_of_children_over_real_rows(self) -> None:
+        async with self.session_factory() as session:
+            seed = await seed_three_theme_codebook(session)
+            corpus_id, run_id = uuid4(), uuid4()
+            document_ids = [uuid4() for _ in range(3)]
+            for document_id in document_ids:
+                session.add(
+                    CorpusDocument(id=document_id, corpus_id=corpus_id, title="doc", content="body")
+                )
+            session.add(
+                CodebookApplicationRun(
+                    id=run_id,
+                    corpus_id=corpus_id,
+                    codebook_id=seed.codebook_id,
+                    status="succeeded",
+                    documents_total=3,
+                    documents_coded=3,
+                )
+            )
+            await session.flush()
+
+            present_docs_by_label = {
+                "Planning Clarity": {document_ids[0], document_ids[1]},
+                "Scope Stability": {document_ids[1], document_ids[2]},
+            }
+            for document_id in document_ids:
+                coding_id = uuid4()
+                session.add(
+                    DocumentCoding(
+                        id=coding_id,
+                        application_run_id=run_id,
+                        document_id=document_id,
+                        codebook_id=seed.codebook_id,
+                        status="coded",
+                    )
+                )
+                await session.flush()
+                for label, present_docs in present_docs_by_label.items():
+                    session.add(
+                        ThemeAssignment(
+                            id=uuid4(),
+                            document_coding_id=coding_id,
+                            theme_id=seed.theme_ids_by_label[label],
+                            is_present=document_id in present_docs,
+                            confidence=0.9,
+                        )
+                    )
+            await session.commit()
+
+            payload = await ThemeFrequencyService(session).list_theme_frequencies(
+                codebook_id=seed.codebook_id
+            )
+            own_by_name = {item.theme_name: item.occurrence_count for item in payload}
+            parent_by_name = {item.theme_name: item.parent_occurrence_count for item in payload}
+            self.assertEqual(
+                own_by_name,
+                {"Delivery Confidence": 0, "Planning Clarity": 2, "Scope Stability": 2},
+            )
+            self.assertEqual(
+                parent_by_name,
+                {"Delivery Confidence": 3, "Planning Clarity": 2, "Scope Stability": 2},
             )
 
     async def test_raises_not_found_for_unknown_codebook(self) -> None:
