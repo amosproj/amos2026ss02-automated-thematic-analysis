@@ -5,6 +5,19 @@
     // Data is embedded server-side as JSON — no extra HTTP requests needed.
     const frequencies       = JSON.parse(appRoot.dataset.frequencies || "[]");
     const tree              = JSON.parse(appRoot.dataset.tree        || "[]");
+
+    // Surface the parent roll-up as the canonical occurrence/coverage so every
+    // consumer displays it. Keep each node's own numbers under `own_*`.
+    for (const f of frequencies) {
+        f.own_occurrence_count = f.occurrence_count;
+        f.own_interview_coverage_percentage = f.interview_coverage_percentage;
+        if (typeof f.parent_occurrence_count === "number") {
+            f.occurrence_count = f.parent_occurrence_count;
+        }
+        if (typeof f.parent_interview_coverage_percentage === "number") {
+            f.interview_coverage_percentage = f.parent_interview_coverage_percentage;
+        }
+    }
     const codes             = JSON.parse(appRoot.dataset.codes       || "[]");
     const quotesUrlTemplate = appRoot.dataset.quotesUrlTemplate || "";
     const readUrlTemplate   = appRoot.dataset.readUrlTemplate   || "";
