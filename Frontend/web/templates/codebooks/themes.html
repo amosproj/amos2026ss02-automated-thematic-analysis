@@ -192,17 +192,22 @@
       </div>
     </div>
 
-    {# Main panels #}
-    <div class="row g-3 align-items-stretch">
-
-      <div class="col-12 col-xl-7">
-        <div class="bg-white border rounded-3 p-3 h-100">
-          <h2 class="h6 panel-title">Theme Frequency</h2>
-          <div class="table-responsive">
+    {# Merged themes box: hierarchy + frequency in one table (issue #226).
+       Rows are rendered client-side by codebook_themes.js — siblings ordered
+       by frequency at every depth, expandable parents, coverage bars. #}
+    <div class="row g-3">
+      <div class="col-12">
+        <div class="bg-white border rounded-3 p-3">
+          <h2 class="h6 panel-title">Themes</h2>
+          <p class="text-secondary small mb-2">
+            Ordered by frequency. Click a row to select a theme; rows with a
+            chevron expand to show their sub-themes, also ordered by frequency.
+          </p>
+          <div class="table-responsive themes-table-scroll">
             <table class="table table-sm align-middle mb-0">
               <thead>
                 <tr class="theme-table-head">
-                  <th style="width:35%">Theme</th>
+                  <th style="width:45%">Theme</th>
                   <th class="text-end" style="width:120px">Occurrences</th>
                   <th style="width:220px; padding-left:3rem">Interview Coverage</th>
                 </tr>
@@ -212,14 +217,6 @@
           </div>
         </div>
       </div>
-
-      <div class="col-12 col-xl-5">
-        <div class="bg-white border rounded-3 p-3 h-100 d-flex flex-column theme-tree-card">
-          <h2 class="h6 panel-title">Theme Hierarchy</h2>
-          <div id="theme-tree" class="tree-container border rounded-2 p-2 flex-grow-1"></div>
-        </div>
-      </div>
-
     </div>
 
     {# Demographic breakdown (UC 3.6) — per-theme, driven by the selected theme #}
