@@ -41,6 +41,9 @@
           row.style.display = "";
         } else {
           row.style.display = "none";
+          // Ensure hidden rows are unchecked so they cannot be deleted or processed
+          const checkbox = row.querySelector("[data-selectable-list-checkbox]");
+          if (checkbox) checkbox.checked = false;
         }
       });
       this.update();
