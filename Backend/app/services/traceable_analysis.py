@@ -601,22 +601,28 @@ class TraceableAnalysisService:
     ) -> list[_QuoteEvidence]:
         parser = JsonOutputParser(pydantic_object=QuoteCodeExtractionResult)
         chain = build_quote_code_extraction_prompt() | build_chat_model(provider=self._provider) | parser
-        evidence: list[_QuoteEvidence] = []
         if on_unit_progress is not None:
             await on_unit_progress(0, len(documents))
 
-        for index, document in enumerate(documents, start=1):
+        _EXTRACTION_CONCURRENCY = 4
+        semaphore = asyncio.Semaphore(_EXTRACTION_CONCURRENCY)
+        completed_count = 0
+        progress_lock = asyncio.Lock()
+
+        async def _extract_one(document: _DocumentText) -> list[_QuoteEvidence]:
+            nonlocal completed_count
             await self._raise_if_cancelled(should_cancel)
-            raw_result = await chain.ainvoke(
-                {
-                    "transcript": document.content,
-                    "research_query_block": build_research_query_block(research_query),
-                    "researcher_topics_block": build_researcher_topics_block(researcher_topics),
-                },
-                config=self._llm_config(),
-            )
+            async with semaphore:
+                raw_result = await chain.ainvoke(
+                    {
+                        "transcript": document.content,
+                        "research_query_block": build_research_query_block(research_query),
+                        "researcher_topics_block": build_researcher_topics_block(researcher_topics),
+                    },
+                    config=self._llm_config(),
+                )
             result = QuoteCodeExtractionResult(**raw_result)
-            document_pairs_before = len(evidence)
+            doc_evidence: list[_QuoteEvidence] = []
             for pair_index, pair in enumerate(result.quote_code_pairs, start=1):
                 label = self._normalize_label(pair.code_label)
                 quote = pair.quote.strip()
@@ -624,7 +630,7 @@ class TraceableAnalysisService:
                     continue
                 match = locate_quote_span(document.content, quote)
                 candidate_id = f"{document.id}:candidate:{pair_index}:{self._label_key(label)}"
-                evidence.append(
+                doc_evidence.append(
                     _QuoteEvidence(
                         quote_id=f"{document.id}:quote:{pair_index}:{uuid.uuid4()}",
                         document_id=document.id,
@@ -639,16 +645,23 @@ class TraceableAnalysisService:
                         rationale=self._clean_optional_text(pair.rationale),
                     )
                 )
-            if on_unit_progress is not None:
-                await on_unit_progress(index, len(documents))
+            async with progress_lock:
+                completed_count += 1
+                if on_unit_progress is not None:
+                    await on_unit_progress(completed_count, len(documents))
             logger.info(
-                "Traceable extraction document complete: document_index={}, documents_total={}, "
-                "document_id={}, quote_code_pairs={}",
-                index,
-                len(documents),
+                "Traceable extraction document complete: document_id={}, quote_code_pairs={}",
                 document.id,
-                len(evidence) - document_pairs_before,
+                len(doc_evidence),
             )
+            return doc_evidence
+
+        tasks = [asyncio.create_task(_extract_one(document)) for document in documents]
+        results = await asyncio.gather(*tasks)
+        # Flatten while preserving document order
+        evidence: list[_QuoteEvidence] = []
+        for doc_evidence in results:
+            evidence.extend(doc_evidence)
         return evidence
 
     def _build_code_candidates(self, quote_evidence: list[_QuoteEvidence]) -> list[CodeCandidate]:
@@ -1051,7 +1064,17 @@ class TraceableAnalysisService:
         should_cancel: Callable[[], Awaitable[bool]] | None,
     ) -> tuple[_IterationArtifact, list[_IterationArtifact], list[dict[str, object]]]:
         cfg = get_settings()
-        max_iterations = max(1, min(cfg.TRACEABLE_MAX_ITERATIONS, max_refinement_rounds + 1))
+        configured_max = max(1, min(cfg.TRACEABLE_MAX_ITERATIONS, max_refinement_rounds + 1))
+        # For small corpora, limit iterations to avoid wasting LLM calls on
+        # diminishing returns. With 2 transcripts, 5 refinement rounds is overkill.
+        doc_count = len(training_documents) + len(evaluation_documents)
+        max_iterations = min(configured_max, max(2, doc_count)) if doc_count <= 4 else configured_max
+        logger.info(
+            "Traceable iteration selection: configured_max={}, effective_max={}, doc_count={}",
+            configured_max,
+            max_iterations,
+            doc_count,
+        )
         current = synthesis
         current_codes = list(consolidated_codes)
         current_quote_evidence = list(quote_evidence)
@@ -1134,6 +1157,26 @@ class TraceableAnalysisService:
                 best = artifact
 
             if iteration >= max_iterations:
+                break
+
+            # Early exit: if the score is already high and this iteration did
+            # not improve over the previous best, further refinement is unlikely
+            # to help and we save several expensive LLM round-trips.
+            current_score = _metric_float(metrics, "composite_score")
+            if iteration > 1 and current_score >= 0.85 and artifact is not best:
+                logger.info(
+                    "Traceable iteration early exit: iteration={}, composite_score={:.3f}, "
+                    "best_score={:.3f}, reason=high_score_no_improvement",
+                    iteration,
+                    current_score,
+                    _metric_float(best.metrics, "composite_score"),
+                )
+                action_log.append({
+                    "action": "early_exit_high_score",
+                    "iteration": iteration,
+                    "composite_score": current_score,
+                    "best_score": _metric_float(best.metrics, "composite_score"),
+                })
                 break
 
             before_labels = self._codebook_label_set(current)
@@ -3744,148 +3787,178 @@ class TraceableAnalysisService:
             for theme in synthesis.themes
             for node in theme.path
         }
-        applied: list[_AppliedEvidence] = []
-        action_log: list[dict[str, object]] = []
-        failed_document_ids: list[UUID] = []
 
-        async def _emit_progress(done: int) -> None:
-            # Report running coded/failed counts (a processed doc is coded unless it failed).
+        _APPLICATION_CONCURRENCY = 4
+        semaphore = asyncio.Semaphore(_APPLICATION_CONCURRENCY)
+        completed_count = 0
+        progress_lock = asyncio.Lock()
+
+        async def _emit_progress() -> None:
             if on_progress is None:
                 return
-            failed = len(failed_document_ids)
-            await on_progress(done, len(documents), done - failed, failed)
+            # Counts are approximate during parallel execution; final totals are exact.
+            await on_progress(completed_count, len(documents), 0, 0)
 
-        await _emit_progress(0)
-        for document_index, document in enumerate(documents, start=1):
+        await _emit_progress()
+
+        @dataclass
+        class _DocResult:
+            evidence: list[_AppliedEvidence]
+            failed: bool
+            action_log: list[dict[str, object]]
+
+        async def _apply_one(document: _DocumentText) -> _DocResult:
+            nonlocal completed_count
             await self._raise_if_cancelled(should_cancel)
-            result: TraceableApplicationResult | None = None
-            payload = {
-                "codebook": codebook_context,
-                "transcript": document.content,
-            }
-            for attempt in range(1, _APPLICATION_MAX_ATTEMPTS + 1):
-                try:
-                    raw_result = await chain.ainvoke(payload, config=self._llm_config())
-                    result = TraceableApplicationResult(**raw_result)
-                    break
-                except Exception as exc:
-                    if attempt >= _APPLICATION_MAX_ATTEMPTS:
-                        failed_document_ids.append(document.id)
-                        logger.warning(
-                            "Traceable application document failed after retries: document_id={}, attempts={}, error={}",
-                            document.id,
-                            attempt,
-                            exc,
-                        )
-                        break
-                    logger.warning(
-                        "Traceable application document retry: document_id={}, attempt={}, error={}",
-                        document.id,
-                        attempt,
-                        exc,
-                    )
-                    await asyncio.sleep(0.5 * attempt)
-            if result is None:
-                await _emit_progress(document_index)
-                continue
-            document_assignments_before = len(applied)
-            document_assignment_keys: set[tuple[str, int | None, int | None, str]] = set()
-            self._append_application_assignments(
-                document=document,
-                result=result,
-                allowed_codes=allowed_codes,
-                allowed_themes=allowed_themes,
-                applied=applied,
-                document_assignment_keys=document_assignment_keys,
-                exact_only=False,
-            )
-            assigned_code_keys = {
-                self._label_key(evidence.code_label)
-                for evidence in applied[document_assignments_before:]
-                if evidence.document_id == document.id
-            }
-            recall_candidates = self._application_recall_candidate_codes(
-                synthesis=synthesis,
-                transcript=document.content,
-                assigned_code_keys=assigned_code_keys,
-                limit=12,
-            )
-            if recall_candidates:
-                recall_payload = {
-                    "codebook": self._build_application_codebook_context(
-                        synthesis,
-                        code_labels={code.code_label for code in recall_candidates},
-                    ),
+            doc_evidence: list[_AppliedEvidence] = []
+            doc_action_log: list[dict[str, object]] = []
+            doc_failed = False
+
+            async with semaphore:
+                result: TraceableApplicationResult | None = None
+                payload = {
+                    "codebook": codebook_context,
                     "transcript": document.content,
                 }
                 for attempt in range(1, _APPLICATION_MAX_ATTEMPTS + 1):
                     try:
-                        raw_recall = await chain.ainvoke(recall_payload, config=self._llm_config())
-                        recall_result = TraceableApplicationResult(**raw_recall)
-                        recalled = self._append_application_assignments(
-                            document=document,
-                            result=recall_result,
-                            allowed_codes=allowed_codes,
-                            allowed_themes=allowed_themes,
-                            applied=applied,
-                            document_assignment_keys=document_assignment_keys,
-                            exact_only=True,
-                        )
-                        if recalled:
-                            action_log.append(
-                                {
-                                    "action": "application_recall_repair",
-                                    "document_id": str(document.id),
-                                    "assignments": recalled,
-                                    "candidate_codes": [code.code_label for code in recall_candidates],
-                                    "quote_match_policy": "exact_only",
-                                    "attempts": attempt,
-                                }
-                            )
-                            logger.info(
-                                "Traceable application recall repair added assignments: "
-                                "document_id={}, assignments={}, candidate_codes={}, attempts={}",
-                                document.id,
-                                recalled,
-                                len(recall_candidates),
-                                attempt,
-                            )
+                        raw_result = await chain.ainvoke(payload, config=self._llm_config())
+                        result = TraceableApplicationResult(**raw_result)
                         break
                     except Exception as exc:
                         if attempt >= _APPLICATION_MAX_ATTEMPTS:
+                            doc_failed = True
                             logger.warning(
-                                "Traceable application recall repair skipped after retries: "
-                                "document_id={}, candidate_codes={}, attempts={}, error={}",
+                                "Traceable application document failed after retries: document_id={}, attempts={}, error={}",
                                 document.id,
-                                len(recall_candidates),
                                 attempt,
                                 exc,
                             )
-                            action_log.append(
-                                {
-                                    "action": "application_recall_repair_skipped",
-                                    "document_id": str(document.id),
-                                    "candidate_codes": [code.code_label for code in recall_candidates],
-                                    "attempts": attempt,
-                                    "error": str(exc),
-                                }
-                            )
                             break
                         logger.warning(
-                            "Traceable application recall repair retry: "
-                            "document_id={}, candidate_codes={}, attempt={}, error={}",
+                            "Traceable application document retry: document_id={}, attempt={}, error={}",
                             document.id,
-                            len(recall_candidates),
                             attempt,
                             exc,
                         )
                         await asyncio.sleep(0.5 * attempt)
+
+                if result is not None:
+                    document_assignment_keys: set[tuple[str, int | None, int | None, str]] = set()
+                    self._append_application_assignments(
+                        document=document,
+                        result=result,
+                        allowed_codes=allowed_codes,
+                        allowed_themes=allowed_themes,
+                        applied=doc_evidence,
+                        document_assignment_keys=document_assignment_keys,
+                        exact_only=False,
+                    )
+                    assigned_code_keys = {
+                        self._label_key(evidence.code_label)
+                        for evidence in doc_evidence
+                        if evidence.document_id == document.id
+                    }
+                    recall_candidates = self._application_recall_candidate_codes(
+                        synthesis=synthesis,
+                        transcript=document.content,
+                        assigned_code_keys=assigned_code_keys,
+                        limit=12,
+                    )
+                    if recall_candidates:
+                        recall_payload = {
+                            "codebook": self._build_application_codebook_context(
+                                synthesis,
+                                code_labels={code.code_label for code in recall_candidates},
+                            ),
+                            "transcript": document.content,
+                        }
+                        for attempt in range(1, _APPLICATION_MAX_ATTEMPTS + 1):
+                            try:
+                                raw_recall = await chain.ainvoke(recall_payload, config=self._llm_config())
+                                recall_result = TraceableApplicationResult(**raw_recall)
+                                recalled = self._append_application_assignments(
+                                    document=document,
+                                    result=recall_result,
+                                    allowed_codes=allowed_codes,
+                                    allowed_themes=allowed_themes,
+                                    applied=doc_evidence,
+                                    document_assignment_keys=document_assignment_keys,
+                                    exact_only=True,
+                                )
+                                if recalled:
+                                    doc_action_log.append(
+                                        {
+                                            "action": "application_recall_repair",
+                                            "document_id": str(document.id),
+                                            "assignments": recalled,
+                                            "candidate_codes": [code.code_label for code in recall_candidates],
+                                            "quote_match_policy": "exact_only",
+                                            "attempts": attempt,
+                                        }
+                                    )
+                                    logger.info(
+                                        "Traceable application recall repair added assignments: "
+                                        "document_id={}, assignments={}, candidate_codes={}, attempts={}",
+                                        document.id,
+                                        recalled,
+                                        len(recall_candidates),
+                                        attempt,
+                                    )
+                                break
+                            except Exception as exc:
+                                if attempt >= _APPLICATION_MAX_ATTEMPTS:
+                                    logger.warning(
+                                        "Traceable application recall repair skipped after retries: "
+                                        "document_id={}, candidate_codes={}, attempts={}, error={}",
+                                        document.id,
+                                        len(recall_candidates),
+                                        attempt,
+                                        exc,
+                                    )
+                                    doc_action_log.append(
+                                        {
+                                            "action": "application_recall_repair_skipped",
+                                            "document_id": str(document.id),
+                                            "candidate_codes": [code.code_label for code in recall_candidates],
+                                            "attempts": attempt,
+                                            "error": str(exc),
+                                        }
+                                    )
+                                    break
+                                logger.warning(
+                                    "Traceable application recall repair retry: "
+                                    "document_id={}, candidate_codes={}, attempt={}, error={}",
+                                    document.id,
+                                    len(recall_candidates),
+                                    attempt,
+                                    exc,
+                                )
+                                await asyncio.sleep(0.5 * attempt)
+
             logger.info(
                 "Traceable application document complete: document_id={}, assignments={}",
                 document.id,
-                len(applied) - document_assignments_before,
+                len(doc_evidence),
             )
-            await _emit_progress(document_index)
+            async with progress_lock:
+                completed_count += 1
+                await _emit_progress()
+            return _DocResult(evidence=doc_evidence, failed=doc_failed, action_log=doc_action_log)
+
+        tasks = [asyncio.create_task(_apply_one(document)) for document in documents]
+        doc_results = await asyncio.gather(*tasks)
+
+        # Merge results in document order for deterministic output
+        applied: list[_AppliedEvidence] = []
+        failed_document_ids: list[UUID] = []
+        action_log: list[dict[str, object]] = []
+        for document, doc_result in zip(documents, doc_results, strict=True):
+            applied.extend(doc_result.evidence)
+            if doc_result.failed:
+                failed_document_ids.append(document.id)
+            action_log.extend(doc_result.action_log)
+
         return _ApplicationPassResult(
             evidence=applied,
             failed_document_ids=failed_document_ids,

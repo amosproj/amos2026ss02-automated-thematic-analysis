@@ -42,6 +42,9 @@ class RemoteEmbeddingClient:
         if spec is None:
             raise RuntimeError(f"Embedding provider '{provider_id}' is not configured.")
 
+        if not spec.supports_embeddings:
+            spec = providers.get_provider(providers.DEFAULT_PROVIDER_ID)
+
         api_key = getattr(self._settings, spec.api_key_attr)
         if not api_key:
             raise RuntimeError(f"{spec.api_key_attr} is required for {spec.label} embeddings.")
