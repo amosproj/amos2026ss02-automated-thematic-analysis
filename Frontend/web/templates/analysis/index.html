@@ -81,9 +81,9 @@
                   <th class="ata-selectable-list__checkbox-cell ps-3" scope="col">
                     <input class="form-check-input" type="checkbox" id="selectAllTranscripts" aria-label="Select all transcripts" checked>
                   </th>
-                  <th>Filename</th>
-                  <th>Title</th>
-                  <th>Uploaded</th>
+                  <th data-sort-col="1" style="cursor:pointer;" class="user-select-none">Filename <i class="bi bi-arrow-down-up text-muted ms-1 sort-icon"></i></th>
+                  <th data-sort-col="2" style="cursor:pointer;" class="user-select-none">Title <i class="bi bi-arrow-down-up text-muted ms-1 sort-icon"></i></th>
+                  <th data-sort-col="3" style="cursor:pointer;" class="user-select-none pe-4">Uploaded <i class="bi bi-arrow-down-up text-muted ms-1 sort-icon"></i></th>
                 </tr>
               </thead>
               <tbody>
@@ -99,7 +99,7 @@
                     </td>
                     <td>{{ t.get('filename') or '—' }}</td>
                     <td>{{ t.get('title', 'Unknown') }}</td>
-                    <td class="text-secondary">{{ (t.get('created_at') or '')[:10] }}</td>
+                    <td class="text-secondary pe-4">{{ (t.get('created_at') or '')[:10] }}</td>
                   </tr>
                 {% endfor %}
               </tbody>

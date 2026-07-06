@@ -45,11 +45,11 @@
               <th class="ata-selectable-list__checkbox-cell" scope="col">
                 Select
               </th>
-              <th>Filename</th>
-              <th>Title</th>
-              <th>Demographic</th>
-              <th>Uploaded</th>
-              <th class="text-end">Actions</th>
+              <th data-sort-col="1" style="cursor:pointer;" class="user-select-none">Filename <i class="bi bi-arrow-down-up text-muted ms-1 sort-icon"></i></th>
+              <th data-sort-col="2" style="cursor:pointer;" class="user-select-none">Title <i class="bi bi-arrow-down-up text-muted ms-1 sort-icon"></i></th>
+              <th data-sort-col="3" style="cursor:pointer;" class="user-select-none">Demographic <i class="bi bi-arrow-down-up text-muted ms-1 sort-icon"></i></th>
+              <th data-sort-col="4" style="cursor:pointer;" class="user-select-none">Uploaded <i class="bi bi-arrow-down-up text-muted ms-1 sort-icon"></i></th>
+              <th class="text-end pe-4">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -73,7 +73,7 @@
                   {% endif %}
                 </td>
                 <td class="text-secondary">{{ d.created_at }}</td>
-                <td class="text-end">
+                <td class="text-end pe-4">
                   <a href="{{ url_for('ingestion.read_transcript', corpus_id=corpus_id, document_id=d.id) }}" class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-file-text"></i> Read
                   </a>
