@@ -101,6 +101,62 @@
               </div>
             </div>
           </div>
+
+          <!-- Item 5 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingFive">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFive" aria-expanded="false" aria-controls="collapseFive">
+                How do I format demographic data?
+              </button>
+            </h3>
+            <div id="collapseFive" class="accordion-collapse collapse" aria-labelledby="headingFive" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                Upload your demographic data as a CSV file. It must have an ID column (e.g., Participant ID) that exactly matches the filenames of your uploaded transcripts to properly link the data together.
+              </div>
+            </div>
+          </div>
+          
+          <!-- Item 6 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingSix">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSix" aria-expanded="false" aria-controls="collapseSix">
+                Can I export my codebook or analysis results?
+              </button>
+            </h3>
+            <div id="collapseSix" class="accordion-collapse collapse" aria-labelledby="headingSix" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                Yes! Your codebooks and full analysis outputs can be exported in CSV format. Look for the "Export" button on the respective Codebooks or Analysis list pages.
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 7 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingSeven">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSeven" aria-expanded="false" aria-controls="collapseSeven">
+                What is the difference between a manual and generated codebook?
+              </button>
+            </h3>
+            <div id="collapseSeven" class="accordion-collapse collapse" aria-labelledby="headingSeven" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                A <strong>Manual Codebook</strong> is built by you from scratch, giving you absolute control over the hierarchy and definitions. A <strong>Generated Codebook</strong> is created by the LLM as an exploratory discovery tool to find themes you might not have considered.
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 8 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingEight">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEight" aria-expanded="false" aria-controls="collapseEight">
+                Why is the analysis taking a long time?
+              </button>
+            </h3>
+            <div id="collapseEight" class="accordion-collapse collapse" aria-labelledby="headingEight" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                LLM text generation takes time. The duration scales with the number of transcripts selected and their length. If it is too slow, consider selecting fewer transcripts or using a faster LLM provider if available.
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -109,6 +165,10 @@
     <!-- Right Sidebar Links -->
     <div class="col-12 col-md-4">
       
+      <div class="mb-3">
+        <input type="search" id="helpSearchInput" class="form-control" placeholder="Search help page..." aria-label="Search help page">
+      </div>
+
       <div class="bg-white border rounded-2 p-3 mb-3">
         <h2 class="h6 mb-2">Project Wiki</h2>
         <p class="text-secondary small mb-3">Comprehensive documentation on system architecture, data models, and API endpoints.</p>
@@ -126,5 +186,36 @@
       </div>
 
     </div>
+    </div>
   </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const searchInput = document.getElementById("helpSearchInput");
+      const accordionItems = document.querySelectorAll("#faqAccordion .accordion-item");
+
+      if (!searchInput) return;
+
+      searchInput.addEventListener("input", () => {
+        const query = searchInput.value.toLowerCase();
+        
+        accordionItems.forEach(item => {
+          const text = item.textContent.toLowerCase();
+          const collapseBody = item.querySelector('.accordion-collapse');
+          
+          if (text.includes(query)) {
+            item.style.display = "";
+            const bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseBody, { toggle: false });
+            if (query.length > 0) {
+              bsCollapse.show();
+            } else {
+              bsCollapse.hide();
+            }
+          } else {
+            item.style.display = "none";
+          }
+        });
+      });
+    });
+  </script>
 {% endblock %}
