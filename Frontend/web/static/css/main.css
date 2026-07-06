@@ -206,14 +206,6 @@
 
 .theme-row-matched td:first-child { font-weight: 600; }
 
-/* Compact marker for the hierarchy tree. */
-.theme-topic-star {
-    color: #d97706;
-    margin-left: 6px;
-    font-size: 0.8rem;
-    cursor: default;
-}
-
 .coverage-label {
     font-size: 0.78rem;
     min-width: 48px;
@@ -328,81 +320,9 @@
     white-space: nowrap;
 }
 
-/* ── Tree with connector lines (file-explorer style) ────────────────────────── */
-.tree-container {
-    flex: 1 1 auto;
-    min-height: 380px;
-    overflow: auto;
-}
-
-.theme-tree-card { min-height: 100%; }
-
-/* Root list — border-left is the outer trunk connecting all root themes.
-   padding-left creates space for the horizontal stubs on each root row.
-   Scales to any number of themes since it's a single CSS border, not per-node. */
-.tree-root {
-    list-style: none;
-    padding: 4px 0;
-    margin: 0;
-    padding-left: 14px;
-    border-left: 1.5px solid #d1d5db;
-}
-
-/* Each root-theme group */
-.tree-group {
-    position: relative;   /* anchor for ::after trunk-cap on last group */
-    margin-bottom: 10px;
-}
-.tree-group:last-child { margin-bottom: 0; }
-
-/* Cap the outer trunk at the midpoint of the last root row (└── effect).
-   top: 16px ≈ half of root-row height (6px padding + ~10px half-line-height).
-   background: #fff covers the trunk below the last item's stub. */
-.tree-group:last-child::after {
-    content: '';
-    position: absolute;
-    left: -15px;          /* 1px past the trunk border-left */
-    top: 16px;
-    bottom: -4px;
-    width: 4px;
-    background: #fff;
-    z-index: 1;
-}
-
-/* Root node row */
-.tree-root-row {
-    position: relative;   /* anchor for ::before stub */
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #1f2937;
-    cursor: pointer;
-    user-select: none;
-    transition: background 0.13s ease, color 0.13s ease;
-    line-height: 1.4;
-}
-.tree-root-row:hover    { background: #f3f4f6; }
-.tree-root-row.selected { background: #eff6ff; color: #1d4ed8; }
-
-/* Horizontal stub from outer trunk to each root row.
-   top: 50% + translateY(-50%) keeps it centred regardless of text wrapping —
-   important when themes have long names at small viewports or with 100s of nodes. */
-.tree-root-row::before {
-    content: '';
-    position: absolute;
-    left: -14px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 14px;
-    height: 1.5px;
-    background: #d1d5db;
-}
-
-/* Expand / collapse arrow */
+/* ── Merged theme table: expand/collapse chevron (issue #226) ────────────────
+   The hierarchy lives inside the frequency table now; each parent row carries
+   a chevron button, children indent via inline padding set by the JS. */
 .tree-toggle {
     background: none;
     border: none;
@@ -412,6 +332,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    vertical-align: middle;
+    margin-right: 4px;
     flex-shrink: 0;
     cursor: pointer;
 }
@@ -425,62 +347,18 @@
     border-color: transparent transparent transparent #9ca3af;
     transition: transform 0.18s ease;
 }
-.tree-toggle[aria-expanded="true"]::before  { transform: rotate(90deg); }
-.tree-root-row.selected .tree-toggle::before { border-color: transparent transparent transparent #1d4ed8; }
-
-.tree-toggle-gap { width: 16px; flex-shrink: 0; }
-
-/* Children list — the border-left IS the vertical connector line */
-.tree-children {
-    list-style: none;
-    padding: 0 0 0 14px;   /* left padding = width of horizontal stub */
-    margin: 3px 0 0 16px;  /* left margin indents the whole group from root */
-    border-left: 1.5px solid #d1d5db;
+.tree-toggle[aria-expanded="true"]::before { transform: rotate(90deg); }
+.theme-row-selected .tree-toggle::before {
+    border-color: transparent transparent transparent #1d4ed8;
 }
 
-/* Each child item — provides the ::before anchor point */
-.tree-child-item {
-    position: relative;
-    margin-bottom: 2px;
+/* Alignment spacer for leaf rows (same footprint as the chevron). */
+.tree-toggle-gap {
+    display: inline-block;
+    width: 16px;
+    margin-right: 4px;
+    flex-shrink: 0;
 }
-.tree-child-item:last-child { margin-bottom: 0; }
-
-/* Horizontal stub: runs from the border-left to the child label */
-.tree-child-item::before {
-    content: '';
-    position: absolute;
-    left: -14px;   /* start exactly at the border-left edge */
-    top: 50%;
-    width: 14px;   /* matches padding-left of .tree-children */
-    height: 1.5px;
-    background: #d1d5db;
-}
-
-/* Cap the vertical line at the last child's midpoint (└── effect) */
-.tree-child-item:last-child::after {
-    content: '';
-    position: absolute;
-    left: -16px;              /* 1px past the border-left */
-    top: calc(50% + 1px);
-    bottom: 0;
-    width: 4px;
-    background: #fff;         /* matches the panel's bg-white background */
-}
-
-/* Child node row */
-.tree-child-row {
-    display: block;
-    padding: 5px 8px;
-    border-radius: 6px;
-    font-size: 0.84rem;
-    color: #4b5563;
-    cursor: pointer;
-    user-select: none;
-    transition: background 0.13s ease, color 0.13s ease;
-    line-height: 1.4;
-}
-.tree-child-row:hover   { background: #f3f4f6; color: #374151; }
-.tree-child-row.selected { background: #eff6ff; color: #1d4ed8; }
 
 /* ── Theme Details panel ────────────────────────────────────────────────────── */
 .td-name {
