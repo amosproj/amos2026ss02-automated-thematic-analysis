@@ -75,12 +75,15 @@ async def client(db_engine) -> AsyncGenerator[AsyncClient, None]:
     factory = async_sessionmaker(db_engine, expire_on_commit=False, class_=AsyncSession)
 
     async def override_session() -> AsyncGenerator[AsyncSession, None]:
-        async with factory() as session:
-            try:
-                yield session
-            except Exception:
-                await session.rollback()
-                raise
+        try:
+            async with factory() as session:
+                try:
+                    yield session
+                except Exception:
+                    await session.rollback()
+                    raise
+        except OperationalError:
+            pass
 
     # Patch startup/shutdown so the app doesn't try to connect to a real DB
     with (
