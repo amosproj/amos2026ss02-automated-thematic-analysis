@@ -123,6 +123,12 @@
                     <strong class="text-dark">Define the Provider:</strong> Open <code>Backend/app/llm/providers.py</code> and add a new <code>ProviderSpec</code> entry to the <code>PROVIDERS</code> tuple. Define its <code>id</code>, <code>label</code>, and the environment variable names it will look for (e.g., <code>api_key_attr="LLM_API_KEY_CUSTOM"</code>).
                   </li>
                   <li class="mb-2">
+                    <strong class="text-dark">Declare the Settings Fields:</strong> Open <code>Backend/app/config.py</code> and add the three attributes you referenced in your <code>ProviderSpec</code> to the <code>Settings</code> class, e.g.<br>
+                    <code>LLM_API_KEY_CUSTOM: str | None = None</code><br>
+                    <code>LLM_BASE_URL_CUSTOM: str = "https://api.your-provider.com/v1"</code><br>
+                    <code>LLM_MODEL_CUSTOM: str = "your-default-model"</code>
+                  </li>
+                  <li class="mb-2">
                     <strong class="text-dark">Manage API Keys Safely:</strong> Open your local <code>Backend/.env</code> file (or copy it from <code>.env.example</code>). Add your API key matching the variable name you defined in step 1. Because <code>.env</code> is excluded via <code>.gitignore</code>, your keys remain securely on your machine and are never committed to the repository.
                   </li>
                   <li class="mb-2">
@@ -145,7 +151,7 @@
             </h3>
             <div id="collapseFive" class="accordion-collapse collapse" aria-labelledby="headingFive" data-bs-parent="#faqAccordion">
               <div class="accordion-body small text-secondary">
-                Upload your demographic data as a CSV file. It must have an ID column (e.g., Participant ID) that exactly matches the filenames of your uploaded transcripts to properly link the data together.
+                Upload your demographic data as a CSV file. It must have a column literally named <code>username</code> that exactly matches the filenames of your uploaded transcripts to properly link the data together.
               </div>
             </div>
           </div>
