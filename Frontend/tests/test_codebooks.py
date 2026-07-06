@@ -175,6 +175,34 @@ def test_codebook_themes_renders_frequency_and_tree(client, fake_backend):
     assert b'id="global-corpus-select"' in resp.data
 
 
+def test_codebook_themes_renders_single_merged_themes_box(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    fake_backend.theme_frequencies = [
+        {"theme_id": "t-1", "theme_name": "Work-Life Balance",
+         "occurrence_count": 5, "interview_coverage_percentage": 60.0},
+    ]
+    fake_backend.theme_tree = [
+        {"theme": {"id": "t-1", "label": "Work-Life Balance", "is_active": True},
+         "children": []},
+    ]
+    resp = client.get("/codebooks/test-corpus-id/cb-1/themes", follow_redirects=True)
+    assert resp.status_code == 200
+    body = resp.data
+    # One merged box replaces the two separate panels (issue #226).
+    assert b'panel-title">Themes</h2>' in body
+    assert b"Theme Frequency" not in body
+    assert b"Theme Hierarchy" not in body
+    assert b'id="theme-tree"' not in body
+    # The table skeleton the JS renders into is still present.
+    assert b'id="themes-table-body"' in body
+    assert b"Occurrences" in body
+    assert b"Interview Coverage" in body
+
+
 def test_codebook_themes_selects_requested_analysis_run(client, fake_backend):
     fake_backend.codebooks = [
         {"id": "cb-1", "name": "Interview Codebook", "version": 1,
