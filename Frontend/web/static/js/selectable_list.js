@@ -8,12 +8,20 @@
       this.rows = Array.from(root.querySelectorAll("[data-selectable-list-row]"));
       this.forms = Array.from(root.querySelectorAll("[data-selectable-list-selected-form]"));
       this.actions = Array.from(root.querySelectorAll("[data-selectable-list-action]"));
+      this.searchInput = root.querySelector("[data-selectable-list-search]");
 
       if (!this.selectAll || !this.selectedCount || this.checkboxes.length === 0) return;
 
+      if (this.searchInput) {
+        this.searchInput.addEventListener("input", () => this.filterRows());
+      }
+
       this.selectAll.addEventListener("change", () => {
         this.checkboxes.forEach((checkbox) => {
-          checkbox.checked = this.selectAll.checked;
+          const row = checkbox.closest("[data-selectable-list-row]");
+          if (!row || row.style.display !== "none") {
+            checkbox.checked = this.selectAll.checked;
+          }
         });
         this.update();
       });
@@ -22,6 +30,19 @@
         checkbox.addEventListener("change", () => this.update());
       });
 
+      this.update();
+    }
+
+    filterRows() {
+      if (!this.searchInput) return;
+      const query = this.searchInput.value.toLowerCase();
+      this.rows.forEach((row) => {
+        if (row.textContent.toLowerCase().includes(query)) {
+          row.style.display = "";
+        } else {
+          row.style.display = "none";
+        }
+      });
       this.update();
     }
 
@@ -35,10 +56,16 @@
       const selectedIdsList = this.getSelectedIds();
       const selectedIds = new Set(selectedIdsList);
       const selectedCount = selectedIdsList.length;
-      const totalCount = this.checkboxes.length;
+      
+      const visibleCheckboxes = this.checkboxes.filter(cb => {
+        const row = cb.closest("[data-selectable-list-row]");
+        return !row || row.style.display !== "none";
+      });
+      const visibleCheckedCount = visibleCheckboxes.filter(cb => cb.checked).length;
+      const totalVisibleCount = visibleCheckboxes.length;
 
-      this.selectAll.checked = selectedCount === totalCount;
-      this.selectAll.indeterminate = selectedCount > 0 && selectedCount < totalCount;
+      this.selectAll.checked = totalVisibleCount > 0 && visibleCheckedCount === totalVisibleCount;
+      this.selectAll.indeterminate = visibleCheckedCount > 0 && visibleCheckedCount < totalVisibleCount;
 
       this.rows.forEach((row) => {
         row.classList.toggle("ata-selectable-list__row--selected", selectedIds.has(row.dataset.itemId));
