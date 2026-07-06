@@ -1,16 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Help & Documentation{% endblock %}
 {% block content %}
-  <div class="mb-4">
-    <h1 class="h3 mb-1">Help &amp; Documentation</h1>
-    <p class="text-secondary mb-0">Resources to help you use the platform and understand its underlying mechanics.</p>
+  <div class="mb-4 d-flex justify-content-between align-items-end flex-wrap gap-3">
+    <div>
+      <h1 class="h3 mb-1">Help &amp; Documentation</h1>
+      <p class="text-secondary mb-0">Resources to help you use the platform and understand its underlying mechanics.</p>
+    </div>
+    <div style="width: 100%; max-width: 300px;" class="position-relative">
+      <i class="bi bi-search position-absolute text-secondary" style="top: 50%; left: 12px; transform: translateY(-50%);"></i>
+      <input type="search" id="helpSearchInput" class="form-control" style="padding-left: 36px;" placeholder="Search help page..." aria-label="Search help page">
+    </div>
   </div>
 
-  <div class="row g-4">
+  <div class="row g-4 mb-4">
     <div class="col-12 col-md-8">
       
       <!-- Getting Started Workflow -->
-      <div class="bg-white border rounded-2 p-4 mb-4">
+      <div class="bg-white border rounded-2 p-4 h-100">
         <h2 class="h5 mb-3">Getting Started</h2>
         <p>The Automated Thematic Analysis tool simplifies the qualitative research process into three main steps:</p>
         <ol class="mb-0">
@@ -26,8 +32,36 @@
         </ol>
       </div>
 
-      <!-- FAQ Accordion -->
-      <div class="bg-white border rounded-2 p-4 mb-4">
+    </div>
+
+    <!-- Right Sidebar Links -->
+    <div class="col-12 col-md-4 d-flex flex-column">
+      
+      <div class="bg-white border rounded-2 p-3 mb-3 flex-fill d-flex flex-column justify-content-between">
+        <div>
+          <h2 class="h6 mb-2">Project Wiki</h2>
+          <p class="text-secondary small mb-3">Comprehensive documentation on system architecture, data models, and API endpoints.</p>
+        </div>
+        <a class="btn btn-sm btn-outline-primary w-100 mt-2" href="https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/wiki" target="_blank" rel="noopener">
+          Open Wiki &nearr;
+        </a>
+      </div>
+
+      <div class="bg-white border rounded-2 p-3 flex-fill d-flex flex-column justify-content-between">
+        <div>
+          <h2 class="h6 mb-2">Source Code</h2>
+          <p class="text-secondary small mb-3">Explore the codebase, report issues, or contribute to the project on GitHub.</p>
+        </div>
+        <a class="btn btn-sm btn-dark w-100 mt-2" href="https://github.com/amosproj/amos2026ss02-automated-thematic-analysis" target="_blank" rel="noopener">
+          <i class="bi bi-github me-1"></i> View Repository &nearr;
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- FAQ Accordion -->
+  <div class="bg-white border rounded-2 p-4 mb-4">
         <h2 class="h5 mb-3">Frequently Asked Questions</h2>
         
         <div class="accordion accordion-flush border rounded-2" id="faqAccordion">
@@ -157,37 +191,21 @@
               </div>
             </div>
           </div>
+          <!-- Item 9 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingNine">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseNine" aria-expanded="false" aria-controls="collapseNine">
+                How do I calculate the cost of my analysis?
+              </button>
+            </h3>
+            <div id="collapseNine" class="accordion-collapse collapse" aria-labelledby="headingNine" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                The platform displays your <strong>Token Usage</strong> (Input and Output tokens) for each analysis run. To calculate the actual cost in dollars, you must reference the pricing page of your selected LLM Provider (e.g., OpenAI, Anthropic). Multiply your Input Tokens by their listed Input Price, and your Output Tokens by their Output Price. Note: For the default NHR@FAU cluster, usage is generally free of charge for affiliated researchers!
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-
-    </div>
-
-    <!-- Right Sidebar Links -->
-    <div class="col-12 col-md-4">
-      
-      <div class="mb-3">
-        <input type="search" id="helpSearchInput" class="form-control" placeholder="Search help page..." aria-label="Search help page">
-      </div>
-
-      <div class="bg-white border rounded-2 p-3 mb-3">
-        <h2 class="h6 mb-2">Project Wiki</h2>
-        <p class="text-secondary small mb-3">Comprehensive documentation on system architecture, data models, and API endpoints.</p>
-        <a class="btn btn-sm btn-outline-primary w-100" href="https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/wiki" target="_blank" rel="noopener">
-          Open Wiki &nearr;
-        </a>
-      </div>
-
-      <div class="bg-white border rounded-2 p-3">
-        <h2 class="h6 mb-2">Source Code</h2>
-        <p class="text-secondary small mb-3">Explore the codebase, report issues, or contribute to the project on GitHub.</p>
-        <a class="btn btn-sm btn-dark w-100" href="https://github.com/amosproj/amos2026ss02-automated-thematic-analysis" target="_blank" rel="noopener">
-          View Repository &nearr;
-        </a>
-      </div>
-
-    </div>
-    </div>
-  </div>
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
