@@ -88,6 +88,9 @@
                  data-job-progress="${job.id}"
                  style="width: 2%">2%</div>
           </div>
+          <div class="small text-secondary mt-1" data-job-caption="${job.id}">
+            Waiting for worker
+          </div>
         </div>
         <a class="btn btn-sm btn-outline-secondary" href="/codebooks/new/jobs/${job.id}?mode=${job.mode || 'auto'}">
           Watch
@@ -98,13 +101,59 @@
 
   function paintProgress(jobId, status) {
     const bar = document.querySelector(`[data-job-progress="${jobId}"]`);
-    if (!bar) return;
+    const caption = document.querySelector(`[data-job-caption="${jobId}"]`);
+    if (!bar && !caption) return;
     const total = status.documents_total || status.analysis_units_total || status.passages_total || 0;
     const done = status.documents_done || status.analysis_units_done || status.passages_done || 0;
     const raw = status.progress_percent || (total > 0 ? Math.round(done / total * 100) : 2);
     const pct = Math.min(99, Math.max(2, raw));
-    bar.style.width = pct + "%";
-    bar.textContent = pct + "%";
+    if (bar) {
+      bar.style.width = pct + "%";
+      bar.textContent = pct + "%";
+    }
+    if (caption) {
+      caption.textContent = statusCaption(status);
+    }
+  }
+
+  function formatCount(value) {
+    return Number(value || 0).toLocaleString();
+  }
+
+  function statusCaption(status) {
+    if (status.status === "queued") return "Waiting for worker";
+    if (status.status === "succeeded") {
+      const pieces = [];
+      if (status.quotes_created !== null && status.quotes_created !== undefined) {
+        pieces.push(`${formatCount(status.quotes_created)} quotes`);
+      }
+      if (status.codes_created !== null && status.codes_created !== undefined) {
+        pieces.push(`${formatCount(status.codes_created)} codes`);
+      }
+      return pieces.length ? `Complete — ${pieces.join(", ")}` : "Complete";
+    }
+    if (status.status === "failed") return "Failed";
+    if (status.status === "cancelled") return "Cancelled";
+
+    const labels = {
+      extracting_quote_codes: "Finding evidence",
+      consolidating_codes: "Consolidating codes",
+      synthesizing_themes: "Building themes",
+      evaluating_iterations: "Evaluating fit",
+      persisting_codebook: "Saving codebook",
+      applying_codebook: "Applying codebook",
+    };
+    const label = labels[status.phase] || "Running";
+    if (status.phase === "consolidating_codes" && status.analysis_units_total > 0) {
+      return `${label} — ${formatCount(status.analysis_units_done)} / ${formatCount(status.analysis_units_total)}`;
+    }
+    if (status.phase === "applying_codebook" && status.analysis_units_total > 0) {
+      return `${label} — ${formatCount(status.analysis_units_done)} / ${formatCount(status.analysis_units_total)}`;
+    }
+    if (status.documents_total > 0) {
+      return `${label} — ${formatCount(status.documents_done)} / ${formatCount(status.documents_total)}`;
+    }
+    return label;
   }
 
   // ---- Terminal handling --------------------------------------------

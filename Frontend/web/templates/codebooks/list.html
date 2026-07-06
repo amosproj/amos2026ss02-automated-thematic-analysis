@@ -38,6 +38,9 @@
               <div class="progress-bar progress-bar-striped progress-bar-animated"
                    data-job-progress="{{ job.id }}" style="width: 2%">2%</div>
             </div>
+            <div class="small text-secondary mt-1" data-job-caption="{{ job.id }}">
+              {{ "Waiting for worker" if job.status == "queued" else "Preparing analysis" }}
+            </div>
           </div>
           <a class="btn btn-sm btn-outline-secondary"
              href="{{ url_for('codebooks.new_codebook_job_progress', job_id=job.id) }}">

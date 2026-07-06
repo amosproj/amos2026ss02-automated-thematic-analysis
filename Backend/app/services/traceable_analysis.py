@@ -3725,7 +3725,7 @@ class TraceableAnalysisService:
         synthesis: CodebookSynthesisResult,
         should_cancel: Callable[[], Awaitable[bool]] | None,
         provider: str | None = None,
-        on_progress: Callable[[int, int], Awaitable[None]] | None = None,
+        on_progress: Callable[[int, int, int, int], Awaitable[None]] | None = None,
     ) -> _ApplicationPassResult:
         # This is the deductive application pass. It intentionally ignores the
         # initial open-coding assignments and asks the model to use the finalized
@@ -3747,8 +3747,15 @@ class TraceableAnalysisService:
         applied: list[_AppliedEvidence] = []
         action_log: list[dict[str, object]] = []
         failed_document_ids: list[UUID] = []
-        if on_progress is not None:
-            await on_progress(0, len(documents))
+
+        async def _emit_progress(done: int) -> None:
+            # Report running coded/failed counts (a processed doc is coded unless it failed).
+            if on_progress is None:
+                return
+            failed = len(failed_document_ids)
+            await on_progress(done, len(documents), done - failed, failed)
+
+        await _emit_progress(0)
         for document_index, document in enumerate(documents, start=1):
             await self._raise_if_cancelled(should_cancel)
             result: TraceableApplicationResult | None = None
@@ -3779,8 +3786,7 @@ class TraceableAnalysisService:
                     )
                     await asyncio.sleep(0.5 * attempt)
             if result is None:
-                if on_progress is not None:
-                    await on_progress(document_index, len(documents))
+                await _emit_progress(document_index)
                 continue
             document_assignments_before = len(applied)
             document_assignment_keys: set[tuple[str, int | None, int | None, str]] = set()
@@ -3879,8 +3885,7 @@ class TraceableAnalysisService:
                 document.id,
                 len(applied) - document_assignments_before,
             )
-            if on_progress is not None:
-                await on_progress(document_index, len(documents))
+            await _emit_progress(document_index)
         return _ApplicationPassResult(
             evidence=applied,
             failed_document_ids=failed_document_ids,

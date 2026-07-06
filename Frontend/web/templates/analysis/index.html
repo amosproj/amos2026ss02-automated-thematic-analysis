@@ -114,6 +114,11 @@
             Run Analysis
           </button>
         </span>
+        <a class="text-secondary small align-self-center ms-md-2"
+           href="{{ url_for('analysis.analysis_demo') }}"
+           title="Preview the progress page with a scripted sample run (no codebook or LLM call)">
+          Preview with sample data &rarr;
+        </a>
       </div>
     </form>
   </div>
@@ -192,27 +197,9 @@
                   &mdash;
                 {% endif %}
               </td>
-              <td>
-                {% if run.status == 'succeeded' and active_corpus_id and run.transcript_document_ids %}
-                  {% set doc_ids = run.transcript_document_ids %}
-                  <div class="dropdown">
-                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
-                            data-bs-toggle="dropdown" aria-expanded="false">
-                      {{ doc_ids | length }} transcript{{ 's' if doc_ids | length != 1 else '' }}
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end" style="max-height: 260px; overflow-y: auto;">
-                      {% for doc_id in doc_ids %}
-                        {% set matched = transcripts | selectattr('id', 'equalto', doc_id) | list %}
-                        {% set doc_title = matched[0].title if matched else (doc_id[:8] + '…') %}
-                        <li>
-                          <a class="dropdown-item small"
-                             href="{{ url_for('ingestion.read_transcript', corpus_id=active_corpus_id, document_id=doc_id, run_id=run.id) }}">
-                            {{ doc_title }}
-                          </a>
-                        </li>
-                      {% endfor %}
-                    </ul>
-                  </div>
+              <td class="text-secondary">
+                {% if run.transcript_docs %}
+                  {{ run.transcript_docs | length }}
                 {% else %}
                   <span class="text-muted small">—</span>
                 {% endif %}
@@ -222,6 +209,15 @@
                    href="{{ url_for('codebooks.codebook_themes_for_corpus', corpus_id=active_corpus_id, codebook_id=run.codebook_id, application_run_id=run.id) }}">
                   View Analysis
                 </a>
+                {% if run.status == 'succeeded' and active_corpus_id and run.transcript_docs %}
+                  <button type="button"
+                          class="btn btn-sm btn-outline-teal"
+                          data-view-transcripts
+                          data-run-id="{{ run.id }}"
+                          aria-label="View transcripts used in analysis run {{ run.name or run.custom_id or run.id }}">
+                    View Transcripts
+                  </button>
+                {% endif %}
               </td>
             </tr>
             {% endfor %}
@@ -329,6 +325,39 @@
     </div>
   </div>
 </div>
+
+{% if active_corpus_id %}
+<!-- Transcripts-in-run modal: one shared instance, populated on demand from
+     the previousRuns data already serialized for the duplicate-run check. -->
+<div class="modal fade" id="runTranscriptsModal" tabindex="-1"
+     aria-labelledby="runTranscriptsModalTitle" aria-hidden="true"
+     data-read-url-template="{{ url_for('ingestion.read_transcript', corpus_id=active_corpus_id, document_id='__DOC__', run_id='__RUN__') }}">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      {# Search lives in the header so it stays fixed while the body scrolls. #}
+      <div class="modal-header transcripts-modal-header flex-wrap gap-2">
+        <h5 class="modal-title" id="runTranscriptsModalTitle">Transcripts</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="w-100 d-flex align-items-center gap-2">
+          <input type="search" id="runTranscriptsSearch"
+                 class="form-control form-control-sm transcripts-modal-search"
+                 placeholder="Search transcripts…" aria-label="Search transcripts">
+          <span id="runTranscriptsCount" class="transcripts-modal-count"></span>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div id="runTranscriptsList" class="row row-cols-1 row-cols-md-2 g-2"></div>
+        <p id="runTranscriptsEmpty" class="text-secondary text-center py-3 mb-0 d-none">
+          No transcripts match your search.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -395,6 +424,67 @@
         duplicateModal.hide();
         form.submit();
       });
+    }
+
+    /* ── View Transcripts modal ──────────────────────────────────────────
+     * One shared modal for every run row. On click, the run is looked up in
+     * the previousRuns constant above and its transcript_docs (id + resolved
+     * title, decorated by the controller) are rendered as links into the
+     * interview reader with run_id so theme highlights auto-select there.
+     * Everything is written via textContent — titles are user-supplied. */
+    const transcriptsModalEl = document.getElementById('runTranscriptsModal');
+    if (transcriptsModalEl) {
+      const transcriptsModal = new bootstrap.Modal(transcriptsModalEl);
+      const listEl   = document.getElementById('runTranscriptsList');
+      const searchEl = document.getElementById('runTranscriptsSearch');
+      const titleEl  = document.getElementById('runTranscriptsModalTitle');
+      const countEl  = document.getElementById('runTranscriptsCount');
+      const emptyEl  = document.getElementById('runTranscriptsEmpty');
+      const readUrlTemplate = transcriptsModalEl.dataset.readUrlTemplate;
+
+      function renderTranscriptList(docs, runId, filter) {
+        const needle = (filter || '').trim().toLowerCase();
+        const visible = needle
+          ? docs.filter((d) => (d.title || '').toLowerCase().includes(needle))
+          : docs;
+        listEl.replaceChildren();
+        for (const doc of visible) {
+          const col = document.createElement('div');
+          col.className = 'col';
+          const link = document.createElement('a');
+          link.className = 'transcript-link small text-truncate';
+          link.href = readUrlTemplate
+            .replace('__DOC__', encodeURIComponent(doc.id))
+            .replace('__RUN__', encodeURIComponent(runId));
+          link.textContent = doc.title;
+          link.title = doc.title;
+          col.appendChild(link);
+          listEl.appendChild(col);
+        }
+        emptyEl.classList.toggle('d-none', visible.length > 0);
+        countEl.textContent = needle
+          ? 'Showing ' + visible.length + ' of ' + docs.length
+          : docs.length + ' transcript' + (docs.length === 1 ? '' : 's');
+      }
+
+      document.querySelectorAll('[data-view-transcripts]').forEach((btn) => {
+        btn.addEventListener('click', function () {
+          const run = previousRuns.find((r) => r.id === btn.dataset.runId);
+          if (!run) return;
+          const docs = [...(run.transcript_docs || [])].sort((a, b) =>
+            (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' })
+          );
+          titleEl.textContent =
+            'Transcripts — ' + (run.name || run.custom_id || run.id.slice(0, 8) + '…');
+          searchEl.value = '';
+          renderTranscriptList(docs, run.id, '');
+          /* Re-assign (not addEventListener) so re-opens don't stack handlers. */
+          searchEl.oninput = () => renderTranscriptList(docs, run.id, searchEl.value);
+          transcriptsModal.show();
+        });
+      });
+
+      transcriptsModalEl.addEventListener('shown.bs.modal', () => searchEl.focus());
     }
   });
 </script>

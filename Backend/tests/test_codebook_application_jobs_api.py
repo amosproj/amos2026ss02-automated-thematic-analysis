@@ -261,6 +261,39 @@ async def test_apply_codebook_job_retries_llm_and_fails_only_one_transcript(clie
     assert statuses == {"coded", "failed"}
 
 
+async def test_apply_codebook_job_streams_coded_and_failed_counts(client, db_engine, monkeypatch) -> None:
+    _, codebook_id, document_ids = await _seed_corpus_codebook(
+        db_engine, texts=["First transcript.", "Second transcript."]
+    )
+    first_coded = asyncio.Event()
+    release = asyncio.Event()
+
+    # Gate mid-run so we can read the job while it is still coding: doc 1 codes,
+    # doc 2 fails, and on_progress carries the running coded/failed counts.
+    async def _gated_apply(self, *, documents, on_progress=None, **_kwargs):
+        del self
+        await on_progress(1, len(documents), 1, 0)
+        first_coded.set()
+        await release.wait()
+        await on_progress(2, len(documents), 1, 1)
+        return _ApplicationPassResult(evidence=[], failed_document_ids=[documents[1].id])
+
+    monkeypatch.setattr(TraceableAnalysisService, "_apply_codebook_to_documents", _gated_apply)
+
+    job_id = (await client.post(
+        f"{API_CODEBOOKS}/{codebook_id}/apply-jobs",
+        json={"transcript_document_ids": document_ids},
+    )).json()["data"]["id"]
+
+    await asyncio.wait_for(first_coded.wait(), timeout=5.0)
+    running = (await client.get(f"{API_CODEBOOKS}/apply-jobs/{job_id}")).json()["data"]
+    assert (running["status"], running["documents_coded"], running["documents_failed"]) == ("running", 1, 0)
+
+    release.set()
+    terminal = await _wait_for_terminal_job_status(client, job_id)
+    assert (terminal["status"], terminal["documents_coded"], terminal["documents_failed"]) == ("succeeded", 1, 1)
+
+
 async def test_apply_codebook_uses_traceable_application_method(db_engine, monkeypatch) -> None:
     corpus_id, codebook_id, document_ids = await _seed_corpus_codebook(
         db_engine,

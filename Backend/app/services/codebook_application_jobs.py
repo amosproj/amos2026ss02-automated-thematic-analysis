@@ -98,13 +98,18 @@ class CodebookApplicationJobRunner:
                 active_provider = await get_active_provider(provider_session)
             service = CodebookApplicationService(session)
 
-            async def _on_progress(done: int, total: int) -> None:
+            async def _on_progress(done: int, total: int,
+                                   coded: int | None = None, failed: int | None = None) -> None:
                 async with session_factory() as progress_session:
                     progress_job = await progress_session.get(CodebookApplicationJob, job_id)
                     if progress_job is None:
                         return
                     progress_job.documents_done = done
                     progress_job.documents_total = total
+                    if coded is not None:  # stream coded/failed live, not just at the end
+                        progress_job.documents_coded = coded
+                    if failed is not None:
+                        progress_job.documents_failed = failed
                     await progress_session.commit()
 
             async def _on_phase(phase: str) -> None:
