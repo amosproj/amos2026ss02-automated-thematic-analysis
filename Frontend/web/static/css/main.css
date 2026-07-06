@@ -360,6 +360,27 @@
     flex-shrink: 0;
 }
 
+/* Scroll cap for the themes table: a fully expanded hierarchy scrolls inside
+   the box while the column headers stick to the top. 70vh fills a laptop
+   viewport while leaving room for the surrounding chrome. */
+.themes-table-scroll {
+    max-height: 70vh;
+    overflow-y: auto;
+    /* Keep content clear of the scrollbar (overlay scrollbars paint on top
+       of flush content, covering the coverage labels). */
+    padding-right: 0.75rem;
+    scrollbar-gutter: stable;
+}
+.themes-table-scroll .theme-table-head th {
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 1;
+    /* border-bottom doesn't travel with sticky cells; draw it as a shadow. */
+    box-shadow: inset 0 -2px 0 #e5e7eb;
+    border-bottom: 0;
+}
+
 /* ── Theme Details panel ────────────────────────────────────────────────────── */
 .td-name {
     font-size: 1.35rem;
