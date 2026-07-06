@@ -180,11 +180,11 @@
                 <p id="theme-details-coverage" class="td-stat-number mb-0"></p>
                 <p class="td-stat-label mb-0">Interview Coverage</p>
               </div>
-            </div>
-            <div class="mt-3">
-              <button id="theme-details-view-quotes" class="btn btn-sm btn-outline-primary">
-                View Quotes
-              </button>
+              <div class="text-center">
+                {# Filled by the quotes module once the theme's quotes load. #}
+                <p id="theme-details-quotes" class="td-stat-number mb-0"></p>
+                <p class="td-stat-label mb-0">Quotes</p>
+              </div>
             </div>
           </div>
 
@@ -192,28 +192,61 @@
       </div>
     </div>
 
-    {# Merged themes box: hierarchy + frequency in one table (issue #226).
-       Rows are rendered client-side by codebook_themes.js — siblings ordered
-       by frequency at every depth, expandable parents, coverage bars. #}
+    {# Merged themes box: hierarchy + frequency in one table (issue #226) with
+       the selected theme's quotes alongside (issue #227). Rows are rendered
+       client-side by codebook_themes.js — siblings ordered by frequency at
+       every depth, expandable parents, coverage bars. The quotes panel reacts
+       to the theme:selected event and pages through the theme's quotes. #}
     <div class="row g-3">
       <div class="col-12">
         <div class="bg-white border rounded-3 p-3">
-          <h2 class="h6 panel-title">Themes</h2>
-          <p class="text-secondary small mb-2">
-            Ordered by frequency. Click a row to select a theme; rows with a
-            chevron expand to show their sub-themes, also ordered by frequency.
-          </p>
-          <div class="table-responsive themes-table-scroll">
-            <table class="table table-sm align-middle mb-0">
-              <thead>
-                <tr class="theme-table-head">
-                  <th style="width:45%">Theme</th>
-                  <th class="text-end" style="width:120px">Occurrences</th>
-                  <th style="width:220px; padding-left:3rem">Interview Coverage</th>
-                </tr>
-              </thead>
-              <tbody id="themes-table-body"></tbody>
-            </table>
+          <div class="row g-3">
+
+            <div class="col-12 col-xl-7">
+              <h2 class="h6 panel-title">Themes</h2>
+              <p class="text-secondary small mb-2">
+                Ordered by frequency. Click a row to select a theme; rows with a
+                chevron expand to show their sub-themes, also ordered by frequency.
+              </p>
+              <div class="table-responsive themes-table-scroll">
+                <table class="table table-sm align-middle mb-0">
+                  <thead>
+                    <tr class="theme-table-head">
+                      <th style="width:45%">Theme</th>
+                      <th class="text-end" style="width:120px">Occurrences</th>
+                      <th style="width:220px; padding-left:3rem">Interview Coverage</th>
+                    </tr>
+                  </thead>
+                  <tbody id="themes-table-body"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="col-12 col-xl-5 quotes-panel">
+              <h2 class="h6 panel-title" id="quotes-panel-title">Quotes</h2>
+              <p class="text-secondary small mb-2" id="quotes-panel-total"></p>
+
+              <p id="quotes-none" class="text-secondary mb-0 text-center py-4">
+                Select a theme to see its quotes.
+              </p>
+              <div id="quotes-loading" class="d-none text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading quotes…</span>
+                </div>
+              </div>
+              <div id="quotes-error" class="d-none alert alert-danger"></div>
+              <div id="quotes-list" class="d-none quotes-list-scroll"></div>
+              <p id="quotes-empty" class="d-none text-secondary text-center py-4">No quotes found for this theme.</p>
+
+              {# d-none is declared after d-flex in Bootstrap, so it wins while
+                 present; the JS only ever toggles d-none. #}
+              <div class="d-flex d-none justify-content-between align-items-center mt-2" id="quotes-pagination">
+                <button class="btn btn-sm btn-outline-secondary" id="quotes-prev">&#8592; Previous</button>
+                <span class="text-secondary small" id="quotes-page-info"></span>
+                <button class="btn btn-sm btn-outline-secondary" id="quotes-next">Next &#8594;</button>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -270,35 +303,6 @@
 
 </div>
 
-{# Quotes modal #}
-<div class="modal fade" id="quotes-modal" tabindex="-1" aria-labelledby="quotes-modal-label" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <div>
-          <h5 class="modal-title mb-0" id="quotes-modal-label">Quotes</h5>
-          <p class="text-secondary small mb-0" id="quotes-modal-total"></p>
-        </div>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body" id="quotes-modal-body">
-        <div id="quotes-loading" class="text-center py-5">
-          <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading quotes…</span>
-          </div>
-        </div>
-        <div id="quotes-error" class="d-none alert alert-danger"></div>
-        <div id="quotes-list" class="d-none"></div>
-        <p id="quotes-empty" class="d-none text-secondary text-center py-4">No quotes found for this theme.</p>
-      </div>
-      <div class="modal-footer d-none" id="quotes-pagination">
-        <button class="btn btn-sm btn-outline-secondary" id="quotes-prev">&#8592; Previous</button>
-        <span class="text-secondary small" id="quotes-page-info"></span>
-        <button class="btn btn-sm btn-outline-secondary" id="quotes-next">Next &#8594;</button>
-      </div>
-    </div>
-  </div>
-</div>
 {% endblock %}
 
 {% block scripts %}

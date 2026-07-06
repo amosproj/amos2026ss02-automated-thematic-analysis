@@ -464,28 +464,33 @@
     }
 
     // ------------------------------------------------------------------
-    // Quotes modal
+    // Quotes panel (issue #227) — lives inside the merged themes box and
+    // follows the selected theme. Reacts to the theme:selected event (the
+    // same contract the demographic-breakdown panel uses), so it needs no
+    // direct coupling to showThemeDetails and survives the boot race via
+    // window.__ataCurrentTheme.
     // ------------------------------------------------------------------
 
-    const quotesModal      = document.getElementById("quotes-modal");
     const quotesLoading    = document.getElementById("quotes-loading");
     const quotesError      = document.getElementById("quotes-error");
     const quotesList       = document.getElementById("quotes-list");
     const quotesEmpty      = document.getElementById("quotes-empty");
-    const quotesTotal      = document.getElementById("quotes-modal-total");
-    const quotesLabel      = document.getElementById("quotes-modal-label");
+    const quotesNone       = document.getElementById("quotes-none");
+    const quotesTotal      = document.getElementById("quotes-panel-total");
+    const quotesLabel      = document.getElementById("quotes-panel-title");
     const quotesPagination = document.getElementById("quotes-pagination");
     const quotesPageInfo   = document.getElementById("quotes-page-info");
     const quotesPrev       = document.getElementById("quotes-prev");
     const quotesNext       = document.getElementById("quotes-next");
-    const viewQuotesBtn    = document.getElementById("theme-details-view-quotes");
+    // Quote-count stat in the Theme Details header; owned by this module
+    // because the count only becomes known once the quotes fetch returns.
+    const themeDetailsQuotes = document.getElementById("theme-details-quotes");
 
-    if (!quotesModal || !viewQuotesBtn) return;
-
-    const bsModal = new bootstrap.Modal(quotesModal);
+    if (!quotesList) return;
 
     let activeQuoteThemeId = null;
     let activeQuotePage    = 1;
+    let quotesRequestToken = 0; // drops stale responses after quick re-selection
     const PAGE_SIZE        = 20;
 
     function quotesUrl(themeId, page) {
@@ -503,7 +508,22 @@
     }
 
     function setQuotesLoading() {
+        quotesNone.classList.add("d-none");
         quotesLoading.classList.remove("d-none");
+        quotesError.classList.add("d-none");
+        quotesList.classList.add("d-none");
+        quotesEmpty.classList.add("d-none");
+        quotesPagination.classList.add("d-none");
+    }
+
+    // Blank panel shown while no theme is selected.
+    function resetQuotesPanel() {
+        activeQuoteThemeId = null;
+        quotesRequestToken++;
+        quotesLabel.textContent = "Quotes";
+        quotesTotal.textContent = "";
+        quotesNone.classList.remove("d-none");
+        quotesLoading.classList.add("d-none");
         quotesError.classList.add("d-none");
         quotesList.classList.add("d-none");
         quotesEmpty.classList.add("d-none");
@@ -521,6 +541,7 @@
 
         quotesLabel.textContent = "Quotes for: " + (themeName || "Theme");
         quotesTotal.textContent = total === 1 ? "1 quote across corpus" : total + " quotes across corpus";
+        if (themeDetailsQuotes) themeDetailsQuotes.textContent = String(total);
 
         if (items.length === 0) {
             quotesEmpty.classList.remove("d-none");
@@ -550,7 +571,7 @@
 
             const link = document.createElement("a");
             link.href      = interviewUrl(item.document_id);
-            link.className = "btn btn-sm btn-outline-secondary";
+            link.className = "btn btn-sm btn-outline-primary";
             link.textContent = "View Interview";
             meta.appendChild(link);
 
@@ -571,6 +592,7 @@
     async function loadQuotes(themeId, page) {
         activeQuoteThemeId = themeId;
         activeQuotePage    = page;
+        const token = ++quotesRequestToken;
         setQuotesLoading();
 
         const themeName = (currentThemeInfoById[themeId] || {}).theme_name || "";
@@ -578,20 +600,40 @@
         try {
             const response = await fetch(quotesUrl(themeId, page));
             const data = await response.json();
+            if (token !== quotesRequestToken) return; // superseded by a newer request
             if (!response.ok || data.error) throw new Error(data.error || "HTTP " + response.status);
             renderQuotes(data, themeName);
         } catch (err) {
+            if (token !== quotesRequestToken) return;
             quotesLoading.classList.add("d-none");
             quotesError.textContent = "Could not load quotes: " + err.message;
             quotesError.classList.remove("d-none");
         }
     }
 
-    viewQuotesBtn.addEventListener("click", () => {
-        if (!selectedThemeId) return;
-        bsModal.show();
-        loadQuotes(selectedThemeId, 1);
+    function onQuotesThemeChange(themeId) {
+        if (!themeId) {
+            resetQuotesPanel();
+            if (themeDetailsQuotes) themeDetailsQuotes.textContent = "";
+            return;
+        }
+        if (themeId === activeQuoteThemeId) return; // same theme — keep page and stat
+        // Placeholder until this theme's quote total arrives with the fetch.
+        if (themeDetailsQuotes) themeDetailsQuotes.textContent = "—";
+        loadQuotes(themeId, 1);
+    }
+
+    document.addEventListener("theme:selected", (event) => {
+        onQuotesThemeChange((event.detail || {}).themeId);
     });
+
+    // Boot race: the auto-selection above fires before this listener attaches.
+    const initialTheme = window.__ataCurrentTheme;
+    if (initialTheme && initialTheme.themeId) {
+        onQuotesThemeChange(initialTheme.themeId);
+    } else {
+        resetQuotesPanel();
+    }
 
     quotesPrev.addEventListener("click", () => {
         if (activeQuoteThemeId && activeQuotePage > 1) {
