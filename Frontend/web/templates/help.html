@@ -1,16 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Help & Documentation{% endblock %}
 {% block content %}
-  <div class="mb-4">
-    <h1 class="h3 mb-1">Help &amp; Documentation</h1>
-    <p class="text-secondary mb-0">Resources to help you use the platform and understand its underlying mechanics.</p>
+  <div class="mb-4 d-flex justify-content-between align-items-end flex-wrap gap-3">
+    <div>
+      <h1 class="h3 mb-1">Help &amp; Documentation</h1>
+      <p class="text-secondary mb-0">Resources to help you use the platform and understand its underlying mechanics.</p>
+    </div>
+    <div style="width: 100%; max-width: 300px;" class="position-relative">
+      <i class="bi bi-search position-absolute text-secondary" style="top: 50%; left: 12px; transform: translateY(-50%);"></i>
+      <input type="search" id="helpSearchInput" class="form-control" style="padding-left: 36px;" placeholder="Search help page..." aria-label="Search help page">
+    </div>
   </div>
 
-  <div class="row g-4">
+  <div class="row g-4 mb-4">
     <div class="col-12 col-md-8">
       
       <!-- Getting Started Workflow -->
-      <div class="bg-white border rounded-2 p-4 mb-4">
+      <div class="bg-white border rounded-2 p-4 h-100">
         <h2 class="h5 mb-3">Getting Started</h2>
         <p>The Automated Thematic Analysis tool simplifies the qualitative research process into three main steps:</p>
         <ol class="mb-0">
@@ -26,47 +32,214 @@
         </ol>
       </div>
 
-      <!-- FAQ -->
-      <div class="bg-white border rounded-2 p-4">
-        <h2 class="h5 mb-3">Frequently Asked Questions</h2>
-        
-        <div class="mb-3">
-          <h3 class="h6 mb-1">Which Large Language Model is being used?</h3>
-          <p class="small text-secondary mb-0">By default, we connect to the NHR@FAU cluster, which runs state-of-the-art open-weights models (such as Qwen or Mixtral) in a secure, privacy-compliant environment. You can change the active provider on the <a href="{{ url_for('main.index') }}">Home page</a>.</p>
-        </div>
-        
-        <div class="mb-3">
-          <h3 class="h6 mb-1">What happens to my data?</h3>
-          <p class="small text-secondary mb-0">Your transcripts are stored securely in our database and are only processed by the selected LLM provider. When using the default FAU NHR provider, your data never leaves the university's secure network infrastructure.</p>
-        </div>
-
-        <div>
-          <h3 class="h6 mb-1">How can I extend the platform?</h3>
-          <p class="small text-secondary mb-0">This tool is entirely open-source. If you wish to experiment with different prompt strategies or integrate new generation methods, the backend services are highly compartmentalized. Check out the project repository linked on the right.</p>
-        </div>
-      </div>
-
     </div>
 
     <!-- Right Sidebar Links -->
-    <div class="col-12 col-md-4">
+    <div class="col-12 col-md-4 d-flex flex-column">
       
-      <div class="bg-white border rounded-2 p-3 mb-3">
-        <h2 class="h6 mb-2">Project Wiki</h2>
-        <p class="text-secondary small mb-3">Comprehensive documentation on system architecture, data models, and API endpoints.</p>
-        <a class="btn btn-sm btn-outline-primary w-100" href="https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/wiki" target="_blank" rel="noopener">
+      <div class="bg-white border rounded-2 p-3 mb-3 flex-fill d-flex flex-column justify-content-between">
+        <div>
+          <h2 class="h6 mb-2">Project Wiki</h2>
+          <p class="text-secondary small mb-3">Comprehensive documentation on system architecture, data models, and API endpoints.</p>
+        </div>
+        <a class="btn btn-sm btn-outline-primary w-100 mt-2" href="https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/wiki" target="_blank" rel="noopener">
           Open Wiki &nearr;
         </a>
       </div>
 
-      <div class="bg-white border rounded-2 p-3">
-        <h2 class="h6 mb-2">Source Code</h2>
-        <p class="text-secondary small mb-3">Explore the codebase, report issues, or contribute to the project on GitHub.</p>
-        <a class="btn btn-sm btn-dark w-100" href="https://github.com/amosproj/amos2026ss02-automated-thematic-analysis" target="_blank" rel="noopener">
-          View Repository &nearr;
+      <div class="bg-white border rounded-2 p-3 flex-fill d-flex flex-column justify-content-between">
+        <div>
+          <h2 class="h6 mb-2">Source Code</h2>
+          <p class="text-secondary small mb-3">Explore the codebase, report issues, or contribute to the project on GitHub.</p>
+        </div>
+        <a class="btn btn-sm btn-dark w-100 mt-2" href="https://github.com/amosproj/amos2026ss02-automated-thematic-analysis" target="_blank" rel="noopener">
+          <i class="bi bi-github me-1"></i> View Repository &nearr;
         </a>
       </div>
 
     </div>
   </div>
+
+  <!-- FAQ Accordion -->
+  <div class="bg-white border rounded-2 p-4 mb-4">
+        <h2 class="h5 mb-3">Frequently Asked Questions</h2>
+        
+        <div class="accordion accordion-flush border rounded-2" id="faqAccordion">
+          <!-- Item 1 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingOne">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+                Which Large Language Model is being used?
+              </button>
+            </h3>
+            <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                By default, we connect to the NHR@FAU cluster, which runs state-of-the-art open-weights models (such as Qwen or Mixtral) in a secure, privacy-compliant environment. You can change the active provider on the <a href="{{ url_for('main.index') }}">Home page</a>.
+              </div>
+            </div>
+          </div>
+          
+          <!-- Item 2 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingTwo">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
+                What happens to my data?
+              </button>
+            </h3>
+            <div id="collapseTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                Your transcripts are stored securely in our database and are only processed by the selected LLM provider. When using the default FAU NHR provider, your data never leaves the university's secure network infrastructure.
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 3 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingThree">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
+                How can I extend the platform?
+              </button>
+            </h3>
+            <div id="collapseThree" class="accordion-collapse collapse" aria-labelledby="headingThree" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                This tool is entirely open-source. If you wish to experiment with different prompt strategies or integrate new generation methods, the backend services are highly compartmentalized. Check out the project repository linked on the right.
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 4 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingFour">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFour" aria-expanded="false" aria-controls="collapseFour">
+                Adding an External LLM Provider
+              </button>
+            </h3>
+            <div id="collapseFour" class="accordion-collapse collapse" aria-labelledby="headingFour" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                <p>You can seamlessly add support for alternative LLM providers (e.g., OpenAI, Anthropic, or any OpenAI-compatible API) by modifying a few configuration files.</p>
+                
+                <ol class="mb-0 ps-3">
+                  <li class="mb-2">
+                    <strong class="text-dark">Define the Provider:</strong> Open <code>Backend/app/llm/providers.py</code> and add a new <code>ProviderSpec</code> entry to the <code>PROVIDERS</code> tuple. Define its <code>id</code>, <code>label</code>, and the environment variable names it will look for (e.g., <code>api_key_attr="LLM_API_KEY_CUSTOM"</code>).
+                  </li>
+                  <li class="mb-2">
+                    <strong class="text-dark">Declare the Settings Fields:</strong> Open <code>Backend/app/config.py</code> and add the three attributes you referenced in your <code>ProviderSpec</code> to the <code>Settings</code> class, e.g.<br>
+                    <code>LLM_API_KEY_CUSTOM: str | None = None</code><br>
+                    <code>LLM_BASE_URL_CUSTOM: str = "https://api.your-provider.com/v1"</code><br>
+                    <code>LLM_MODEL_CUSTOM: str = "your-default-model"</code>
+                  </li>
+                  <li class="mb-2">
+                    <strong class="text-dark">Manage API Keys Safely:</strong> Open your local <code>Backend/.env</code> file (or copy it from <code>.env.example</code>). Add your API key matching the variable name you defined in step 1. Because <code>.env</code> is excluded via <code>.gitignore</code>, your keys remain securely on your machine and are never committed to the repository.
+                  </li>
+                  <li class="mb-2">
+                    <strong class="text-dark">Code Communications:</strong> Because the system dynamically reads the provider registry, simply registering it in <code>providers.py</code> is usually enough! However, if your provider requires specific custom headers or non-standard client initialization, you should modify the <code>build_chat_model()</code> function inside <code>Backend/app/llm/client.py</code>.
+                  </li>
+                  <li>
+                    <strong class="text-dark">Restart &amp; Select:</strong> Once configured, restart the backend server. Your new provider will instantly appear as an option in the "LLM Provider" dropdown on the <a href="{{ url_for('main.index') }}">Home page</a>.
+                  </li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 5 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingFive">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFive" aria-expanded="false" aria-controls="collapseFive">
+                How do I format demographic data?
+              </button>
+            </h3>
+            <div id="collapseFive" class="accordion-collapse collapse" aria-labelledby="headingFive" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                Upload your demographic data as a CSV file. It must have a column literally named <code>username</code> that exactly matches the filenames of your uploaded transcripts to properly link the data together.
+              </div>
+            </div>
+          </div>
+          
+          <!-- Item 6 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingSix">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSix" aria-expanded="false" aria-controls="collapseSix">
+                Can I export my codebook or analysis results?
+              </button>
+            </h3>
+            <div id="collapseSix" class="accordion-collapse collapse" aria-labelledby="headingSix" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                Yes! Your codebooks and full analysis outputs can be exported in CSV format. Look for the "Export" button on the respective Codebooks or Analysis list pages.
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 7 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingSeven">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSeven" aria-expanded="false" aria-controls="collapseSeven">
+                What is the difference between a manual and generated codebook?
+              </button>
+            </h3>
+            <div id="collapseSeven" class="accordion-collapse collapse" aria-labelledby="headingSeven" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                A <strong>Manual Codebook</strong> is built by you from scratch, giving you absolute control over the hierarchy and definitions. A <strong>Generated Codebook</strong> is created by the LLM as an exploratory discovery tool to find themes you might not have considered.
+              </div>
+            </div>
+          </div>
+
+          <!-- Item 8 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingEight">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEight" aria-expanded="false" aria-controls="collapseEight">
+                Why is the analysis taking a long time?
+              </button>
+            </h3>
+            <div id="collapseEight" class="accordion-collapse collapse" aria-labelledby="headingEight" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                LLM text generation takes time. The duration scales with the number of transcripts selected and their length. If it is too slow, consider selecting fewer transcripts or using a faster LLM provider if available.
+              </div>
+            </div>
+          </div>
+          <!-- Item 9 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingNine">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseNine" aria-expanded="false" aria-controls="collapseNine">
+                How do I calculate the cost of my analysis?
+              </button>
+            </h3>
+            <div id="collapseNine" class="accordion-collapse collapse" aria-labelledby="headingNine" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                The platform displays your <strong>Token Usage</strong> (Input and Output tokens) for each analysis run. To calculate the actual cost in dollars, you must reference the pricing page of your selected LLM Provider (e.g., OpenAI, Anthropic). Multiply your Input Tokens by their listed Input Price, and your Output Tokens by their Output Price. Note: For the default NHR@FAU cluster, usage is generally free of charge for affiliated researchers!
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const searchInput = document.getElementById("helpSearchInput");
+      const accordionItems = document.querySelectorAll("#faqAccordion .accordion-item");
+
+      if (!searchInput) return;
+
+      searchInput.addEventListener("input", () => {
+        const query = searchInput.value.toLowerCase();
+        
+        accordionItems.forEach(item => {
+          const text = item.textContent.toLowerCase();
+          const collapseBody = item.querySelector('.accordion-collapse');
+          
+          if (text.includes(query)) {
+            item.style.display = "";
+            const bsCollapse = bootstrap.Collapse.getOrCreateInstance(collapseBody, { toggle: false });
+            if (query.length > 0) {
+              bsCollapse.show();
+            } else {
+              bsCollapse.hide();
+            }
+          } else {
+            item.style.display = "none";
+          }
+        });
+      });
+    });
+  </script>
 {% endblock %}
