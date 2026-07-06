@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import pytest
-
 import asyncio
 import json
 import time
 from uuid import UUID, uuid4
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models import (
@@ -374,7 +373,7 @@ async def test_apply_codebook_job_can_be_cancelled_while_running(client, db_engi
     assert cancel_response.json()["data"]["cancel_requested"] is True
     terminal_job = await _wait_for_terminal_job_status(client, created_job["id"])
     assert terminal_job["status"] == "cancelled"
-    
+
     # Wait for the background task to complete entirely to avoid DB teardown conflicts
     from app.services.codebook_application_jobs import codebook_application_job_runner
     while codebook_application_job_runner._tasks:
