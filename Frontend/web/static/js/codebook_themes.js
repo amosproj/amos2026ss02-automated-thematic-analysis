@@ -280,13 +280,18 @@
     function renderThemeTreeTable(treeData) {
         themesTableBody.innerHTML = "";
 
-        (function renderLevel(nodes, depth, parentId) {
+        // `ancestorGuides` carries one flag per ancestor indent column:
+        // true = that ancestor has further siblings below, so the column
+        // draws a vertical pass-through line (classic file-explorer capping —
+        // lines stop at each branch's last child instead of running on).
+        (function renderLevel(nodes, depth, parentId, ancestorGuides) {
             const sorted = [...nodes].sort((a, b) => byFrequencyThenName(nodeInfo(a), nodeInfo(b)));
-            for (const node of sorted) {
+            sorted.forEach((node, index) => {
                 const theme       = node.theme;
                 const children    = node.children ?? [];
                 const info        = nodeInfo(node);
                 const code        = isCodeNode(theme);
+                const isLast      = index === sorted.length - 1;
                 if (parentId) parentIdByThemeId[theme.id] = parentId;
 
                 const row = document.createElement("tr");
@@ -297,32 +302,46 @@
                     row.classList.add("d-none"); // children start collapsed
                 }
 
-                // Theme cell: indent by depth + chevron + label (+ badges).
+                // Theme cell: connector guides + chevron + label (+ badges).
                 const nameCell = document.createElement("td");
-                nameCell.style.paddingLeft = (0.5 + depth * 1.4) + "rem";
+                const nameWrap = document.createElement("div");
+                nameWrap.className = "theme-name-flex";
+                nameCell.appendChild(nameWrap);
+
+                for (const hasLine of ancestorGuides) {
+                    const guide = document.createElement("span");
+                    guide.className = "tree-indent" + (hasLine ? " tree-indent--line" : "");
+                    nameWrap.appendChild(guide);
+                }
+                if (depth > 0) {
+                    // ├ for children with siblings below, └ for the last one.
+                    const connector = document.createElement("span");
+                    connector.className = "tree-indent " + (isLast ? "tree-indent--elbow" : "tree-indent--tee");
+                    nameWrap.appendChild(connector);
+                }
                 if (children.length > 0) {
                     const toggle = document.createElement("button");
                     toggle.className = "tree-toggle";
                     toggle.setAttribute("aria-expanded", "false");
                     toggle.setAttribute("aria-label", "Toggle " + info.theme_name);
                     toggle.setAttribute("tabindex", "-1");
-                    nameCell.appendChild(toggle);
+                    nameWrap.appendChild(toggle);
                 } else {
                     const gap = document.createElement("span");
                     gap.className = "tree-toggle-gap";
-                    nameCell.appendChild(gap);
+                    nameWrap.appendChild(gap);
                 }
-                nameCell.appendChild(document.createTextNode(info.theme_name));
+                nameWrap.appendChild(document.createTextNode(info.theme_name));
                 const matchedTopic = matchedTopicFor(info.theme_name);
                 if (matchedTopic) {
                     row.classList.add("theme-row-matched");
-                    nameCell.appendChild(makeTopicBadge(matchedTopic));
+                    nameWrap.appendChild(makeTopicBadge(matchedTopic));
                 }
                 if (code) {
                     const chip = document.createElement("span");
                     chip.className = "badge text-bg-light border ms-1";
                     chip.textContent = "code";
-                    nameCell.appendChild(chip);
+                    nameWrap.appendChild(chip);
                 }
 
                 // Occurrences — codes have no frequency data, so show a dash
@@ -364,9 +383,16 @@
                 });
 
                 themesTableBody.appendChild(row);
-                renderLevel(children, depth + 1, theme.id);
-            }
-        })(treeData, 0, null);
+                // Children inherit this level's columns plus one for this node:
+                // a pass-through line while it still has siblings below.
+                renderLevel(
+                    children,
+                    depth + 1,
+                    theme.id,
+                    depth === 0 ? [] : [...ancestorGuides, !isLast]
+                );
+            });
+        })(treeData, 0, null, []);
 
         highlightSelectedRow();
     }

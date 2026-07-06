@@ -360,6 +360,36 @@
     flex-shrink: 0;
 }
 
+/* Connector guides (file-explorer style, drawn per row so they work inside
+   table rows): one .tree-indent column per ancestor level. --line is a
+   pass-through, --tee (├) marks a child with siblings below, --elbow (└)
+   the last child. Negative vertical margins bridge the cell padding so the
+   lines run continuously from row to row. */
+.theme-name-flex {
+    display: flex;
+    align-items: center;
+    min-height: 100%;
+}
+.tree-indent {
+    flex: 0 0 1.1rem;
+    align-self: stretch;
+    margin-top: -0.25rem;    /* .table-sm cell padding */
+    margin-bottom: -0.25rem;
+}
+.tree-indent--line {
+    background: linear-gradient(#d1d5db, #d1d5db) no-repeat center top / 1.5px 100%;
+}
+.tree-indent--tee {
+    background:
+        linear-gradient(#d1d5db, #d1d5db) no-repeat center top / 1.5px 100%,
+        linear-gradient(#d1d5db, #d1d5db) no-repeat right center / 50% 1.5px;
+}
+.tree-indent--elbow {
+    background:
+        linear-gradient(#d1d5db, #d1d5db) no-repeat center top / 1.5px 50%,
+        linear-gradient(#d1d5db, #d1d5db) no-repeat right center / 50% 1.5px;
+}
+
 /* Scroll cap for the themes table: a fully expanded hierarchy scrolls inside
    the box while the column headers stick to the top. 70vh fills a laptop
    viewport while leaving room for the surrounding chrome. */
