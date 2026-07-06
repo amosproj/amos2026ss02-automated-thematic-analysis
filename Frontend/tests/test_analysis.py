@@ -1,3 +1,5 @@
+import re
+
 
 def test_analysis_index_no_corpus(client, fake_backend):
     # Setup state to simulate backend failure which results in no active corpus
@@ -202,3 +204,69 @@ def test_delete_selected_runs_backend_error_is_flashed(client, fake_backend):
     assert resp.status_code == 302
     follow = client.get(resp.headers["Location"])
     assert b"simulated delete_codebook_application_run failure" in follow.data
+
+
+def test_previous_runs_transcript_count_and_popup_trigger(client, fake_backend):
+    corpus_id = _ready_corpus_with_runs(fake_backend)
+    fake_backend.documents = [
+        {"id": "doc1", "title": "Interview Alpha"},
+        {"id": "doc2", "title": "Interview Beta"},
+    ]
+    fake_backend.application_runs[0]["transcript_document_ids"] = ["doc1", "doc2"]
+    with client.session_transaction() as sess:
+        sess["active_corpus_id"] = corpus_id
+
+    resp = client.get("/analysis/")
+    assert resp.status_code == 200
+    body = resp.data
+    # The old hard-to-scroll dropdown is gone entirely.
+    assert b"dropdown" not in body
+    # Transcripts column shows a bare integer count.
+    assert re.search(rb'<td class="text-secondary">\s*2\s*</td>', body)
+    # Succeeded run gets a View Transcripts trigger wired to its run id...
+    assert b"View Transcripts" in body
+    assert b'data-view-transcripts' in body
+    assert b'data-run-id="run1"' in body
+    # ...but the failed run does not.
+    assert b'aria-label="View transcripts used in analysis run Second Run"' not in body
+    # Shared modal skeleton + read-URL template are on the page.
+    assert b'id="runTranscriptsModal"' in body
+    assert b'id="runTranscriptsSearch"' in body
+    assert b"__DOC__" in body and b"__RUN__" in body
+    # Resolved titles are serialized into previousRuns for the modal JS.
+    assert b"transcript_docs" in body
+    assert b"Interview Alpha" in body
+    assert b"Interview Beta" in body
+
+
+def test_previous_runs_transcript_title_fallback_for_unknown_doc(client, fake_backend):
+    corpus_id = _ready_corpus_with_runs(fake_backend)
+    fake_backend.documents = [{"id": "other-doc", "title": "Interview Alpha"}]
+    fake_backend.application_runs[0]["transcript_document_ids"] = ["doc-gone-12345"]
+    with client.session_transaction() as sess:
+        sess["active_corpus_id"] = corpus_id
+
+    resp = client.get("/analysis/")
+    assert resp.status_code == 200
+    body = resp.data
+    # Unknown ids fall back to a shortened id (tojson may escape the ellipsis).
+    assert (b"doc-gone\\u2026" in body) or ("doc-gone…".encode() in body)
+
+
+def test_previous_runs_without_transcripts_show_dash(client, fake_backend):
+    corpus_id = _ready_corpus_with_runs(fake_backend)
+    fake_backend.application_runs = [
+        {"id": "run3", "codebook_id": "cb1", "name": "Running Run",
+         "custom_id": "RUN-003", "status": "running",
+         "created_at": "2026-01-03T00:00:00", "transcript_document_ids": []},
+    ]
+    with client.session_transaction() as sess:
+        sess["active_corpus_id"] = corpus_id
+
+    resp = client.get("/analysis/")
+    assert resp.status_code == 200
+    body = resp.data
+    # No trigger button is rendered (data-run-id is unique to it); the shared
+    # modal skeleton and its JS may still be present on the page.
+    assert b"data-run-id=" not in body
+    assert re.search(rb'<td class="text-secondary">\s*<span class="text-muted small">', body)
