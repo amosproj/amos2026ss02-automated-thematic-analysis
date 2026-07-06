@@ -92,7 +92,7 @@ class CodebookApplicationService:
         codebook_id: UUID,
         transcript_document_ids: list[UUID] | None,
         provider: str | None = None,
-        on_progress: Callable[[int, int], Awaitable[None]] | None = None,
+        on_progress: Callable[[int, int, int, int], Awaitable[None]] | None = None,
         on_phase: Callable[[str], Awaitable[None]] | None = None,
         on_run_created: Callable[[UUID], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,

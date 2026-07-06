@@ -2,14 +2,7 @@
 {% block title %}Applying Codebook{% endblock %}
 {% block content %}
   <div class="mb-4">
-    <h1 class="h3 mb-1">Applying Codebook</h1>
-    <p class="text-secondary mb-0 d-flex align-items-center gap-2">
-      <span id="status-spinner"
-            class="spinner-border spinner-border-sm text-secondary"
-            role="status"
-            aria-hidden="true"></span>
-      <span id="status-line">Starting analysis run&hellip;</span>
-    </p>
+    <h1 class="h3 mb-0">Applying Codebook</h1>
   </div>
 
   <div class="bg-white border rounded-2 p-4" style="max-width: 640px;"
@@ -19,14 +12,46 @@
        data-list-url="{{ url_for('analysis.index') }}"
        id="progress-app">
 
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span class="text-secondary small d-flex align-items-center gap-2">
+        <span id="status-spinner"
+              class="spinner-border spinner-border-sm text-secondary"
+              role="status"
+              aria-hidden="true"></span>
+        <span id="status-line">Starting analysis run&hellip;</span>
+      </span>
+      <span id="progress-percent" class="small fw-semibold text-secondary">0%</span>
+    </div>
+
     <div class="progress mb-3" role="progressbar" aria-label="Analysis progress">
       <div id="progress-bar"
            class="progress-bar progress-bar-striped progress-bar-animated"
-           style="width: 0%">0%</div>
+           style="width: 0%"></div>
     </div>
 
-    <div class="text-secondary small mb-3">
+    <div class="text-secondary small mb-3" aria-live="polite">
       <span id="progress-counts">Preparing&hellip;</span>
+    </div>
+
+    <div class="row g-2 mb-3" aria-label="Application metrics">
+      <div class="col-12 col-sm-4">
+        <div class="border rounded-2 px-3 py-2 h-100">
+          <div class="small text-secondary">Processed</div>
+          <div id="metric-processed" class="fw-semibold">Waiting</div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-4">
+        <div class="border rounded-2 px-3 py-2 h-100">
+          <div class="small text-secondary">Coded</div>
+          <div id="metric-coded" class="fw-semibold">Pending</div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-4">
+        <div class="border rounded-2 px-3 py-2 h-100">
+          <div class="small text-secondary">Failed</div>
+          <div id="metric-failed" class="fw-semibold">0</div>
+        </div>
+      </div>
     </div>
 
     <div id="progress-error" class="alert alert-danger d-none" role="alert"></div>
@@ -47,7 +72,11 @@
       const statusLine = document.getElementById("status-line");
       const statusSpinner = document.getElementById("status-spinner");
       const bar = document.getElementById("progress-bar");
+      const percentLabel = document.getElementById("progress-percent");
       const counts = document.getElementById("progress-counts");
+      const metricProcessed = document.getElementById("metric-processed");
+      const metricCoded = document.getElementById("metric-coded");
+      const metricFailed = document.getElementById("metric-failed");
       const errorEl = document.getElementById("progress-error");
       const cancelBtn = document.getElementById("cancel-btn");
 
@@ -64,13 +93,46 @@
 
       function setBar(pct) {
         bar.style.width = pct + "%";
-        bar.textContent = pct + "%";
         bar.setAttribute("aria-valuenow", String(pct));
+        percentLabel.textContent = pct + "%";
+      }
+
+      function formatCount(value) {
+        if (value === null || value === undefined) return "0";
+        return Number(value).toLocaleString();
+      }
+
+      function phaseLabel(job) {
+        const phase = job.phase || job.status || "queued";
+        const labels = {
+          queued: "Queued",
+          loading_codebook: "Loading codebook",
+          coding_documents: "Coding transcripts",
+          persisting: "Saving results",
+          succeeded: "Complete",
+          failed: "Failed",
+          cancelled: "Cancelled",
+        };
+        return labels[phase] || phase.replaceAll("_", " ");
+      }
+
+      function updateMetrics(job) {
+        const done = job.documents_done || 0;
+        const total = job.documents_total || 0;
+        metricProcessed.textContent = total > 0
+          ? `${formatCount(done)} / ${formatCount(total)}`
+          : "Waiting";
+        metricCoded.textContent = job.documents_coded !== null && job.documents_coded !== undefined
+          ? formatCount(job.documents_coded)
+          : "Pending";
+        metricFailed.textContent = formatCount(job.documents_failed || 0);
       }
 
       function paint(job) {
         const total = job.documents_total || 0;
         const done = job.documents_done || 0;
+        const step = phaseLabel(job);
+        updateMetrics(job);
 
         if (job.status === "queued") {
           setBar(0);
@@ -80,28 +142,28 @@
         }
 
         if (job.status === "running" && done === 0) {
-          setBar(2);
+          setBar(job.progress_percent || 2);
           counts.textContent = total > 0
-            ? ("0 / " + total + " transcripts")
-            : "Connected — waiting to process first transcript…";
-          statusLine.textContent = "Connected to worker — initializing analysis…";
+            ? `0 of ${formatCount(total)} transcripts processed`
+            : "Connected — preparing transcripts…";
+          statusLine.textContent = `${step}…`;
           return;
         }
 
         if (job.status === "running") {
-          const raw = total > 0 ? Math.round((done / total) * 100) : 2;
+          const raw = job.progress_percent || (total > 0 ? Math.round((done / total) * 100) : 2);
           const pct = Math.min(99, Math.max(2, raw));
           setBar(pct);
-          counts.textContent = done + " / " + total + " transcripts";
+          counts.textContent = `${formatCount(done)} of ${formatCount(total)} transcripts processed`;
           statusLine.textContent = total > 0
-            ? "Applying codebook — " + done + " of " + total + " transcripts analyzed…"
-            : "Applying codebook…";
+            ? `${step} — ${formatCount(done)} of ${formatCount(total)} transcripts…`
+            : `${step}…`;
           return;
         }
 
         if (job.status === "succeeded") {
           setBar(100);
-          counts.textContent = (done || total) + " / " + (total || done) + " transcripts";
+          counts.textContent = `${formatCount(job.documents_coded || done || total)} transcripts coded`;
           statusLine.textContent = "Done. Redirecting to results…";
         } else {
           statusLine.textContent = "Status: " + job.status;
