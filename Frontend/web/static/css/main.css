@@ -390,10 +390,20 @@
         linear-gradient(#d1d5db, #d1d5db) no-repeat right center / 50% 1.5px;
 }
 
-/* Scroll cap for the themes table: a fully expanded hierarchy scrolls inside
-   the box while the column headers stick to the top. 70vh fills a laptop
-   viewport while leaving room for the surrounding chrome. */
-.themes-table-scroll {
+/* Divider between the themes table and the quotes panel inside the merged
+   box: a vertical rule when the columns sit side by side (xl+), a horizontal
+   rule when they stack on smaller screens. */
+.quotes-panel {
+    border-top: 1px solid #e5e7eb;
+    padding-top: 1rem;
+}
+
+/* Symmetric scroll caps: only the quote cards / theme rows scroll, so the
+   panel titles, sticky column headers, and pagination stay visible and the
+   two columns keep matching heights. 70vh fills a laptop viewport while
+   leaving room for the surrounding chrome. */
+.themes-table-scroll,
+.quotes-list-scroll {
     max-height: 70vh;
     overflow-y: auto;
     /* Keep content clear of the scrollbar (overlay scrollbars paint on top
@@ -409,6 +419,14 @@
     /* border-bottom doesn't travel with sticky cells; draw it as a shadow. */
     box-shadow: inset 0 -2px 0 #e5e7eb;
     border-bottom: 0;
+}
+@media (min-width: 1200px) {
+    .quotes-panel {
+        border-top: 0;
+        padding-top: 0;
+        border-left: 1px solid #e5e7eb;
+        padding-left: 1.5rem;
+    }
 }
 
 /* ── Theme Details panel ────────────────────────────────────────────────────── */
