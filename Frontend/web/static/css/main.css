@@ -917,7 +917,6 @@
     display: block;
     padding: 0.5rem 0.75rem;
     border: 1px solid #e2e8f0;
-    border-left: 3px solid transparent;
     border-radius: 0.5rem;
     color: #334155;
     background: #fff;
@@ -929,7 +928,6 @@
 .transcript-link:focus {
     background: #f0fdfa;
     border-color: #99f6e4;
-    border-left-color: #0d9488;
     color: #0f766e;
     transform: translateX(2px);
 }
