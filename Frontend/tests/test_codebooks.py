@@ -207,7 +207,7 @@ def test_codebook_themes_renders_single_merged_themes_box(client, fake_backend):
     assert b"View Quotes" not in body
     # Quote-count stat in the Theme Details header (filled by the quotes JS).
     assert b'id="theme-details-quotes"' in body
-    assert b'id="quotes-own-only"' in body
+    assert b'id="quotes-hide-subthemes"' in body
 
 
 def test_codebook_themes_selects_requested_analysis_run(client, fake_backend):

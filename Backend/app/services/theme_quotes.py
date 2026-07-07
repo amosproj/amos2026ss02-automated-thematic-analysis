@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import desc, func, select
@@ -113,7 +114,7 @@ class ThemeQuotesService:
     async def _load_tags_for_quotes(
         self,
         *,
-        base_filter: tuple,
+        base_filter: tuple[Any, ...],
         document_ids: set[UUID],
     ) -> dict[tuple[UUID, str], list[UUID]]:
         if not document_ids:
