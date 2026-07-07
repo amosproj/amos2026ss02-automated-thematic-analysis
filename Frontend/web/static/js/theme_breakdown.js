@@ -141,11 +141,15 @@
             track.appendChild(bar);
             row.appendChild(track);
 
-            const value = document.createElement("span");
-            value.className = "breakdown-bar-value";
-            value.textContent =
-                `${formatPct(group.percentage)} (${group.present_count}/${group.group_total})`;
-            row.appendChild(value);
+            const pct = document.createElement("span");
+            pct.className = "breakdown-bar-pct";
+            pct.textContent = formatPct(group.percentage);
+            row.appendChild(pct);
+
+            const count = document.createElement("span");
+            count.className = "breakdown-bar-count";
+            count.textContent = `(${group.present_count}/${group.group_total})`;
+            row.appendChild(count);
             chart.appendChild(row);
         }
         return chart;
