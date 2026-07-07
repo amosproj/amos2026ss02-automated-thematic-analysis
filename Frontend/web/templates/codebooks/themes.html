@@ -27,9 +27,11 @@
   <nav aria-label="breadcrumb" class="mb-3">
     <ol class="breadcrumb mb-0">
       <li class="breadcrumb-item">
-        <a href="{{ url_for('codebooks.list_codebooks_for_corpus', corpus_id=corpus_id) }}">Codebooks</a>
+        <a href="{{ url_for('analysis.index', corpus_id=corpus_id) }}">Analysis</a>
       </li>
-      <li class="breadcrumb-item active">{{ name or 'Theme Browser' }}</li>
+      <li class="breadcrumb-item active">
+        {{ (selected_application_run.name or selected_application_run.custom_id or selected_application_run.id) if selected_application_run else 'Theme Browser' }}
+      </li>
     </ol>
   </nav>
 
@@ -60,7 +62,7 @@
   </div>
 
   <div class="analysis-run-bar rounded-3 mb-4 p-4">
-    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div class="d-flex align-items-start flex-wrap gap-3">
       <div>
         <p class="text-white-50 small mb-1 text-uppercase fw-semibold" style="letter-spacing:.07em">Analysis Run</p>
         <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
@@ -109,22 +111,6 @@
           {% endif %}
         {% else %}
           <p class="analysis-run-message mb-0">No analysis runs for this codebook.</p>
-        {% endif %}
-      </div>
-      <div class="analysis-run-control">
-        <label for="application-run-select" class="form-label text-white-50 small text-uppercase fw-semibold mb-1" style="letter-spacing:.07em">Select Run</label>
-        {% if application_runs %}
-          <select id="application-run-select" class="form-select form-select-sm">
-            {% for run in application_runs %}
-              <option value="{{ run.id }}" {% if selected_application_run_id == run.id|string %}selected{% endif %}>
-                {{ run.select_label }}
-              </option>
-            {% endfor %}
-          </select>
-        {% else %}
-          <select id="application-run-select" class="form-select form-select-sm" disabled>
-            <option selected>No analysis runs available</option>
-          </select>
         {% endif %}
       </div>
     </div>

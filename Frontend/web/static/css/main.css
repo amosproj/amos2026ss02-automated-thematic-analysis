@@ -99,20 +99,6 @@
     color: rgba(255, 255, 255, 0.5);
 }
 
-.analysis-run-control {
-    width: min(100%, 360px);
-}
-
-.analysis-run-control .form-select {
-    border-color: rgba(255, 255, 255, 0.38);
-    box-shadow: none;
-}
-
-.analysis-run-control .form-select:focus {
-    border-color: #fff;
-    box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.24);
-}
-
 .theme-version-badge {
     background: rgba(255, 255, 255, 0.18);
     color: #fff;
@@ -122,12 +108,6 @@
     border-radius: 20px;
     border: 1px solid rgba(255, 255, 255, 0.3);
     letter-spacing: 0.03em;
-}
-
-@media (max-width: 767.98px) {
-    .analysis-run-control {
-        width: 100%;
-    }
 }
 
 /* ── Metric cards ───────────────────────────────────────────────────────────── */
@@ -921,7 +901,7 @@
     white-space: nowrap;
 }
 
-/* Search sits on the gradient; mirror the .analysis-run-control treatment. */
+/* Search sits on the gradient; give the input a matching light border. */
 .transcripts-modal-search {
     border-color: rgba(255, 255, 255, 0.38);
     box-shadow: none;
