@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import re
 import uuid
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
@@ -12,7 +13,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables import RunnableConfig, RunnableLambda
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -599,7 +600,8 @@ class TraceableAnalysisService:
         should_cancel: Callable[[], Awaitable[bool]] | None,
     ) -> list[_QuoteEvidence]:
         parser = JsonOutputParser(pydantic_object=QuoteCodeExtractionResult)
-        chain = build_quote_code_extraction_prompt() | build_chat_model(provider=self._provider) | parser
+        sanitize: RunnableLambda[Any, Any] = RunnableLambda(lambda s: re.sub(r"\*+", "", s) if isinstance(s, str) else s)
+        chain = build_quote_code_extraction_prompt() | build_chat_model(provider=self._provider) | sanitize | parser
         evidence: list[_QuoteEvidence] = []
         if on_unit_progress is not None:
             await on_unit_progress(0, len(documents))
@@ -614,6 +616,8 @@ class TraceableAnalysisService:
                 },
                 config=self._llm_config(),
             )
+            if not raw_result:
+                continue
             result = QuoteCodeExtractionResult(**raw_result)
             document_pairs_before = len(evidence)
             for pair_index, pair in enumerate(result.quote_code_pairs, start=1):
