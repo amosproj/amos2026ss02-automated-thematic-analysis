@@ -22,19 +22,6 @@
     const quotesUrlTemplate = appRoot.dataset.quotesUrlTemplate || "";
     const readUrlTemplate   = appRoot.dataset.readUrlTemplate   || "";
     const applicationRunId  = appRoot.dataset.applicationRunId || "";
-    const applicationRunSelect = document.getElementById("application-run-select");
-
-    if (applicationRunSelect) {
-        applicationRunSelect.addEventListener("change", () => {
-            const url = new URL(window.location.href);
-            if (applicationRunSelect.value) {
-                url.searchParams.set("application_run_id", applicationRunSelect.value);
-            } else {
-                url.searchParams.delete("application_run_id");
-            }
-            window.location.href = url.toString();
-        });
-    }
 
     // Topics the researcher asked the AI to focus on.
     const researcherTopics = (() => {
