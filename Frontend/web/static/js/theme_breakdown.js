@@ -108,7 +108,7 @@
     }
 
     function formatPct(value) {
-        return (typeof value === "number" ? value : 0).toFixed(1) + "%";
+        return Math.round(typeof value === "number" ? value : 0) + "%";
     }
 
     function smallSampleBadge() {
@@ -133,24 +133,23 @@
             label.title = group.group_value;
             row.appendChild(label);
 
-            const right = document.createElement("div");
-            right.className = "d-flex align-items-center";
-
             const track = document.createElement("div");
-            track.className = "breakdown-track flex-grow-1";
+            track.className = "breakdown-track";
             const bar = document.createElement("div");
             bar.className = "breakdown-bar";
             bar.style.width = clampPct(group.percentage) + "%";
             track.appendChild(bar);
-            right.appendChild(track);
+            row.appendChild(track);
 
-            const value = document.createElement("span");
-            value.className = "breakdown-bar-value";
-            value.textContent =
-                `${formatPct(group.percentage)} (${group.present_count}/${group.group_total})`;
-            right.appendChild(value);
+            const pct = document.createElement("span");
+            pct.className = "breakdown-bar-pct";
+            pct.textContent = formatPct(group.percentage);
+            row.appendChild(pct);
 
-            row.appendChild(right);
+            const count = document.createElement("span");
+            count.className = "breakdown-bar-count";
+            count.textContent = `(${group.present_count}/${group.group_total})`;
+            row.appendChild(count);
             chart.appendChild(row);
         }
         return chart;

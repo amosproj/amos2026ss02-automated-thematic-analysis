@@ -231,17 +231,15 @@
 }
 
 .breakdown-chart {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    display: grid;
+    grid-template-columns: minmax(90px, 160px) 1fr auto auto;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
     margin-bottom: 0.9rem;
 }
 
 .breakdown-row {
-    display: grid;
-    grid-template-columns: minmax(90px, 160px) 1fr;
-    align-items: center;
-    gap: 0.75rem;
+    display: contents;
 }
 
 .breakdown-row-label {
@@ -269,10 +267,16 @@
     min-width: 2px;
 }
 
-.breakdown-bar-value {
+.breakdown-bar-pct {
     font-size: 0.75rem;
     color: #1e1b4b;
-    margin-left: 0.5rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.breakdown-bar-count {
+    font-size: 0.75rem;
+    color: #6b7280;
     white-space: nowrap;
 }
 
