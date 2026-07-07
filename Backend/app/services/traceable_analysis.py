@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import re
 import uuid
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
@@ -10,8 +11,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
-
-import re
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.runnables import RunnableConfig, RunnableLambda
