@@ -600,7 +600,7 @@ class TraceableAnalysisService:
         should_cancel: Callable[[], Awaitable[bool]] | None,
     ) -> list[_QuoteEvidence]:
         parser = JsonOutputParser(pydantic_object=QuoteCodeExtractionResult)
-        sanitize = RunnableLambda(lambda s: re.sub(r"\*+", "", s) if isinstance(s, str) else s)
+        sanitize: RunnableLambda[Any, Any] = RunnableLambda(lambda s: re.sub(r"\*+", "", s) if isinstance(s, str) else s)
         chain = build_quote_code_extraction_prompt() | build_chat_model(provider=self._provider) | sanitize | parser
         evidence: list[_QuoteEvidence] = []
         if on_unit_progress is not None:
