@@ -13,11 +13,11 @@ from app.models import (
     CorpusDocument,
     DocumentCoding,
     ThemeAssignment,
-    ThemeHierarchyRelationship,
 )
 from app.models.demographic import DemographicRow
 from app.schemas.common import Page, PageMeta
 from app.schemas.theme_views import ThemeQuoteItem
+from app.services.theme_hierarchy import load_descendants_and_self
 
 
 class ThemeQuotesService:
@@ -38,10 +38,10 @@ class ThemeQuotesService:
         if run_id is None:
             return Page(items=[], meta=PageMeta(total=0, page=page, page_size=page_size, pages=0))
 
-        theme_ids = await self._resolve_theme_ids(
-            codebook_id=codebook_id,
-            theme_id=theme_id,
-            include_descendants=include_descendants,
+        theme_ids = (
+            await load_descendants_and_self(self._session, codebook_id=codebook_id, theme_id=theme_id)
+            if include_descendants
+            else {theme_id}
         )
 
         base_filter = (
@@ -137,40 +137,6 @@ class ThemeQuotesService:
             if row.theme_id not in ids:
                 ids.append(row.theme_id)
         return theme_ids_by_key
-
-    async def _resolve_theme_ids(
-        self,
-        *,
-        codebook_id: UUID,
-        theme_id: UUID,
-        include_descendants: bool,
-    ) -> set[UUID]:
-        if not include_descendants:
-            return {theme_id}
-        rows = (
-            await self._session.execute(
-                select(
-                    ThemeHierarchyRelationship.parent_theme_id,
-                    ThemeHierarchyRelationship.child_theme_id,
-                ).where(
-                    ThemeHierarchyRelationship.codebook_id == codebook_id,
-                    ThemeHierarchyRelationship.is_active.is_(True),
-                )
-            )
-        ).all()
-        children_by_parent: dict[UUID, set[UUID]] = defaultdict(set)
-        for parent_id, child_id in rows:
-            children_by_parent[parent_id].add(child_id)
-
-        resolved: set[UUID] = set()
-        stack = [theme_id]
-        while stack:
-            current = stack.pop()
-            if current in resolved:
-                continue
-            resolved.add(current)
-            stack.extend(children_by_parent.get(current, ()))
-        return resolved
 
     async def _resolve_run_id(self, codebook_id: UUID, application_run_id: UUID | None) -> UUID | None:
         if application_run_id is not None:

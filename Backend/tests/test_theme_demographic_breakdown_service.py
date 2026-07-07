@@ -19,6 +19,7 @@ from app.models import (
     DocumentCoding,
     Theme,
     ThemeAssignment,
+    ThemeHierarchyRelationship,
 )
 from app.services.theme_demographic_breakdown import (
     NOT_SPECIFIED_LABEL,
@@ -47,6 +48,8 @@ async def _seed_breakdown(
     # theme label -> set of interviewees for whom the theme is present
     present_by_theme: dict[str, set[str]],
     run_status: str = "succeeded",
+    # optional parent->child hierarchy edges by theme label
+    edges_by_label: list[tuple[str, str]] | None = None,
 ) -> BreakdownSeed:
     corpus_id = uuid4()
     codebook_id = uuid4()
@@ -70,6 +73,16 @@ async def _seed_breakdown(
         session.add(
             CodebookThemeRelationship(
                 id=uuid4(), codebook_id=codebook_id, theme_id=theme_id, is_active=True
+            )
+        )
+    for parent_label, child_label in edges_by_label or []:
+        session.add(
+            ThemeHierarchyRelationship(
+                id=uuid4(),
+                codebook_id=codebook_id,
+                parent_theme_id=theme_ids[parent_label],
+                child_theme_id=theme_ids[child_label],
+                is_active=True,
             )
         )
 
@@ -441,6 +454,75 @@ class ThemeDemographicBreakdownServiceTests(unittest.IsolatedAsyncioTestCase):
                     theme_id=uuid4(),
                     dimensions=["gender"],
                 )
+
+    async def test_parent_theme_rolls_up_descendant_present_counts(self) -> None:
+        async with self.session_factory() as session:
+            seed = await _seed_breakdown(
+                session,
+                columns=["username", "Region"],
+                people={
+                    "Alice": {"Region": "North"},
+                    "Bob": {"Region": "North"},
+                    "Carol": {"Region": "South"},
+                    "Dave": {"Region": "South"},
+                },
+                theme_labels=["Parent", "Child A", "Child B"],
+                present_by_theme={
+                    "Child A": {"Alice", "Bob"},
+                    "Child B": {"Bob", "Carol"},
+                    "Parent": set(),
+                },
+                edges_by_label=[("Parent", "Child A"), ("Parent", "Child B")],
+            )
+
+            result = await ThemeDemographicBreakdownService(session).get_theme_breakdown(
+                codebook_id=seed.codebook_id,
+                theme_id=seed.theme_ids["Parent"],
+                dimensions=["Region"],
+            )
+
+        groups = {g.group_value: g for g in result.dimensions[0].groups}
+        # North: Alice + Bob present (Bob once) out of 2 → 100%.
+        self.assertEqual(groups["North"].present_count, 2)
+        self.assertEqual(groups["North"].group_total, 2)
+        self.assertEqual(groups["North"].percentage, 100.0)
+        # South: only Carol (via Child B) out of 2 → 50%.
+        self.assertEqual(groups["South"].present_count, 1)
+        self.assertEqual(groups["South"].group_total, 2)
+        self.assertEqual(groups["South"].percentage, 50.0)
+
+    async def test_leaf_theme_breakdown_is_not_affected_by_rollup(self) -> None:
+        # Selecting a child theme still counts only its own assignments.
+        async with self.session_factory() as session:
+            seed = await _seed_breakdown(
+                session,
+                columns=["username", "Region"],
+                people={
+                    "Alice": {"Region": "North"},
+                    "Bob": {"Region": "North"},
+                    "Carol": {"Region": "South"},
+                    "Dave": {"Region": "South"},
+                },
+                theme_labels=["Parent", "Child A", "Child B"],
+                present_by_theme={
+                    "Child A": {"Alice", "Bob"},
+                    "Child B": {"Bob", "Carol"},
+                    "Parent": set(),
+                },
+                edges_by_label=[("Parent", "Child A"), ("Parent", "Child B")],
+            )
+
+            result = await ThemeDemographicBreakdownService(session).get_theme_breakdown(
+                codebook_id=seed.codebook_id,
+                theme_id=seed.theme_ids["Child A"],
+                dimensions=["Region"],
+            )
+
+        groups = {g.group_value: g for g in result.dimensions[0].groups}
+        # Child A alone: Alice + Bob (North); South has none.
+        self.assertEqual(groups["North"].present_count, 2)
+        self.assertEqual(groups["South"].present_count, 0)
+        self.assertEqual(groups["South"].percentage, 0.0)
 
 
 if __name__ == "__main__":

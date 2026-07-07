@@ -23,6 +23,7 @@ from app.schemas.theme_views import (
     ThemeDimensionBreakdown,
 )
 from app.services.theme_graph import ThemeNotFoundError
+from app.services.theme_hierarchy import load_descendants_and_self
 
 # The username column links a demographic row to a transcript; it is an
 # identifier, not a demographic variable, so it is never offered as a dimension.
@@ -111,8 +112,11 @@ class ThemeDemographicBreakdownService:
             )
 
         population = await self._load_population(run_id=run_id)
+        theme_ids = await load_descendants_and_self(
+            self._session, codebook_id=codebook_id, theme_id=theme_id
+        )
         present_document_ids = await self._load_present_document_ids(
-            run_id=run_id, theme_id=theme_id
+            run_id=run_id, theme_ids=theme_ids
         )
 
         return ThemeDemographicBreakdownResponse(
@@ -203,7 +207,7 @@ class ThemeDemographicBreakdownService:
         return [(row.document_id, row.data) for row in rows]
 
     async def _load_present_document_ids(
-        self, *, run_id: UUID, theme_id: UUID
+        self, *, run_id: UUID, theme_ids: set[UUID]
     ) -> set[UUID]:
         rows = (
             await self._session.execute(
@@ -214,7 +218,7 @@ class ThemeDemographicBreakdownService:
                 )
                 .where(
                     DocumentCoding.application_run_id == run_id,
-                    ThemeAssignment.theme_id == theme_id,
+                    ThemeAssignment.theme_id.in_(theme_ids),
                     ThemeAssignment.is_present.is_(True),
                 )
             )
