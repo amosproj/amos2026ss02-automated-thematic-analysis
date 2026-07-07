@@ -64,15 +64,10 @@ def _prepare_application_runs(
     for run in application_runs:
         run_id = str(run.get("id"))
         timestamp = _format_run_timestamp(run)
-        run_name = run.get("name") or run.get("custom_id") or run_id
-        label = f"{run_name} - {timestamp}" if timestamp else run_name
-        if run_id == latest_successful_id:
-            label = f"{label} - Latest successful"
         decorated_runs.append({
             **run,
             "id": run_id,
             "timestamp_label": timestamp,
-            "select_label": label,
             "is_latest_successful": run_id == latest_successful_id,
         })
 
