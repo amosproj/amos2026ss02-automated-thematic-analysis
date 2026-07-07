@@ -495,8 +495,7 @@
     const quotesPageInfo   = document.getElementById("quotes-page-info");
     const quotesPrev       = document.getElementById("quotes-prev");
     const quotesNext       = document.getElementById("quotes-next");
-    // Quote-count stat in the Theme Details header; owned by this module
-    // because the count only becomes known once the quotes fetch returns.
+    const quotesOwnOnly    = document.getElementById("quotes-own-only");
     const themeDetailsQuotes = document.getElementById("theme-details-quotes");
 
     if (!quotesList) return;
@@ -510,6 +509,7 @@
         const url = new URL(quotesUrlTemplate.replace("__THEME__", themeId), window.location.origin);
         url.searchParams.set("page", page);
         url.searchParams.set("page_size", PAGE_SIZE);
+        url.searchParams.set("include_descendants", quotesOwnOnly && quotesOwnOnly.checked ? "false" : "true");
         if (applicationRunId) {
             url.searchParams.set("application_run_id", applicationRunId);
         }
@@ -567,6 +567,16 @@
         for (const item of items) {
             const card = document.createElement("div");
             card.className = "border rounded-2 p-3 mb-2";
+
+            const tagWrap = document.createElement("div");
+            tagWrap.className = "d-flex flex-wrap gap-1 mb-2";
+            for (const themeId of (item.theme_ids || [])) {
+                const tag = document.createElement("span");
+                tag.className = "badge text-bg-light border";
+                tag.textContent = (currentThemeInfoById[themeId] || {}).theme_name || "Theme";
+                tagWrap.appendChild(tag);
+            }
+            card.appendChild(tagWrap);
 
             // Quote text — textContent prevents XSS on any user-supplied content.
             const quoteEl = document.createElement("blockquote");
@@ -646,6 +656,12 @@
         onQuotesThemeChange(initialTheme.themeId);
     } else {
         resetQuotesPanel();
+    }
+
+    if (quotesOwnOnly) {
+        quotesOwnOnly.addEventListener("change", () => {
+            if (activeQuoteThemeId) loadQuotes(activeQuoteThemeId, 1);
+        });
     }
 
     quotesPrev.addEventListener("click", () => {

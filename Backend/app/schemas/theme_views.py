@@ -35,6 +35,7 @@ class ThemeQuoteItem(BaseSchema):
     document_id: UUID
     document_title: str
     interviewee_id: str | None
+    theme_ids: list[UUID]
 
 
 class DemographicDimensionsResponse(BaseSchema):
