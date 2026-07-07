@@ -231,17 +231,15 @@
 }
 
 .breakdown-chart {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    display: grid;
+    grid-template-columns: minmax(90px, 160px) 1fr auto;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
     margin-bottom: 0.9rem;
 }
 
 .breakdown-row {
-    display: grid;
-    grid-template-columns: minmax(90px, 160px) 1fr;
-    align-items: center;
-    gap: 0.75rem;
+    display: contents;
 }
 
 .breakdown-row-label {
@@ -272,7 +270,6 @@
 .breakdown-bar-value {
     font-size: 0.75rem;
     color: #1e1b4b;
-    margin-left: 0.5rem;
     white-space: nowrap;
 }
 
