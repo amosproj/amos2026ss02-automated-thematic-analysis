@@ -212,6 +212,16 @@
               <h2 class="h6 panel-title" id="quotes-panel-title">Quotes</h2>
               <p class="text-secondary small mb-2" id="quotes-panel-total"></p>
 
+              {# Off by default: quotes roll up from sub-themes. Checking it limits
+                 the list to quotes assigned directly to the selected theme. The JS
+                 reveals it only for themes that actually have sub-themes. #}
+              <div class="form-check form-switch mb-2 d-none" id="quotes-hide-subthemes-wrap">
+                <input class="form-check-input" type="checkbox" role="switch" id="quotes-hide-subthemes">
+                <label class="form-check-label small text-secondary" for="quotes-hide-subthemes">
+                  Do not show sub-themes&#39; quotes
+                </label>
+              </div>
+
               <p id="quotes-none" class="text-secondary mb-0 text-center py-4">
                 Select a theme to see its quotes.
               </p>

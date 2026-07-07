@@ -224,7 +224,6 @@ def test_codebook_themes_renders_single_merged_themes_box(client, fake_backend):
     resp = client.get("/codebooks/test-corpus-id/cb-1/themes", follow_redirects=True)
     assert resp.status_code == 200
     body = resp.data
-    # One merged box replaces the two separate panels (issue #226).
     assert b'panel-title">Themes</h2>' in body
     assert b"Theme Frequency" not in body
     assert b"Theme Hierarchy" not in body
@@ -233,7 +232,6 @@ def test_codebook_themes_renders_single_merged_themes_box(client, fake_backend):
     assert b'id="themes-table-body"' in body
     assert b"Occurrences" in body
     assert b"Interview Coverage" in body
-    # Quotes live inline in the same box, not in a pop-up (issue #227).
     assert b'id="quotes-panel-title"' in body
     assert b'id="quotes-none"' in body
     assert b'id="quotes-pagination"' in body
@@ -241,6 +239,7 @@ def test_codebook_themes_renders_single_merged_themes_box(client, fake_backend):
     assert b"View Quotes" not in body
     # Quote-count stat in the Theme Details header (filled by the quotes JS).
     assert b'id="theme-details-quotes"' in body
+    assert b'id="quotes-hide-subthemes"' in body
 
 
 def test_codebook_themes_selects_requested_analysis_run(client, fake_backend):

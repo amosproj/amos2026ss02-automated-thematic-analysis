@@ -456,6 +456,17 @@
     updateMetricCards();
     renderThemeTreeTable(tree);
 
+    // Hide toggle when there are no sub-themes
+    const themeIdsWithSubthemes = new Set();
+    (function markSubthemeParents(nodes) {
+        for (const node of nodes) {
+            if (!isCodeNode(node.theme) && (node.children ?? []).some(c => !isCodeNode(c.theme))) {
+                themeIdsWithSubthemes.add(node.theme.id);
+            }
+            markSubthemeParents(node.children ?? []);
+        }
+    })(tree);
+
     // Auto-select the top theme by frequency on load and make its row visible.
     const top = sortByFrequency(frequencies)[0];
     if (top) {
@@ -482,8 +493,8 @@
     const quotesPageInfo   = document.getElementById("quotes-page-info");
     const quotesPrev       = document.getElementById("quotes-prev");
     const quotesNext       = document.getElementById("quotes-next");
-    // Quote-count stat in the Theme Details header; owned by this module
-    // because the count only becomes known once the quotes fetch returns.
+    const quotesHideSubthemes     = document.getElementById("quotes-hide-subthemes");
+    const quotesHideSubthemesWrap = document.getElementById("quotes-hide-subthemes-wrap");
     const themeDetailsQuotes = document.getElementById("theme-details-quotes");
 
     if (!quotesList) return;
@@ -497,6 +508,7 @@
         const url = new URL(quotesUrlTemplate.replace("__THEME__", themeId), window.location.origin);
         url.searchParams.set("page", page);
         url.searchParams.set("page_size", PAGE_SIZE);
+        url.searchParams.set("include_descendants", quotesHideSubthemes && quotesHideSubthemes.checked ? "false" : "true");
         if (applicationRunId) {
             url.searchParams.set("application_run_id", applicationRunId);
         }
@@ -530,7 +542,7 @@
         quotesPagination.classList.add("d-none");
     }
 
-    function renderQuotes(data, themeName) {
+    function renderQuotes(data, themeName, rollUp) {
         quotesLoading.classList.add("d-none");
 
         const items = data.items || [];
@@ -540,8 +552,8 @@
         const pages = meta.pages  ?? 0;
 
         quotesLabel.textContent = "Quotes for: " + (themeName || "Theme");
-        quotesTotal.textContent = total === 1 ? "1 quote across corpus" : total + " quotes across corpus";
-        if (themeDetailsQuotes) themeDetailsQuotes.textContent = String(total);
+        quotesTotal.textContent = total === 1 ? "1 quote" : total + " quotes";
+        if (rollUp && themeDetailsQuotes) themeDetailsQuotes.textContent = String(total);
 
         if (items.length === 0) {
             quotesEmpty.classList.remove("d-none");
@@ -554,6 +566,16 @@
         for (const item of items) {
             const card = document.createElement("div");
             card.className = "border rounded-2 p-3 mb-2";
+
+            const tagWrap = document.createElement("div");
+            tagWrap.className = "d-flex flex-wrap gap-1 mb-2";
+            for (const themeId of (item.theme_ids || [])) {
+                const tag = document.createElement("span");
+                tag.className = "badge text-bg-light border";
+                tag.textContent = (currentThemeInfoById[themeId] || {}).theme_name || "Theme";
+                tagWrap.appendChild(tag);
+            }
+            card.appendChild(tagWrap);
 
             // Quote text — textContent prevents XSS on any user-supplied content.
             const quoteEl = document.createElement("blockquote");
@@ -593,6 +615,7 @@
         activeQuoteThemeId = themeId;
         activeQuotePage    = page;
         const token = ++quotesRequestToken;
+        const rollUp = !(quotesHideSubthemes && quotesHideSubthemes.checked);
         setQuotesLoading();
 
         const themeName = (currentThemeInfoById[themeId] || {}).theme_name || "";
@@ -602,7 +625,7 @@
             const data = await response.json();
             if (token !== quotesRequestToken) return; // superseded by a newer request
             if (!response.ok || data.error) throw new Error(data.error || "HTTP " + response.status);
-            renderQuotes(data, themeName);
+            renderQuotes(data, themeName, rollUp);
         } catch (err) {
             if (token !== quotesRequestToken) return;
             quotesLoading.classList.add("d-none");
@@ -615,9 +638,15 @@
         if (!themeId) {
             resetQuotesPanel();
             if (themeDetailsQuotes) themeDetailsQuotes.textContent = "";
+            if (quotesHideSubthemesWrap) quotesHideSubthemesWrap.classList.add("d-none");
             return;
         }
         if (themeId === activeQuoteThemeId) return; // same theme — keep page and stat
+
+        if (quotesHideSubthemes) quotesHideSubthemes.checked = false;
+        if (quotesHideSubthemesWrap) {
+            quotesHideSubthemesWrap.classList.toggle("d-none", !themeIdsWithSubthemes.has(themeId));
+        }
         // Placeholder until this theme's quote total arrives with the fetch.
         if (themeDetailsQuotes) themeDetailsQuotes.textContent = "—";
         loadQuotes(themeId, 1);
@@ -633,6 +662,12 @@
         onQuotesThemeChange(initialTheme.themeId);
     } else {
         resetQuotesPanel();
+    }
+
+    if (quotesHideSubthemes) {
+        quotesHideSubthemes.addEventListener("change", () => {
+            if (activeQuoteThemeId) loadQuotes(activeQuoteThemeId, 1);
+        });
     }
 
     quotesPrev.addEventListener("click", () => {

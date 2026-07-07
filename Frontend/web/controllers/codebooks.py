@@ -403,6 +403,8 @@ def theme_quotes_json(corpus_id: str, codebook_id: str, theme_id: str):
         page_size = max(1, min(100, int(request.args.get("page_size", 20))))
     except (TypeError, ValueError):
         page, page_size = 1, 20
+
+    include_descendants = request.args.get("include_descendants", "true").lower() != "false"
     try:
         application_run_id = request.args.get("application_run_id") or None
         result = _backend().get_theme_quotes(
@@ -411,6 +413,7 @@ def theme_quotes_json(corpus_id: str, codebook_id: str, theme_id: str):
             page,
             page_size,
             application_run_id=application_run_id,
+            include_descendants=include_descendants,
         )
         return jsonify(result)
     except BackendError as exc:

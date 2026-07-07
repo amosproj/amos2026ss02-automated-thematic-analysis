@@ -213,8 +213,9 @@ class BackendClient:
         page: int = 1,
         page_size: int = 20,
         application_run_id: str | None = None,
+        include_descendants: bool = True,
     ) -> dict:
-        params = {"page": page, "page_size": page_size}
+        params = {"page": page, "page_size": page_size, "include_descendants": str(include_descendants).lower()}
         if application_run_id:
             params["application_run_id"] = application_run_id
         return self._get(
