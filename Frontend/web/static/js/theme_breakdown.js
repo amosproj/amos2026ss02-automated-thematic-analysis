@@ -138,6 +138,8 @@
             // if (group.small_sample) label.appendChild(smallSampleBadge());
 
             label.title = group.group_value;
+            label.setAttribute("data-bs-toggle", "tooltip");
+            new bootstrap.Tooltip(label, { trigger: "hover focus" });
             row.appendChild(label);
 
             const track = document.createElement("div");
