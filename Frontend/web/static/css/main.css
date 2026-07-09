@@ -232,7 +232,7 @@
 
 .breakdown-chart {
     display: grid;
-    grid-template-columns: minmax(90px, 160px) 1fr auto auto;
+    grid-template-columns: minmax(auto, 160px) 1fr auto auto;
     align-items: center;
     gap: 0.5rem 0.75rem;
     margin-bottom: 0.9rem;
@@ -245,7 +245,7 @@
 .breakdown-row-label {
     font-size: 0.82rem;
     color: #374151;
-    text-align: right;
+    text-align: left;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
