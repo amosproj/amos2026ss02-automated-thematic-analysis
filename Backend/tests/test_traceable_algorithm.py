@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.config import Settings
 from app.exceptions import UnprocessableError
-from app.models import Codebook, Corpus
+from app.models import Code, CodeAssignment, Codebook, Corpus, CorpusDocument, Theme
 from app.schemas.traceable_llm import (
     CodebookMissingConcept,
     CodebookOverbroadCode,
@@ -28,6 +28,7 @@ from app.services.traceable_analysis import (
     TraceableAnalysisService,
     _AppliedEvidence,
     _DocumentText,
+    _PersistedCodebookRefs,
     _QuoteEvidence,
 )
 from app.services.traceable_code_consolidation import (
@@ -209,6 +210,74 @@ async def test_traceable_persist_rejects_multi_parent_theme_dag(db_session) -> N
         )
     ).scalar_one_or_none()
     assert persisted is None
+
+
+async def test_traceable_persist_application_deduplicates_same_theme_quotes(db_session) -> None:
+    """Duplicate/overlapping evidence for one theme persists as a single code assignment."""
+    corpus = Corpus(id=uuid.uuid4(), project_id=uuid.uuid4(), name="Corpus")
+    document = CorpusDocument(
+        id=uuid.uuid4(),
+        corpus_id=corpus.id,
+        title="Doc 1",
+        content="Participant: The manual handoffs slow everyone down.",
+    )
+    codebook = Codebook(
+        id=uuid.uuid4(),
+        corpus_id=corpus.id,
+        name="Dedup codebook",
+        description="Fixture",
+        version=1,
+        created_by="system",
+    )
+    theme = Theme(id=uuid.uuid4(), codebook_id=codebook.id, label="Workflow Friction", is_active=True)
+    code_a = Code(id=uuid.uuid4(), codebook_id=codebook.id, label="Manual Handoffs", is_active=True)
+    code_b = Code(id=uuid.uuid4(), codebook_id=codebook.id, label="Handoff Delays", is_active=True)
+    db_session.add_all([corpus, document, codebook, theme, code_a, code_b])
+    await db_session.commit()
+
+    def _evidence(code_label: str, quote: str, confidence: float) -> _AppliedEvidence:
+        start = document.content.find(quote)
+        assert start >= 0
+        return _AppliedEvidence(
+            document_id=document.id,
+            code_label=code_label,
+            theme_label="Workflow Friction",
+            quote=quote,
+            start_char=start,
+            end_char=start + len(quote),
+            quote_match_status="exact",
+            confidence=confidence,
+            rationale=None,
+        )
+
+    service = TraceableAnalysisService(db_session)
+    run = await service._persist_application(
+        analysis_name="Dedup run",
+        custom_id=None,
+        corpus_id=corpus.id,
+        documents=[_DocumentText(id=document.id, title=document.title, content=document.content)],
+        applied_evidence=[
+            _evidence("Manual Handoffs", "manual handoffs slow", 0.95),
+            # Verbatim duplicate of the same passage under a sibling code.
+            _evidence("Handoff Delays", "manual handoffs slow", 0.6),
+            # Overlapping longer span of the same passage.
+            _evidence("Manual Handoffs", "The manual handoffs slow everyone down", 0.5),
+        ],
+        failed_document_ids=[],
+        persisted=_PersistedCodebookRefs(
+            codebook=codebook,
+            theme_by_label={"workflow friction": theme},
+            code_by_label={"manual handoffs": code_a, "handoff delays": code_b},
+            theme_id_by_code_label={"manual handoffs": theme.id, "handoff delays": theme.id},
+        ),
+    )
+
+    assignments = (await db_session.execute(select(CodeAssignment))).scalars().all()
+    assert run.status == "succeeded"
+    assert len(assignments) == 1
+    # The longest located span of the passage wins.
+    assert assignments[0].quote == "The manual handoffs slow everyone down"
+    assert assignments[0].theme_id == theme.id
 
 
 def test_reviewer_actions_revise_and_move_code_paths() -> None:

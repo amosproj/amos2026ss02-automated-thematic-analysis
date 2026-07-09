@@ -72,7 +72,11 @@ from app.schemas.traceable_llm import (
     ThemeSynthesisResult,
     TraceableApplicationResult,
 )
-from app.services.quote_matching import locate_quote_span
+from app.services.quote_matching import (
+    QuoteSpanCandidate,
+    locate_quote_span,
+    select_deduplicated_quote_spans,
+)
 from app.services.theme_graph import ThemeGraphService
 from app.services.traceable_code_consolidation import (
     CodeCandidate,
@@ -3766,7 +3770,7 @@ class TraceableAnalysisService:
                 failed_documents += 1
                 continue
 
-            seen_theme_ids: set[UUID] = set()
+            resolved_assignments: list[tuple[_AppliedEvidence, Code, UUID | None]] = []
             for evidence in document_evidence:
                 code = persisted.code_by_label.get(self._label_key(evidence.code_label))
                 if code is None:
@@ -3776,6 +3780,24 @@ class TraceableAnalysisService:
                     theme = persisted.theme_by_label.get(self._label_key(evidence.theme_label))
                     if theme is not None:
                         theme_id = theme.id
+                resolved_assignments.append((evidence, code, theme_id))
+
+            kept_indices = select_deduplicated_quote_spans(
+                [
+                    QuoteSpanCandidate(
+                        group_key=theme_id if theme_id is not None else ("code", code.id),
+                        quote=evidence.quote,
+                        start_char=evidence.start_char,
+                        end_char=evidence.end_char,
+                        confidence=self._clamp_confidence(evidence.confidence),
+                    )
+                    for evidence, code, theme_id in resolved_assignments
+                ]
+            )
+
+            seen_theme_ids: set[UUID] = set()
+            for index in kept_indices:
+                evidence, code, theme_id = resolved_assignments[index]
                 self._session.add(
                     CodeAssignment(
                         id=uuid.uuid4(),

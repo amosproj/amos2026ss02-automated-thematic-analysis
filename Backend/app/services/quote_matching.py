@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+from collections import defaultdict
+from collections.abc import Hashable, Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
@@ -11,6 +13,51 @@ class QuoteMatch:
     start_char: int | None
     end_char: int | None
     quote_match_status: str
+
+
+@dataclass(frozen=True)
+class QuoteSpanCandidate:
+    """One located (or unlocatable) quote competing for persistence within a dedup group."""
+
+    group_key: Hashable
+    quote: str
+    start_char: int | None
+    end_char: int | None
+    confidence: float
+
+
+def select_deduplicated_quote_spans(candidates: Sequence[QuoteSpanCandidate]) -> list[int]:
+
+    def _span_length(candidate: QuoteSpanCandidate) -> int:
+        if candidate.start_char is None or candidate.end_char is None:
+            return -1
+        return candidate.end_char - candidate.start_char
+
+    processing_order = sorted(
+        range(len(candidates)),
+        key=lambda index: (-_span_length(candidates[index]), -candidates[index].confidence, index),
+    )
+
+    kept: list[int] = []
+    kept_spans: dict[Hashable, list[tuple[int, int]]] = defaultdict(list)
+    kept_texts: dict[Hashable, set[str]] = defaultdict(set)
+    for index in processing_order:
+        candidate = candidates[index]
+        normalized_text = " ".join(candidate.quote.split()).casefold()
+        if candidate.start_char is None or candidate.end_char is None:
+            if normalized_text in kept_texts[candidate.group_key]:
+                continue
+        else:
+            span = (candidate.start_char, candidate.end_char)
+            if any(
+                kept_start < span[1] and kept_end > span[0]
+                for kept_start, kept_end in kept_spans[candidate.group_key]
+            ):
+                continue
+            kept_spans[candidate.group_key].append(span)
+        kept_texts[candidate.group_key].add(normalized_text)
+        kept.append(index)
+    return sorted(kept)
 
 
 def locate_quote_span(transcript: str, quote: str | None) -> QuoteMatch:

@@ -1,4 +1,8 @@
-from app.services.quote_matching import locate_quote_span
+from app.services.quote_matching import (
+    QuoteSpanCandidate,
+    locate_quote_span,
+    select_deduplicated_quote_spans,
+)
 
 
 def test_locate_quote_span_exact_match() -> None:
@@ -28,4 +32,84 @@ def test_locate_quote_span_not_found() -> None:
     assert match.quote_match_status == "not_found"
     assert match.start_char is None
     assert match.end_char is None
+
+
+def _candidate(
+    group_key: object = "theme-1",
+    quote: str = "manual handoffs slow",
+    start_char: int | None = 10,
+    end_char: int | None = 30,
+    confidence: float = 0.9,
+) -> QuoteSpanCandidate:
+    return QuoteSpanCandidate(
+        group_key=group_key,
+        quote=quote,
+        start_char=start_char,
+        end_char=end_char,
+        confidence=confidence,
+    )
+
+
+def test_dedup_keeps_one_copy_of_identical_span_preferring_confidence() -> None:
+    kept = select_deduplicated_quote_spans([
+        _candidate(confidence=0.6),
+        _candidate(confidence=0.9),
+    ])
+
+    assert kept == [1]
+
+
+def test_dedup_prefers_longer_span_over_contained_one() -> None:
+    kept = select_deduplicated_quote_spans([
+        _candidate(start_char=12, end_char=25, confidence=0.99),
+        _candidate(start_char=10, end_char=30, confidence=0.5),
+    ])
+
+    assert kept == [1]
+
+
+def test_dedup_drops_partially_overlapping_shorter_span_of_same_group() -> None:
+    kept = select_deduplicated_quote_spans([
+        _candidate(start_char=10, end_char=30, confidence=0.5),
+        _candidate(start_char=25, end_char=40, confidence=0.99),
+    ])
+
+    assert kept == [0]
+
+
+def test_dedup_keeps_identical_span_across_different_groups() -> None:
+    kept = select_deduplicated_quote_spans([
+        _candidate(group_key="theme-1"),
+        _candidate(group_key="theme-2"),
+    ])
+
+    assert kept == [0, 1]
+
+
+def test_dedup_keeps_non_overlapping_spans_in_same_group() -> None:
+    kept = select_deduplicated_quote_spans([
+        _candidate(start_char=10, end_char=30),
+        _candidate(start_char=40, end_char=60),
+    ])
+
+    assert kept == [0, 1]
+
+
+def test_dedup_unlocated_quotes_by_whitespace_insensitive_text() -> None:
+    kept = select_deduplicated_quote_spans([
+        _candidate(quote="Manual  handoffs\nslow", start_char=None, end_char=None, confidence=0.7),
+        _candidate(quote="manual handoffs slow", start_char=None, end_char=None, confidence=0.5),
+        _candidate(quote="an unrelated remark", start_char=None, end_char=None, confidence=0.5),
+    ])
+
+    assert kept == [0, 2]
+
+
+def test_dedup_drops_unlocated_duplicate_of_kept_located_quote() -> None:
+    kept = select_deduplicated_quote_spans([
+        _candidate(start_char=10, end_char=30),
+        _candidate(start_char=None, end_char=None, confidence=0.99),
+    ])
+
+    assert kept == [0]
 
