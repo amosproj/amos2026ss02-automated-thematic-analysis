@@ -111,6 +111,9 @@
         return Math.round(typeof value === "number" ? value : 0) + "%";
     }
 
+    // [FEATURE DISABLED] The small sample badge feature is currently disabled 
+    // to reduce UI clutter. Uncomment this function and its calls to re-enable it
+    /* 
     function smallSampleBadge() {
         const badge = document.createElement("span");
         badge.className = "breakdown-small-sample";
@@ -118,6 +121,7 @@
         badge.title = "Few interviews in this group; percentage may be unreliable.";
         return badge;
     }
+    */
 
     function renderChart(groups) {
         const chart = document.createElement("div");
@@ -130,7 +134,8 @@
             const label = document.createElement("div");
             label.className = "breakdown-row-label";
             label.textContent = group.group_value;
-            if (group.small_sample) label.appendChild(smallSampleBadge());
+            // [FEATURE DISABLED] Uncomment to show the small sample badge
+            // if (group.small_sample) label.appendChild(smallSampleBadge());
 
             label.title = group.group_value;
             row.appendChild(label);
@@ -191,12 +196,14 @@
             return;
         }
 
-        let anySmallSample = false;
+        // [FEATURE DISABLED] Uncomment to calculate and display the small sample warning
+        // let anySmallSample = false;
         for (const dim of dims) {
             resultsEl.appendChild(renderDimension(dim));
-            if ((dim.groups || []).some((g) => g.small_sample)) anySmallSample = true;
+            // if ((dim.groups || []).some((g) => g.small_sample)) anySmallSample = true;
         }
 
+        /*
         if (anySmallSample) {
             const note = document.createElement("p");
             note.className = "text-secondary small mt-2 mb-0";
@@ -205,6 +212,7 @@
                 "read their percentages with caution.";
             resultsEl.appendChild(note);
         }
+        */
     }
 
     // ------------------------------------------------------------------
