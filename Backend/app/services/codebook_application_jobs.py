@@ -110,6 +110,8 @@ class CodebookApplicationJobRunner:
                         progress_job.documents_coded = coded
                     if failed is not None:
                         progress_job.documents_failed = failed
+                    progress_job.llm_tokens_input = service.traceable_service.llm_tokens_input
+                    progress_job.llm_tokens_output = service.traceable_service.llm_tokens_output
                     await progress_session.commit()
 
             async def _on_phase(phase: str) -> None:
@@ -118,6 +120,8 @@ class CodebookApplicationJobRunner:
                     if phase_job is None:
                         return
                     phase_job.phase = phase
+                    phase_job.llm_tokens_input = service.traceable_service.llm_tokens_input
+                    phase_job.llm_tokens_output = service.traceable_service.llm_tokens_output
                     await phase_session.commit()
 
             async def _on_run_created(application_run_id: UUID) -> None:
@@ -163,6 +167,8 @@ class CodebookApplicationJobRunner:
                 current_job.documents_done = summary.documents_total
                 current_job.documents_coded = summary.documents_coded
                 current_job.documents_failed = summary.documents_failed
+                current_job.llm_tokens_input = service.traceable_service.llm_tokens_input
+                current_job.llm_tokens_output = service.traceable_service.llm_tokens_output
                 current_job.error_message = (
                     json.dumps(
                         {

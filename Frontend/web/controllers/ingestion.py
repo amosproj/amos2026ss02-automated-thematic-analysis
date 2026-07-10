@@ -276,7 +276,7 @@ def list_transcripts(corpus_id: str) -> str:
             client,
             requested_corpus_id=corpus_id,
         )
-        documents = client.list_documents(active_corpus_id)
+        documents = client.list_documents(active_corpus_id, page_size=10000)
         active_corpus_name = active_corpus.get("name", active_corpus_name)
     except BackendError as exc:
         flash(exc.user_message, "danger")

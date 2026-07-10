@@ -48,6 +48,8 @@ class CodebookGenerationJob(Base, TimestampMixin):
     codes_created: Mapped[int | None] = mapped_column(Integer, nullable=True)
     documents_coded: Mapped[int | None] = mapped_column(Integer, nullable=True)
     documents_failed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    llm_tokens_input: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    llm_tokens_output: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Failed jobs store the exception message; successful partial runs store
     # structured JSON describing passages skipped after repeated parser errors.
     error_message: Mapped[str | None] = mapped_column(Text(), nullable=True)

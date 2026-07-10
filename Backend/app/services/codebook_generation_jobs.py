@@ -164,6 +164,8 @@ class CodebookGenerationJobRunner:
                     progress_job.analysis_units_total = total
                     progress_job.passages_done = done
                     progress_job.passages_total = total
+                    progress_job.llm_tokens_input = service.traceable_service.llm_tokens_input
+                    progress_job.llm_tokens_output = service.traceable_service.llm_tokens_output
                     await progress_session.commit()
 
             async def _on_phase_progress(phase: str, done: int, total: int) -> None:
@@ -176,6 +178,8 @@ class CodebookGenerationJobRunner:
                     progress_job.analysis_units_total = total
                     progress_job.passages_done = done
                     progress_job.passages_total = total
+                    progress_job.llm_tokens_input = service.traceable_service.llm_tokens_input
+                    progress_job.llm_tokens_output = service.traceable_service.llm_tokens_output
                     await progress_session.commit()
 
             async def _should_cancel() -> bool:
@@ -195,6 +199,8 @@ class CodebookGenerationJobRunner:
                     phase_job.analysis_units_total = 0
                     phase_job.passages_done = 0
                     phase_job.passages_total = 0
+                    phase_job.llm_tokens_input = service.traceable_service.llm_tokens_input
+                    phase_job.llm_tokens_output = service.traceable_service.llm_tokens_output
                     await phase_session.commit()
 
             async def _on_codebook_created(codebook_id: UUID) -> None:
@@ -251,6 +257,8 @@ class CodebookGenerationJobRunner:
                 job.documents_failed = generated.documents_failed
                 job.passages_done = generated.passages_processed
                 job.passages_total = max(job.passages_total, generated.passages_processed)
+                job.llm_tokens_input = service.traceable_service.llm_tokens_input
+                job.llm_tokens_output = service.traceable_service.llm_tokens_output
                 if generated.provenance is not None:
                     job.provenance_json = json.dumps(generated.provenance, ensure_ascii=False)
                 job.action_log_json = json.dumps(generated.action_log, ensure_ascii=False)

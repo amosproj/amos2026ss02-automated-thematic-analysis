@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import re
 import uuid
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
@@ -12,7 +13,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables import RunnableConfig, RunnableLambda
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -600,7 +601,8 @@ class TraceableAnalysisService:
         should_cancel: Callable[[], Awaitable[bool]] | None,
     ) -> list[_QuoteEvidence]:
         parser = JsonOutputParser(pydantic_object=QuoteCodeExtractionResult)
-        chain = build_quote_code_extraction_prompt() | build_chat_model(provider=self._provider) | parser
+        sanitize: RunnableLambda[Any, Any] = RunnableLambda(lambda s: re.sub(r"\*+", "", s) if isinstance(s, str) else s)
+        chain = build_quote_code_extraction_prompt() | build_chat_model(provider=self._provider) | sanitize | parser
         if on_unit_progress is not None:
             await on_unit_progress(0, len(documents))
 
@@ -621,30 +623,31 @@ class TraceableAnalysisService:
                     },
                     config=self._llm_config(),
                 )
-            result = QuoteCodeExtractionResult(**raw_result)
             doc_evidence: list[_QuoteEvidence] = []
-            for pair_index, pair in enumerate(result.quote_code_pairs, start=1):
-                label = self._normalize_label(pair.code_label)
-                quote = pair.quote.strip()
-                if not label or not quote:
-                    continue
-                match = locate_quote_span(document.content, quote)
-                candidate_id = f"{document.id}:candidate:{pair_index}:{self._label_key(label)}"
-                doc_evidence.append(
-                    _QuoteEvidence(
-                        quote_id=f"{document.id}:quote:{pair_index}:{uuid.uuid4()}",
-                        document_id=document.id,
-                        quote=match.quote,
-                        start_char=match.start_char,
-                        end_char=match.end_char,
-                        quote_match_status=match.quote_match_status,
-                        candidate_id=candidate_id,
-                        code_label=label,
-                        code_description=self._clean_optional_text(pair.code_description),
-                        confidence=self._clamp_confidence(pair.confidence),
-                        rationale=self._clean_optional_text(pair.rationale),
+            if raw_result:
+                result = QuoteCodeExtractionResult(**raw_result)
+                for pair_index, pair in enumerate(result.quote_code_pairs, start=1):
+                    label = self._normalize_label(pair.code_label)
+                    quote = pair.quote.strip()
+                    if not label or not quote:
+                        continue
+                    match = locate_quote_span(document.content, quote)
+                    candidate_id = f"{document.id}:candidate:{pair_index}:{self._label_key(label)}"
+                    doc_evidence.append(
+                        _QuoteEvidence(
+                            quote_id=f"{document.id}:quote:{pair_index}:{uuid.uuid4()}",
+                            document_id=document.id,
+                            quote=match.quote,
+                            start_char=match.start_char,
+                            end_char=match.end_char,
+                            quote_match_status=match.quote_match_status,
+                            candidate_id=candidate_id,
+                            code_label=label,
+                            code_description=self._clean_optional_text(pair.code_description),
+                            confidence=self._clamp_confidence(pair.confidence),
+                            rationale=self._clean_optional_text(pair.rationale),
+                        )
                     )
-                )
             async with progress_lock:
                 completed_count += 1
                 if on_unit_progress is not None:

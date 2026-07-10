@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import and_, desc, func, select
+from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -15,6 +15,7 @@ from app.models import (
 )
 from app.schemas.theme_views import ThemeFrequencyItem
 from app.services.theme_graph import ThemeNotFoundError
+from app.services.theme_hierarchy import descendants_and_self, load_children_map
 
 
 class ThemeFrequencyService:
@@ -35,28 +36,47 @@ class ThemeFrequencyService:
             application_run_id=application_run_id,
         )
         themes = await self._load_active_themes(codebook_id=codebook_id)
-        occurrence_count_by_theme_id = await self._load_occurrence_count_by_theme_id(
+        theme_ids = {theme.id for theme in themes}
+        document_ids_by_theme_id = await self._load_document_ids_by_theme_id(
             codebook_id=codebook_id,
             application_run_id=selected_run_id,
-            theme_ids={theme.id for theme in themes},
+            theme_ids=theme_ids,
         )
+
+        children_map = await load_children_map(self._session, codebook_id=codebook_id)
+        parent_occurrence_by_theme_id = {
+            theme_id: len(
+                set().union(
+                    *(document_ids_by_theme_id.get(d, set()) for d in descendants_and_self(theme_id, children_map))
+                )
+            )
+            for theme_id in theme_ids
+        }
         total_interviews_in_corpus = await self._load_total_interviews_in_corpus(
             codebook_id=codebook_id,
             application_run_id=selected_run_id,
         )
 
-        payload = [
-            ThemeFrequencyItem(
-                theme_id=theme.id,
-                theme_name=theme.label,
-                occurrence_count=occurrence_count_by_theme_id.get(theme.id, 0),
-                interview_coverage_percentage=self._to_coverage_percentage(
-                    occurrence_count=occurrence_count_by_theme_id.get(theme.id, 0),
-                    total_interviews=total_interviews_in_corpus,
-                ),
+        payload = []
+        for theme in themes:
+            own_occurrence = len(document_ids_by_theme_id.get(theme.id, set()))
+            parent_occurrence = parent_occurrence_by_theme_id.get(theme.id, own_occurrence)
+            payload.append(
+                ThemeFrequencyItem(
+                    theme_id=theme.id,
+                    theme_name=theme.label,
+                    occurrence_count=own_occurrence,
+                    interview_coverage_percentage=self._to_coverage_percentage(
+                        occurrence_count=own_occurrence,
+                        total_interviews=total_interviews_in_corpus,
+                    ),
+                    parent_occurrence_count=parent_occurrence,
+                    parent_interview_coverage_percentage=self._to_coverage_percentage(
+                        occurrence_count=parent_occurrence,
+                        total_interviews=total_interviews_in_corpus,
+                    ),
+                )
             )
-            for theme in themes
-        ]
         payload.sort(
             key=lambda item: (
                 -item.occurrence_count,
@@ -115,33 +135,31 @@ class ThemeFrequencyService:
         )
         return list((await self._session.scalars(stmt)).all())
 
-    async def _load_occurrence_count_by_theme_id(
+    async def _load_document_ids_by_theme_id(
         self,
         *,
         codebook_id: UUID,
         application_run_id: UUID | None,
         theme_ids: set[UUID],
-    ) -> dict[UUID, int]:
+    ) -> dict[UUID, set[UUID]]:
         del codebook_id
         if application_run_id is None or not theme_ids:
-            return {theme_id: 0 for theme_id in theme_ids}
+            return {theme_id: set() for theme_id in theme_ids}
         stmt = (
-            select(
-                ThemeAssignment.theme_id,
-                func.count(func.distinct(DocumentCoding.document_id)),
-            )
+            select(ThemeAssignment.theme_id, DocumentCoding.document_id)
             .join(DocumentCoding, ThemeAssignment.document_coding_id == DocumentCoding.id)
             .where(
                 DocumentCoding.application_run_id == application_run_id,
                 ThemeAssignment.theme_id.in_(theme_ids),
                 ThemeAssignment.is_present.is_(True),
             )
-            .group_by(ThemeAssignment.theme_id)
+            .distinct()
         )
         rows = (await self._session.execute(stmt)).all()
-        counts = {theme_id: 0 for theme_id in theme_ids}
-        counts.update({theme_id: int(count) for theme_id, count in rows})
-        return counts
+        document_ids: dict[UUID, set[UUID]] = {theme_id: set() for theme_id in theme_ids}
+        for theme_id, document_id in rows:
+            document_ids[theme_id].add(document_id)
+        return document_ids
 
     async def _load_total_interviews_in_corpus(
         self,

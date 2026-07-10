@@ -85,6 +85,18 @@ def test_codebook_list_row_shows_review_button(client, fake_backend):
     assert b'href="/codebooks/cb-1/review"' in resp.data
 
 
+def test_codebook_list_row_has_no_view_themes_button(client, fake_backend):
+    # Navigating to the theme browser is only available from the Analysis
+    # tab now, so the Codebooks list no longer links there directly.
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    resp = client.get("/codebooks/", follow_redirects=True)
+    assert b"View themes" not in resp.data
+
+
 def test_codebook_list_shows_running_job_row(client, fake_backend):
     # In-progress runs are server-rendered so they're visible in any browser
     # or session, not just the one that started the run.
@@ -175,6 +187,61 @@ def test_codebook_themes_renders_frequency_and_tree(client, fake_backend):
     assert b'id="global-corpus-select"' in resp.data
 
 
+def test_codebook_themes_highlights_analysis_nav_tab(client, fake_backend):
+    # The theme browser is reached from the Analysis tab, so the nav bar
+    # should mark Analysis (not Codebooks) as active while viewing it.
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    resp = client.get("/codebooks/test-corpus-id/cb-1/themes", follow_redirects=True)
+    assert resp.status_code == 200
+    assert b'href="/analysis/">Analysis</a>' in resp.data
+    body = resp.data.decode()
+    analysis_link_start = body.index('href="/analysis/">Analysis</a>')
+    analysis_class = body[:analysis_link_start].rsplit('class="', 1)[-1]
+    assert "active" in analysis_class
+    codebooks_link_start = body.index('>Codebooks</a>')
+    codebooks_class = body[:codebooks_link_start].rsplit('class="', 1)[-1]
+    assert "active" not in codebooks_class
+
+
+def test_codebook_themes_renders_single_merged_themes_box(client, fake_backend):
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    fake_backend.theme_frequencies = [
+        {"theme_id": "t-1", "theme_name": "Work-Life Balance",
+         "occurrence_count": 5, "interview_coverage_percentage": 60.0},
+    ]
+    fake_backend.theme_tree = [
+        {"theme": {"id": "t-1", "label": "Work-Life Balance", "is_active": True},
+         "children": []},
+    ]
+    resp = client.get("/codebooks/test-corpus-id/cb-1/themes", follow_redirects=True)
+    assert resp.status_code == 200
+    body = resp.data
+    assert b'panel-title">Themes</h2>' in body
+    assert b"Theme Frequency" not in body
+    assert b"Theme Hierarchy" not in body
+    assert b'id="theme-tree"' not in body
+    # The table skeleton the JS renders into is still present.
+    assert b'id="themes-table-body"' in body
+    assert b"Occurrences" in body
+    assert b"Interview Coverage" in body
+    assert b'id="quotes-panel-title"' in body
+    assert b'id="quotes-none"' in body
+    assert b'id="quotes-pagination"' in body
+    assert b'id="quotes-modal"' not in body
+    assert b"View Quotes" not in body
+    # Quote-count stat in the Theme Details header (filled by the quotes JS).
+    assert b'id="theme-details-quotes"' in body
+    assert b'id="quotes-hide-subthemes"' in body
+
+
 def test_codebook_themes_selects_requested_analysis_run(client, fake_backend):
     fake_backend.codebooks = [
         {"id": "cb-1", "name": "Interview Codebook", "version": 1,
@@ -213,10 +280,10 @@ def test_codebook_themes_selects_requested_analysis_run(client, fake_backend):
     assert fake_backend.last_theme_frequencies_application_run_id == "run-2"
     assert b"Run Two Theme" in resp.data
     assert b"analysis-run-bar" in resp.data
-    assert b'id="application-run-select"' in resp.data
-    assert b'value="run-2" selected' in resp.data
+    assert b'id="application-run-select"' not in resp.data
     assert b"Latest successful" in resp.data
-    assert b"Follow-up Run - 2026-01-02 00:00" in resp.data
+    assert b"Follow-up Run" in resp.data
+    assert b"2026-01-02 00:00" in resp.data
     assert b"Latest successful run" not in resp.data
 
 
@@ -253,7 +320,7 @@ def test_codebook_themes_defaults_to_latest_successful_run(client, fake_backend)
 
     assert resp.status_code == 200
     assert fake_backend.last_theme_frequencies_application_run_id == "run-2"
-    assert b'value="run-2" selected' in resp.data
+    assert b"Latest Run" in resp.data
     assert b"Latest Theme" in resp.data
     assert b"4 coded" in resp.data
     assert b"1 failed" in resp.data
@@ -277,9 +344,7 @@ def test_codebook_themes_shows_analysis_run_bar_without_runs(client, fake_backen
     assert b"analysis-run-bar" in resp.data
     assert b"Select an analysis run" in resp.data
     assert b"No analysis runs for this codebook." in resp.data
-    assert b'id="application-run-select"' in resp.data
-    assert b"disabled" in resp.data
-    assert b"No analysis runs available" in resp.data
+    assert b'id="application-run-select"' not in resp.data
 
 
 def test_codebook_themes_defaults_to_latest_failed_run_when_no_success(client, fake_backend):
@@ -313,7 +378,7 @@ def test_codebook_themes_defaults_to_latest_failed_run_when_no_success(client, f
 
     assert resp.status_code == 200
     assert fake_backend.last_theme_frequencies_application_run_id == "run-2"
-    assert b'value="run-2" selected' in resp.data
+    assert b"Failed Run 2" in resp.data
     assert b"Failed" in resp.data
     assert b"This analysis run failed." in resp.data
     assert b"2 coded" in resp.data
@@ -331,6 +396,33 @@ def test_codebook_themes_renders_name_from_query_param(client, fake_backend):
     resp = client.get("/codebooks/test-corpus-id/cb-1/themes?name=My+Codebook&version=3", follow_redirects=True)
     assert resp.status_code == 200
     assert b"My Codebook" in resp.data
+
+
+def test_codebook_themes_breadcrumb_shows_analysis_run_name(client, fake_backend):
+    # AC: breadcrumb reads "Analysis / {analysis_run_name}", not
+    # "Codebooks / {codebook_name}", and links back to the Analysis tab.
+    fake_backend.codebooks = [
+        {"id": "cb-1", "name": "Interview Codebook", "version": 1,
+         "project_id": "proj-1", "created_by": "alice", "description": None,
+         "corpus_id": fake_backend.corpus_id},
+    ]
+    fake_backend.application_runs = [
+        {"id": "run-1", "codebook_id": "cb-1", "name": "Initial Run",
+         "custom_id": "RUN-001", "status": "succeeded",
+         "created_at": "2026-01-01T00:00:00"},
+    ]
+    fake_backend.theme_tree = [
+        {"theme": {"id": "t-1", "label": "Work-Life Balance", "is_active": True},
+         "children": []},
+    ]
+    resp = client.get("/codebooks/test-corpus-id/cb-1/themes", follow_redirects=True)
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    breadcrumb_start = body.index('aria-label="breadcrumb"')
+    breadcrumb = body[breadcrumb_start:body.index("</nav>", breadcrumb_start)]
+    assert 'href="/analysis/?corpus_id=test-corpus-id">Analysis</a>' in breadcrumb
+    assert "Initial Run" in breadcrumb
+    assert "Codebooks" not in breadcrumb
 
 
 def test_codebook_themes_renders_empty_state(client, fake_backend):

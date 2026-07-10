@@ -5,23 +5,23 @@
     // Data is embedded server-side as JSON — no extra HTTP requests needed.
     const frequencies       = JSON.parse(appRoot.dataset.frequencies || "[]");
     const tree              = JSON.parse(appRoot.dataset.tree        || "[]");
+
+    // Surface the parent roll-up as the canonical occurrence/coverage so every
+    // consumer displays it. Keep each node's own numbers under `own_*`.
+    for (const f of frequencies) {
+        f.own_occurrence_count = f.occurrence_count;
+        f.own_interview_coverage_percentage = f.interview_coverage_percentage;
+        if (typeof f.parent_occurrence_count === "number") {
+            f.occurrence_count = f.parent_occurrence_count;
+        }
+        if (typeof f.parent_interview_coverage_percentage === "number") {
+            f.interview_coverage_percentage = f.parent_interview_coverage_percentage;
+        }
+    }
     const codes             = JSON.parse(appRoot.dataset.codes       || "[]");
     const quotesUrlTemplate = appRoot.dataset.quotesUrlTemplate || "";
     const readUrlTemplate   = appRoot.dataset.readUrlTemplate   || "";
     const applicationRunId  = appRoot.dataset.applicationRunId || "";
-    const applicationRunSelect = document.getElementById("application-run-select");
-
-    if (applicationRunSelect) {
-        applicationRunSelect.addEventListener("change", () => {
-            const url = new URL(window.location.href);
-            if (applicationRunSelect.value) {
-                url.searchParams.set("application_run_id", applicationRunSelect.value);
-            } else {
-                url.searchParams.delete("application_run_id");
-            }
-            window.location.href = url.toString();
-        });
-    }
 
     // Topics the researcher asked the AI to focus on.
     const researcherTopics = (() => {
@@ -124,13 +124,18 @@
         return "theme-progress-bar--high";
     }
 
+    // Shared ordering: most frequent first, ties alphabetical. Used for the
+    // frequency list (boot auto-select) and for every sibling level of the
+    // merged theme table.
+    function byFrequencyThenName(a, b) {
+        if (b.occurrence_count !== a.occurrence_count) {
+            return b.occurrence_count - a.occurrence_count;
+        }
+        return a.theme_name.localeCompare(b.theme_name);
+    }
+
     function sortByFrequency(themes) {
-        return [...themes].sort((a, b) => {
-            if (b.occurrence_count !== a.occurrence_count) {
-                return b.occurrence_count - a.occurrence_count;
-            }
-            return a.theme_name.localeCompare(b.theme_name);
-        });
+        return [...themes].sort(byFrequencyThenName);
     }
 
     function flattenTreeNodes(nodes, out) {
@@ -213,13 +218,10 @@
         announceSelectedTheme({ themeId: null, themeName: "" });
     }
 
-    // Sync the visual selection highlight across both the table and tree.
+    // Sync the visual selection highlight across the merged theme table.
     function highlightSelectedRow() {
         themesTableBody.querySelectorAll("tr").forEach((row) => {
             row.classList.toggle("theme-row-selected", row.dataset.themeId === selectedThemeId);
-        });
-        document.querySelectorAll("#theme-tree [data-theme-id]").forEach((el) => {
-            el.classList.toggle("selected", el.dataset.themeId === selectedThemeId);
         });
     }
 
@@ -245,147 +247,204 @@
     }
 
     // ------------------------------------------------------------------
-    // Frequency table
-    // ------------------------------------------------------------------
-
-    function renderThemeTable(themes) {
-        themesTableBody.innerHTML = "";
-        const sorted = sortByFrequency(themes);
-
-        for (const theme of sorted) {
-            const row = document.createElement("tr");
-            row.dataset.themeId = theme.theme_id;
-            row.classList.add("theme-row-selectable");
-            row.addEventListener("click", () => showThemeDetails(theme.theme_id));
-
-            const nameCell = document.createElement("td");
-            nameCell.appendChild(document.createTextNode(theme.theme_name));
-            const matchedTopic = matchedTopicFor(theme.theme_name);
-            if (matchedTopic) {
-                row.classList.add("theme-row-matched");
-                nameCell.appendChild(makeTopicBadge(matchedTopic));
-            }
-
-            // Occurrence count
-            const countCell = document.createElement("td");
-            countCell.className   = "text-end";
-            countCell.textContent = String(theme.occurrence_count);
-            if (theme.occurrence_count === 0) countCell.classList.add("theme-zero");
-
-            // Coverage with mini progress bar
-            const pct      = theme.interview_coverage_percentage || 0;
-            const barWidth = Math.min(Math.max(pct, 0), 100);
-            const coverageCell = document.createElement("td");
-            coverageCell.style.paddingLeft = "3rem";
-            coverageCell.innerHTML = `
-                <div class="d-flex align-items-center gap-2">
-                    <div class="theme-progress">
-                        <div class="theme-progress-bar ${coverageBarClass(pct)}" style="width:${barWidth}%"></div>
-                    </div>
-                    <span class="coverage-label${pct === 0 ? " theme-zero" : ""}">${formatCoverage(pct)}</span>
-                </div>`;
-
-            row.append(nameCell, countCell, coverageCell);
-            themesTableBody.appendChild(row);
-        }
-
-        highlightSelectedRow();
-    }
-
-    // ------------------------------------------------------------------
-    // Tree with connector lines (file-explorer style, pure vanilla JS).
+    // Merged theme table: frequency + hierarchy in one box (issue #226).
+    //
+    // Each tree node becomes one <tr>; the Theme cell carries the hierarchy
+    // (depth indent + expand/collapse chevron) while the Occurrences and
+    // Coverage columns keep the frequency view. Sibling rows are ordered by
+    // frequency at every depth, so expanding a parent lists its children
+    // most-frequent first.
     //
     // Built with the DOM API (createElement + textContent + setAttribute)
     // — never innerHTML on user data — so a malicious theme label like
     // `<img src=x onerror=alert(1)>` is rendered as literal text and cannot
     // execute as JS.
-    //
-    // The recursive `buildNodeElement` handles arbitrary tree depth:
-    // any non-leaf node gets a toggle button and click-to-expand, regardless
-    // of how deeply nested it sits in the hierarchy.
     // ------------------------------------------------------------------
 
-    function renderTree(treeData) {
-        const container = document.getElementById("theme-tree");
-        if (!container) return;
+    // child theme id -> parent theme id; lets revealTheme expand ancestors.
+    const parentIdByThemeId = {};
 
-        container.replaceChildren();
-        const rootUl = document.createElement("ul");
-        rootUl.className = "tree-root";
-        rootUl.setAttribute("role", "tree");
-
-        for (const rootNode of treeData) {
-            rootUl.appendChild(buildNodeElement(rootNode, /*isRoot=*/ true));
-        }
-        container.appendChild(rootUl);
+    function isCodeNode(theme) {
+        return theme.type === "CODE" || theme.node_type === "CODE";
     }
 
-    function buildNodeElement(node, isRoot) {
-        const theme       = node.theme;
-        const children    = node.children ?? [];
-        const hasChildren = children.length > 0;
+    function nodeInfo(node) {
+        return currentThemeInfoById[node.theme.id] ?? {
+            theme_id:                      node.theme.id,
+            theme_name:                    node.theme.label,
+            occurrence_count:              0,
+            interview_coverage_percentage: 0,
+        };
+    }
 
-        const li = document.createElement("li");
-        li.className = isRoot ? "tree-group" : "tree-child-item";
-        li.setAttribute("role", "none");
+    function renderThemeTreeTable(treeData) {
+        themesTableBody.innerHTML = "";
 
-        const row = document.createElement("div");
-        row.className = isRoot ? "tree-root-row" : "tree-child-row";
-        row.setAttribute("role", "treeitem");
-        row.setAttribute("tabindex", "0");
-        row.dataset.themeId = theme.id;
+        // `ancestorGuides` carries one flag per ancestor indent column:
+        // true = that ancestor has further siblings below, so the column
+        // draws a vertical pass-through line (classic file-explorer capping —
+        // lines stop at each branch's last child instead of running on).
+        (function renderLevel(nodes, depth, parentId, ancestorGuides) {
+            const sorted = [...nodes].sort((a, b) => byFrequencyThenName(nodeInfo(a), nodeInfo(b)));
+            sorted.forEach((node, index) => {
+                const theme       = node.theme;
+                const children    = node.children ?? [];
+                const info        = nodeInfo(node);
+                const code        = isCodeNode(theme);
+                const isLast      = index === sorted.length - 1;
+                if (parentId) parentIdByThemeId[theme.id] = parentId;
 
-        if (hasChildren) {
-            const toggle = document.createElement("button");
-            toggle.className = "tree-toggle";
-            toggle.setAttribute("aria-expanded", "false");
-            toggle.setAttribute("aria-label", "Toggle " + theme.label);
-            toggle.setAttribute("tabindex", "-1");
-            row.appendChild(toggle);
-        } else if (isRoot) {
-            // Keep root rows aligned when they have no children.
-            const gap = document.createElement("span");
-            gap.className = "tree-toggle-gap";
-            row.appendChild(gap);
+                const row = document.createElement("tr");
+                row.dataset.themeId = theme.id;
+                row.classList.add("theme-row-selectable");
+                if (parentId) {
+                    row.dataset.parentId = parentId;
+                    row.classList.add("d-none"); // children start collapsed
+                }
+
+                // Theme cell: connector guides + chevron + label (+ badges).
+                const nameCell = document.createElement("td");
+                const nameWrap = document.createElement("div");
+                nameWrap.className = "theme-name-flex";
+                nameCell.appendChild(nameWrap);
+
+                for (const hasLine of ancestorGuides) {
+                    const guide = document.createElement("span");
+                    guide.className = "tree-indent" + (hasLine ? " tree-indent--line" : "");
+                    nameWrap.appendChild(guide);
+                }
+                if (depth > 0) {
+                    // ├ for children with siblings below, └ for the last one.
+                    const connector = document.createElement("span");
+                    connector.className = "tree-indent " + (isLast ? "tree-indent--elbow" : "tree-indent--tee");
+                    nameWrap.appendChild(connector);
+                }
+                if (children.length > 0) {
+                    const toggle = document.createElement("button");
+                    toggle.className = "tree-toggle";
+                    toggle.setAttribute("aria-expanded", "false");
+                    toggle.setAttribute("aria-label", "Toggle " + info.theme_name);
+                    toggle.setAttribute("tabindex", "-1");
+                    nameWrap.appendChild(toggle);
+                } else {
+                    const gap = document.createElement("span");
+                    gap.className = "tree-toggle-gap";
+                    nameWrap.appendChild(gap);
+                }
+                nameWrap.appendChild(document.createTextNode(info.theme_name));
+                const matchedTopic = matchedTopicFor(info.theme_name);
+                if (matchedTopic) {
+                    row.classList.add("theme-row-matched");
+                    nameWrap.appendChild(makeTopicBadge(matchedTopic));
+                }
+                if (code) {
+                    const chip = document.createElement("span");
+                    chip.className = "badge text-bg-light border ms-1";
+                    chip.textContent = "code";
+                    nameWrap.appendChild(chip);
+                }
+
+                // Occurrences — codes have no frequency data, so show a dash
+                // rather than a misleading 0.
+                const countCell = document.createElement("td");
+                countCell.className = "text-end";
+                if (code) {
+                    countCell.textContent = "—";
+                    countCell.classList.add("theme-zero");
+                } else {
+                    countCell.textContent = String(info.occurrence_count);
+                    if (info.occurrence_count === 0) countCell.classList.add("theme-zero");
+                }
+
+                // Coverage with mini progress bar (values are numeric, so the
+                // interpolated markup below contains no user-supplied strings).
+                const coverageCell = document.createElement("td");
+                coverageCell.style.paddingLeft = "3rem";
+                if (code) {
+                    coverageCell.innerHTML = '<span class="coverage-label theme-zero">—</span>';
+                } else {
+                    const pct      = info.interview_coverage_percentage || 0;
+                    const barWidth = Math.min(Math.max(pct, 0), 100);
+                    coverageCell.innerHTML = `
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="theme-progress">
+                                <div class="theme-progress-bar ${coverageBarClass(pct)}" style="width:${barWidth}%"></div>
+                            </div>
+                            <span class="coverage-label${pct === 0 ? " theme-zero" : ""}">${formatCoverage(pct)}</span>
+                        </div>`;
+                }
+
+                row.append(nameCell, countCell, coverageCell);
+
+                // Every row selects; rows with children also toggle their subtree.
+                row.addEventListener("click", () => {
+                    showThemeDetails(theme.id);
+                    if (children.length > 0) toggleChildren(theme.id);
+                });
+
+                themesTableBody.appendChild(row);
+                // Children inherit this level's columns plus one for this node:
+                // a pass-through line while it still has siblings below.
+                renderLevel(
+                    children,
+                    depth + 1,
+                    theme.id,
+                    depth === 0 ? [] : [...ancestorGuides, !isLast]
+                );
+            });
+        })(treeData, 0, null, []);
+
+        highlightSelectedRow();
+    }
+
+    function rowFor(themeId) {
+        return themesTableBody.querySelector(`tr[data-theme-id="${CSS.escape(themeId)}"]`);
+    }
+
+    function directChildRows(themeId) {
+        return [...themesTableBody.querySelectorAll(`tr[data-parent-id="${CSS.escape(themeId)}"]`)];
+    }
+
+    // Collapse a node's whole subtree and reset its toggle state, so a
+    // re-expanded parent shows only its direct children.
+    function collapseSubtree(themeId) {
+        const toggle = rowFor(themeId)?.querySelector(".tree-toggle");
+        if (toggle) toggle.setAttribute("aria-expanded", "false");
+        for (const child of directChildRows(themeId)) {
+            child.classList.add("d-none");
+            collapseSubtree(child.dataset.themeId);
         }
+    }
 
-        // Label rendered via textContent — auto-escapes any HTML in the label.
-        row.appendChild(document.createTextNode(theme.label));
-        const matchedTreeTopic = matchedTopicFor(theme.label);
-        if (matchedTreeTopic) {
-            const star = document.createElement("span");
-            star.className = "theme-topic-star";
-            star.textContent = "★";
-            star.title = "Matches your requested topic: " + matchedTreeTopic;
-            row.appendChild(star);
-        }
-        li.appendChild(row);
-
-        let childrenUl = null;
-        if (hasChildren) {
-            childrenUl = document.createElement("ul");
-            childrenUl.className = "tree-children";
-            childrenUl.setAttribute("role", "group");
-            childrenUl.style.display = "none";
-            for (const child of children) {
-                childrenUl.appendChild(buildNodeElement(child, /*isRoot=*/ false));
+    function setExpanded(themeId, expanded) {
+        const toggle = rowFor(themeId)?.querySelector(".tree-toggle");
+        if (!toggle) return;
+        toggle.setAttribute("aria-expanded", String(expanded));
+        for (const child of directChildRows(themeId)) {
+            if (expanded) {
+                child.classList.remove("d-none");
+            } else {
+                child.classList.add("d-none");
+                collapseSubtree(child.dataset.themeId);
             }
-            li.appendChild(childrenUl);
         }
+    }
 
-        // Click handler: every row selects; rows with children also toggle.
-        // Uses the closure-captured `li` / `childrenUl` so it works at any depth
-        // (the old code's `row.closest(".tree-group")` only worked at root level).
-        row.addEventListener("click", () => {
-            showThemeDetails(row.dataset.themeId);
-            if (!hasChildren) return;
-            const toggle  = row.querySelector(".tree-toggle");
-            const expanded = toggle.getAttribute("aria-expanded") === "true";
-            toggle.setAttribute("aria-expanded", String(!expanded));
-            childrenUl.style.display = expanded ? "none" : "";
-        });
+    function toggleChildren(themeId) {
+        const toggle = rowFor(themeId)?.querySelector(".tree-toggle");
+        if (!toggle) return;
+        setExpanded(themeId, toggle.getAttribute("aria-expanded") !== "true");
+    }
 
-        return li;
+    // Expand every ancestor so the given theme's row is visible.
+    function revealTheme(themeId) {
+        const ancestors = [];
+        let parent = parentIdByThemeId[themeId];
+        while (parent) {
+            ancestors.unshift(parent);
+            parent = parentIdByThemeId[parent];
+        }
+        for (const id of ancestors) setExpanded(id, true);
     }
 
     // ------------------------------------------------------------------
@@ -395,42 +454,61 @@
     currentThemeInfoById = buildThemeInfoMap(frequencies, tree);
     clearThemeDetails();
     updateMetricCards();
-    renderThemeTable(frequencies);
-    renderTree(tree);
+    renderThemeTreeTable(tree);
 
-    // Auto-select the top theme by frequency on load.
+    // Hide toggle when there are no sub-themes
+    const themeIdsWithSubthemes = new Set();
+    (function markSubthemeParents(nodes) {
+        for (const node of nodes) {
+            if (!isCodeNode(node.theme) && (node.children ?? []).some(c => !isCodeNode(c.theme))) {
+                themeIdsWithSubthemes.add(node.theme.id);
+            }
+            markSubthemeParents(node.children ?? []);
+        }
+    })(tree);
+
+    // Auto-select the top theme by frequency on load and make its row visible.
     const top = sortByFrequency(frequencies)[0];
-    if (top) showThemeDetails(top.theme_id);
+    if (top) {
+        showThemeDetails(top.theme_id);
+        revealTheme(top.theme_id);
+    }
 
     // ------------------------------------------------------------------
-    // Quotes modal
+    // Quotes panel (issue #227) — lives inside the merged themes box and
+    // follows the selected theme. Reacts to the theme:selected event (the
+    // same contract the demographic-breakdown panel uses), so it needs no
+    // direct coupling to showThemeDetails and survives the boot race via
+    // window.__ataCurrentTheme.
     // ------------------------------------------------------------------
 
-    const quotesModal      = document.getElementById("quotes-modal");
     const quotesLoading    = document.getElementById("quotes-loading");
     const quotesError      = document.getElementById("quotes-error");
     const quotesList       = document.getElementById("quotes-list");
     const quotesEmpty      = document.getElementById("quotes-empty");
-    const quotesTotal      = document.getElementById("quotes-modal-total");
-    const quotesLabel      = document.getElementById("quotes-modal-label");
+    const quotesNone       = document.getElementById("quotes-none");
+    const quotesTotal      = document.getElementById("quotes-panel-total");
+    const quotesLabel      = document.getElementById("quotes-panel-title");
     const quotesPagination = document.getElementById("quotes-pagination");
     const quotesPageInfo   = document.getElementById("quotes-page-info");
     const quotesPrev       = document.getElementById("quotes-prev");
     const quotesNext       = document.getElementById("quotes-next");
-    const viewQuotesBtn    = document.getElementById("theme-details-view-quotes");
+    const quotesHideSubthemes     = document.getElementById("quotes-hide-subthemes");
+    const quotesHideSubthemesWrap = document.getElementById("quotes-hide-subthemes-wrap");
+    const themeDetailsQuotes = document.getElementById("theme-details-quotes");
 
-    if (!quotesModal || !viewQuotesBtn) return;
-
-    const bsModal = new bootstrap.Modal(quotesModal);
+    if (!quotesList) return;
 
     let activeQuoteThemeId = null;
     let activeQuotePage    = 1;
+    let quotesRequestToken = 0; // drops stale responses after quick re-selection
     const PAGE_SIZE        = 20;
 
     function quotesUrl(themeId, page) {
         const url = new URL(quotesUrlTemplate.replace("__THEME__", themeId), window.location.origin);
         url.searchParams.set("page", page);
         url.searchParams.set("page_size", PAGE_SIZE);
+        url.searchParams.set("include_descendants", quotesHideSubthemes && quotesHideSubthemes.checked ? "false" : "true");
         if (applicationRunId) {
             url.searchParams.set("application_run_id", applicationRunId);
         }
@@ -442,6 +520,7 @@
     }
 
     function setQuotesLoading() {
+        quotesNone.classList.add("d-none");
         quotesLoading.classList.remove("d-none");
         quotesError.classList.add("d-none");
         quotesList.classList.add("d-none");
@@ -449,7 +528,21 @@
         quotesPagination.classList.add("d-none");
     }
 
-    function renderQuotes(data, themeName) {
+    // Blank panel shown while no theme is selected.
+    function resetQuotesPanel() {
+        activeQuoteThemeId = null;
+        quotesRequestToken++;
+        quotesLabel.textContent = "Quotes";
+        quotesTotal.textContent = "";
+        quotesNone.classList.remove("d-none");
+        quotesLoading.classList.add("d-none");
+        quotesError.classList.add("d-none");
+        quotesList.classList.add("d-none");
+        quotesEmpty.classList.add("d-none");
+        quotesPagination.classList.add("d-none");
+    }
+
+    function renderQuotes(data, themeName, rollUp) {
         quotesLoading.classList.add("d-none");
 
         const items = data.items || [];
@@ -459,7 +552,8 @@
         const pages = meta.pages  ?? 0;
 
         quotesLabel.textContent = "Quotes for: " + (themeName || "Theme");
-        quotesTotal.textContent = total === 1 ? "1 quote across corpus" : total + " quotes across corpus";
+        quotesTotal.textContent = total === 1 ? "1 quote" : total + " quotes";
+        if (rollUp && themeDetailsQuotes) themeDetailsQuotes.textContent = String(total);
 
         if (items.length === 0) {
             quotesEmpty.classList.remove("d-none");
@@ -472,6 +566,16 @@
         for (const item of items) {
             const card = document.createElement("div");
             card.className = "border rounded-2 p-3 mb-2";
+
+            const tagWrap = document.createElement("div");
+            tagWrap.className = "d-flex flex-wrap gap-1 mb-2";
+            for (const themeId of (item.theme_ids || [])) {
+                const tag = document.createElement("span");
+                tag.className = "badge text-bg-light border";
+                tag.textContent = (currentThemeInfoById[themeId] || {}).theme_name || "Theme";
+                tagWrap.appendChild(tag);
+            }
+            card.appendChild(tagWrap);
 
             // Quote text — textContent prevents XSS on any user-supplied content.
             const quoteEl = document.createElement("blockquote");
@@ -489,7 +593,7 @@
 
             const link = document.createElement("a");
             link.href      = interviewUrl(item.document_id);
-            link.className = "btn btn-sm btn-outline-secondary";
+            link.className = "btn btn-sm btn-outline-primary";
             link.textContent = "View Interview";
             meta.appendChild(link);
 
@@ -510,6 +614,8 @@
     async function loadQuotes(themeId, page) {
         activeQuoteThemeId = themeId;
         activeQuotePage    = page;
+        const token = ++quotesRequestToken;
+        const rollUp = !(quotesHideSubthemes && quotesHideSubthemes.checked);
         setQuotesLoading();
 
         const themeName = (currentThemeInfoById[themeId] || {}).theme_name || "";
@@ -517,20 +623,52 @@
         try {
             const response = await fetch(quotesUrl(themeId, page));
             const data = await response.json();
+            if (token !== quotesRequestToken) return; // superseded by a newer request
             if (!response.ok || data.error) throw new Error(data.error || "HTTP " + response.status);
-            renderQuotes(data, themeName);
+            renderQuotes(data, themeName, rollUp);
         } catch (err) {
+            if (token !== quotesRequestToken) return;
             quotesLoading.classList.add("d-none");
             quotesError.textContent = "Could not load quotes: " + err.message;
             quotesError.classList.remove("d-none");
         }
     }
 
-    viewQuotesBtn.addEventListener("click", () => {
-        if (!selectedThemeId) return;
-        bsModal.show();
-        loadQuotes(selectedThemeId, 1);
+    function onQuotesThemeChange(themeId) {
+        if (!themeId) {
+            resetQuotesPanel();
+            if (themeDetailsQuotes) themeDetailsQuotes.textContent = "";
+            if (quotesHideSubthemesWrap) quotesHideSubthemesWrap.classList.add("d-none");
+            return;
+        }
+        if (themeId === activeQuoteThemeId) return; // same theme — keep page and stat
+
+        if (quotesHideSubthemes) quotesHideSubthemes.checked = false;
+        if (quotesHideSubthemesWrap) {
+            quotesHideSubthemesWrap.classList.toggle("d-none", !themeIdsWithSubthemes.has(themeId));
+        }
+        // Placeholder until this theme's quote total arrives with the fetch.
+        if (themeDetailsQuotes) themeDetailsQuotes.textContent = "—";
+        loadQuotes(themeId, 1);
+    }
+
+    document.addEventListener("theme:selected", (event) => {
+        onQuotesThemeChange((event.detail || {}).themeId);
     });
+
+    // Boot race: the auto-selection above fires before this listener attaches.
+    const initialTheme = window.__ataCurrentTheme;
+    if (initialTheme && initialTheme.themeId) {
+        onQuotesThemeChange(initialTheme.themeId);
+    } else {
+        resetQuotesPanel();
+    }
+
+    if (quotesHideSubthemes) {
+        quotesHideSubthemes.addEventListener("change", () => {
+            if (activeQuoteThemeId) loadQuotes(activeQuoteThemeId, 1);
+        });
+    }
 
     quotesPrev.addEventListener("click", () => {
         if (activeQuoteThemeId && activeQuotePage > 1) {

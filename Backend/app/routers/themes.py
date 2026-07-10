@@ -121,6 +121,7 @@ async def list_theme_quotes(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     application_run_id: UUID | None = Query(default=None),
+    include_descendants: bool = Query(default=True),
 ) -> JSONResponse:
     service = ThemeQuotesService(session)
     payload = await service.list_theme_quotes(
@@ -129,5 +130,6 @@ async def list_theme_quotes(
         page=page,
         page_size=page_size,
         application_run_id=application_run_id,
+        include_descendants=include_descendants,
     )
     return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))

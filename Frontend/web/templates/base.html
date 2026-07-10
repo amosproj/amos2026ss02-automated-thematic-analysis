@@ -9,6 +9,7 @@
         rel="stylesheet"
         integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
         crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
   {% block head_extra %}{% endblock %}
 </head>
@@ -50,11 +51,11 @@
                href="{{ url_for('demographic.demographic_landing') }}">Demographic Data</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint in ('codebooks.list_codebooks', 'codebooks.list_codebooks_for_corpus', 'codebooks.codebook_themes', 'codebooks.codebook_themes_for_corpus', 'codebooks.export_codebook', 'codebooks.success') %}active{% endif %}"
+            <a class="nav-link {% if request.endpoint in ('codebooks.list_codebooks', 'codebooks.list_codebooks_for_corpus', 'codebooks.export_codebook', 'codebooks.success') %}active{% endif %}"
                href="{{ url_for('codebooks.list_codebooks') }}">Codebooks</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'analysis.index' %}active{% endif %}"
+            <a class="nav-link {% if request.endpoint in ('analysis.index', 'codebooks.codebook_themes', 'codebooks.codebook_themes_for_corpus') %}active{% endif %}"
                href="{{ url_for('analysis.index') }}">Analysis</a>
           </li>
           <li class="nav-item">
@@ -125,6 +126,7 @@
   </script>
   <script src="{{ url_for('static', filename='js/job_tracker.js') }}"></script>
   <script src="{{ url_for('static', filename='js/selectable_list.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/table_sort.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

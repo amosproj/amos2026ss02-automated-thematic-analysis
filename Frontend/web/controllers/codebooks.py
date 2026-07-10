@@ -64,15 +64,10 @@ def _prepare_application_runs(
     for run in application_runs:
         run_id = str(run.get("id"))
         timestamp = _format_run_timestamp(run)
-        run_name = run.get("name") or run.get("custom_id") or run_id
-        label = f"{run_name} - {timestamp}" if timestamp else run_name
-        if run_id == latest_successful_id:
-            label = f"{label} - Latest successful"
         decorated_runs.append({
             **run,
             "id": run_id,
             "timestamp_label": timestamp,
-            "select_label": label,
             "is_latest_successful": run_id == latest_successful_id,
         })
 
@@ -275,7 +270,6 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
     version = request.args.get("version", "")
     selected_application_run_id = request.args.get("application_run_id", "")
     active_codebook_id = codebook_id
-    application_runs: list[dict] = []
     selected_application_run: dict | None = None
     corpus_name = "Selected Corpus"
     corpus_options: list[dict] = [{"id": corpus_id, "name": corpus_name}]
@@ -308,7 +302,7 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         research_query = active_codebook.get("research_query") or ""
         researcher_topics = active_codebook.get("researcher_topics") or ""
         application_runs = client.list_codebook_application_runs(active_codebook_id)
-        application_runs, selected_application_run, selected_application_run_id = (
+        _, selected_application_run, selected_application_run_id = (
             _prepare_application_runs(application_runs, selected_application_run_id)
         )
 
@@ -341,7 +335,6 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             codes=[],
             research_query="",
             researcher_topics="",
-            application_runs=application_runs,
             selected_application_run_id=selected_application_run_id,
             selected_application_run=selected_application_run,
             demographic_dimensions=[],
@@ -362,7 +355,6 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
             codes=[],
             research_query="",
             researcher_topics="",
-            application_runs=application_runs,
             selected_application_run_id=selected_application_run_id,
             selected_application_run=selected_application_run,
             demographic_dimensions=[],
@@ -381,7 +373,6 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
         codes=codes,
         research_query=research_query,
         researcher_topics=researcher_topics,
-        application_runs=application_runs,
         selected_application_run_id=selected_application_run_id,
         selected_application_run=selected_application_run,
         demographic_dimensions=demographic_dimensions,
@@ -412,6 +403,8 @@ def theme_quotes_json(corpus_id: str, codebook_id: str, theme_id: str):
         page_size = max(1, min(100, int(request.args.get("page_size", 20))))
     except (TypeError, ValueError):
         page, page_size = 1, 20
+
+    include_descendants = request.args.get("include_descendants", "true").lower() != "false"
     try:
         application_run_id = request.args.get("application_run_id") or None
         result = _backend().get_theme_quotes(
@@ -420,6 +413,7 @@ def theme_quotes_json(corpus_id: str, codebook_id: str, theme_id: str):
             page,
             page_size,
             application_run_id=application_run_id,
+            include_descendants=include_descendants,
         )
         return jsonify(result)
     except BackendError as exc:

@@ -272,6 +272,8 @@ class RouterUnitTests(unittest.IsolatedAsyncioTestCase):
                             theme_name="Incident Recovery",
                             occurrence_count=0,
                             interview_coverage_percentage=0.0,
+                            parent_occurrence_count=0,
+                            parent_interview_coverage_percentage=0.0,
                         )
                     ]
                 ),

@@ -23,6 +23,8 @@ class ThemeFrequencyItem(BaseSchema):
     theme_name: str
     occurrence_count: int = Field(ge=0)
     interview_coverage_percentage: float = Field(ge=0.0, le=100.0)
+    parent_occurrence_count: int = Field(ge=0)
+    parent_interview_coverage_percentage: float = Field(ge=0.0, le=100.0)
 
 
 class ThemeQuoteItem(BaseSchema):
@@ -33,6 +35,7 @@ class ThemeQuoteItem(BaseSchema):
     document_id: UUID
     document_title: str
     interviewee_id: str | None
+    theme_ids: list[UUID]
 
 
 class DemographicDimensionsResponse(BaseSchema):
