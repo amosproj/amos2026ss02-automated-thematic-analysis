@@ -14,56 +14,138 @@
        data-review-base="/codebooks/"
        id="progress-app">
 
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <span class="text-secondary small d-flex align-items-center gap-2">
-        <span id="status-spinner"
-              class="spinner-border spinner-border-sm text-secondary"
-              role="status"
-              aria-hidden="true"></span>
-        <span id="status-line">Starting job&hellip;</span>
-      </span>
-      <span id="progress-percent" class="small fw-semibold text-secondary">0%</span>
+    
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 class="h5 mb-0" id="status-line">Starting job&hellip;</h2>
+      <span id="progress-percent" class="small fw-semibold text-secondary d-none">0%</span>
     </div>
 
-    <div class="progress mb-3" role="progressbar" aria-label="Generation progress">
-      <div id="progress-bar"
-           class="progress-bar progress-bar-striped progress-bar-animated"
-           style="width: 0%"></div>
+    <div class="pipeline-stepper" id="pipeline-stepper">
+      <div class="pipeline-step" data-step="loading">
+        <div class="pipeline-step-icon"><i class="bi bi-circle"></i></div>
+        <div class="pipeline-step-content">
+          <div class="pipeline-step-title">Preparing</div>
+          <div class="pipeline-step-subtitle d-none">Worker is preparing the analysis</div>
+          <div class="pipeline-step-progress d-none">
+            <div class="pipeline-step-progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="pipeline-step" data-step="extracting_quote_codes">
+        <div class="pipeline-step-icon"><i class="bi bi-circle"></i></div>
+        <div class="pipeline-step-content">
+          <div class="pipeline-step-title">Finding evidence</div>
+          <div class="pipeline-step-subtitle d-none">0 of 0 transcripts reviewed</div>
+          <div class="pipeline-step-progress d-none">
+            <div class="pipeline-step-progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="pipeline-step" data-step="consolidating_codes">
+        <div class="pipeline-step-icon"><i class="bi bi-circle"></i></div>
+        <div class="pipeline-step-content">
+          <div class="pipeline-step-title">Consolidating codes</div>
+          <div class="pipeline-step-subtitle d-none">0 of 0 relationships checked</div>
+          <div class="pipeline-step-progress d-none">
+            <div class="pipeline-step-progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="pipeline-step" data-step="synthesizing_themes">
+        <div class="pipeline-step-icon"><i class="bi bi-circle"></i></div>
+        <div class="pipeline-step-content">
+          <div class="pipeline-step-title">Building themes</div>
+          <div class="pipeline-step-subtitle d-none">Synthesizing thematic structure</div>
+          <div class="pipeline-step-progress d-none">
+            <div class="pipeline-step-progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="pipeline-step" data-step="evaluating_iterations">
+        <div class="pipeline-step-icon"><i class="bi bi-circle"></i></div>
+        <div class="pipeline-step-content">
+          <div class="pipeline-step-title">Evaluating fit</div>
+          <div class="pipeline-step-subtitle d-none">Evaluating against held-out transcripts</div>
+          <div class="pipeline-step-progress d-none">
+            <div class="pipeline-step-progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="pipeline-step" data-step="persisting_codebook">
+        <div class="pipeline-step-icon"><i class="bi bi-circle"></i></div>
+        <div class="pipeline-step-content">
+          <div class="pipeline-step-title">Saving codebook</div>
+          <div class="pipeline-step-subtitle d-none">Writing to database</div>
+          <div class="pipeline-step-progress d-none">
+            <div class="pipeline-step-progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="pipeline-step" data-step="applying_codebook">
+        <div class="pipeline-step-icon"><i class="bi bi-circle"></i></div>
+        <div class="pipeline-step-content">
+          <div class="pipeline-step-title">Applying codebook</div>
+          <div class="pipeline-step-subtitle d-none">0 of 0 transcripts coded</div>
+          <div class="pipeline-step-progress d-none">
+            <div class="pipeline-step-progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="text-secondary small mb-3" aria-live="polite">
-      <span id="progress-counts">Preparing&hellip;</span>
-    </div>
 
     <div class="row g-2 mb-3" aria-label="Job metrics">
-      <div class="col-12 col-sm-4">
+      <div class="col-12 col-sm-3">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Transcripts</div>
           <div id="metric-documents" class="fw-semibold">Waiting</div>
         </div>
       </div>
-      <div class="col-12 col-sm-4">
+      <div class="col-12 col-sm-3">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Evidence</div>
           <div id="metric-evidence" class="fw-semibold">Pending</div>
         </div>
       </div>
-      <div class="col-12 col-sm-4">
+      <div class="col-12 col-sm-3">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Codebook</div>
           <div id="metric-codebook" class="fw-semibold">Pending</div>
         </div>
       </div>
+      <div class="col-12 col-sm-3">
+        <div class="border rounded-2 px-3 py-2 h-100">
+          <div class="small text-secondary">Tokens (In/Out)</div>
+          <div id="metric-tokens" class="fw-semibold">0 / 0</div>
+        </div>
+      </div>
     </div>
 
-    <div id="progress-error" class="alert alert-danger d-none" role="alert"></div>
+    <div class="alert alert-info small py-2 mb-3 d-flex align-items-center gap-2" role="alert">
+      <i class="bi bi-info-circle flex-shrink-0 text-primary"></i>
+      <div>
+        <strong>Train/Test Split:</strong> During generation, ~80% of transcripts are used to discover themes. The remaining ~20% are held out to evaluate and refine the codebook's quality against unseen data.
+      </div>
+    </div>
+
+    
+    <div id="progress-error-container" class="alert alert-danger d-none flex-column" role="alert">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <strong>Error occurred</strong>
+        <button type="button" class="copy-error-btn" onclick="navigator.clipboard.writeText(document.getElementById('progress-error').textContent)">
+          <i class="bi bi-clipboard"></i> Copy details
+        </button>
+      </div>
+      <div id="progress-error" class="small text-break" style="white-space: pre-wrap; font-family: monospace;"></div>
+    </div>
+
 
     <form id="cancel-form" method="post" action="">
       <button type="button" id="cancel-btn" class="btn btn-outline-secondary">Cancel</button>
     </form>
   </div>
 
-  <script>
+    <script>
     (() => {
       const app = document.getElementById("progress-app");
       const jobId = app.dataset.jobId;
@@ -74,17 +156,14 @@
       const reviewBase = app.dataset.reviewBase;
 
       const statusLine = document.getElementById("status-line");
-      const statusSpinner = document.getElementById("status-spinner");
-      const bar = document.getElementById("progress-bar");
-      const percentLabel = document.getElementById("progress-percent");
-      const counts = document.getElementById("progress-counts");
       const metricDocuments = document.getElementById("metric-documents");
       const metricEvidence = document.getElementById("metric-evidence");
       const metricCodebook = document.getElementById("metric-codebook");
+      const metricTokens = document.getElementById("metric-tokens");
+      const errorContainer = document.getElementById("progress-error-container");
       const errorEl = document.getElementById("progress-error");
       const cancelBtn = document.getElementById("cancel-btn");
 
-      // Faster polls early so a quick job doesn't look frozen.
       let pollIntervalMs = 600;
       const MAX_INTERVAL_MS = 1800;
 
@@ -93,13 +172,8 @@
 
       function showError(message) {
         errorEl.textContent = message;
-        errorEl.classList.remove("d-none");
-      }
-
-      function setBar(pct) {
-        bar.style.width = pct + "%";
-        bar.setAttribute("aria-valuenow", String(pct));
-        percentLabel.textContent = pct + "%";
+        errorContainer.classList.remove("d-none");
+        errorContainer.classList.add("d-flex");
       }
 
       function formatCount(value) {
@@ -132,8 +206,14 @@
         if (job.phase === "applying_codebook" && job.analysis_units_total > 0) {
           return `${formatCount(job.analysis_units_done)} of ${formatCount(job.analysis_units_total)} transcripts coded`;
         }
-        if (job.documents_total > 0) {
+        if (job.documents_total > 0 && job.phase === "extracting_quote_codes") {
           return `${formatCount(job.documents_done)} of ${formatCount(job.documents_total)} transcripts reviewed`;
+        }
+        if (job.phase === "synthesizing_themes") {
+            return "Synthesizing thematic structure";
+        }
+        if (job.phase === "evaluating_iterations") {
+            return "Evaluating iterations";
         }
         return "Worker is preparing the analysis";
       }
@@ -157,6 +237,8 @@
           pieces.push(`${formatCount(job.themes_created)} themes`);
         }
         metricCodebook.textContent = pieces.length ? pieces.join(" / ") : "Pending";
+        
+        metricTokens.textContent = `${job.llm_tokens_input ? formatCount(job.llm_tokens_input) : "0"} / ${job.llm_tokens_output ? formatCount(job.llm_tokens_output) : "0"}`;
       }
 
       function paint(job) {
@@ -165,44 +247,92 @@
         const step = phaseLabel(job);
         updateMetrics(job);
 
+        // Update stepper UI
+        const orderedPhases = [
+          "loading",
+          "extracting_quote_codes",
+          "consolidating_codes",
+          "synthesizing_themes",
+          "evaluating_iterations",
+          "persisting_codebook",
+          "applying_codebook"
+        ];
+        
+        let currentPhaseIndex = orderedPhases.indexOf(job.phase);
+        if (currentPhaseIndex === -1 && job.status === "succeeded") {
+          currentPhaseIndex = orderedPhases.length;
+        }
+
+        document.querySelectorAll('.pipeline-step').forEach((stepEl, idx) => {
+          const stepPhase = stepEl.dataset.step;
+          const phaseIdx = orderedPhases.indexOf(stepPhase);
+          const iconEl = stepEl.querySelector('.pipeline-step-icon');
+          const subtitleEl = stepEl.querySelector('.pipeline-step-subtitle');
+          const progressEl = stepEl.querySelector('.pipeline-step-progress');
+          const progressBarEl = stepEl.querySelector('.pipeline-step-progress-bar');
+          
+          stepEl.className = "pipeline-step";
+          
+          if (phaseIdx < currentPhaseIndex || (job.status === "succeeded")) {
+            stepEl.classList.add("pipeline-step-completed");
+            iconEl.innerHTML = '<i class="bi bi-check"></i>';
+            subtitleEl.classList.add("d-none");
+            progressEl.classList.add("d-none");
+          } else if (phaseIdx === currentPhaseIndex) {
+            if (job.status === "failed") {
+              stepEl.classList.add("pipeline-step-failed");
+              iconEl.innerHTML = '<i class="bi bi-x"></i>';
+              subtitleEl.classList.add("d-none");
+              progressEl.classList.add("d-none");
+            } else if (job.status === "running") {
+              stepEl.classList.add("pipeline-step-active");
+              iconEl.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+              subtitleEl.classList.remove("d-none");
+              subtitleEl.textContent = activeCounter(job);
+              
+              const raw = job.progress_percent || (total > 0 ? Math.round((done / total) * 100) : 2);
+              const pct = Math.min(99, Math.max(2, raw));
+              if (job.phase === "synthesizing_themes" || job.phase === "persisting_codebook" || job.phase === "evaluating_iterations" || job.phase === "loading") {
+                  progressEl.classList.remove("d-none");
+                  progressBarEl.style.width = "100%";
+                  progressBarEl.classList.add("progress-bar-striped", "progress-bar-animated");
+              } else {
+                  progressEl.classList.remove("d-none");
+                  progressBarEl.style.width = pct + "%";
+                  progressBarEl.classList.remove("progress-bar-striped", "progress-bar-animated");
+              }
+            } else {
+              iconEl.innerHTML = '<i class="bi bi-circle"></i>';
+              subtitleEl.classList.add("d-none");
+              progressEl.classList.add("d-none");
+            }
+          } else {
+            stepEl.classList.add("pipeline-step-pending");
+            iconEl.innerHTML = '<i class="bi bi-circle"></i>';
+            subtitleEl.classList.add("d-none");
+            progressEl.classList.add("d-none");
+          }
+        });
+
         if (job.status === "queued") {
-          setBar(0);
-          counts.textContent = "Preparing…";
           statusLine.textContent = "Waiting for a worker…";
           return;
         }
 
-        if (job.status === "running" && done === 0) {
-          setBar(job.progress_percent || 2);
-          counts.textContent = activeCounter(job);
-          statusLine.textContent = `${step}…`;
-          return;
-        }
-
-        if (job.status === "running") {
-          // Clamp at 99% so the bar can't read "100%" before status flips.
-          const raw = job.progress_percent || (total > 0 ? Math.round((done / total) * 100) : 2);
-          const pct = Math.min(99, Math.max(2, raw));
-          setBar(pct);
-          counts.textContent = activeCounter(job);
-          statusLine.textContent = `${step}…`;
-          return;
-        }
-
         if (job.status === "succeeded") {
-          setBar(100);
-          counts.textContent = job.application_run_id
-            ? "Codebook generated and applied."
-            : "Codebook generated.";
           statusLine.textContent = "Done. Opening results…";
         } else {
-          statusLine.textContent = "Status: " + job.status;
+          statusLine.textContent = `${step}…`;
         }
       }
 
       function stopAnimation() {
-        bar.classList.remove("progress-bar-animated", "progress-bar-striped");
-        statusSpinner.classList.add("d-none");
+        document.querySelectorAll('.pipeline-step-active .pipeline-step-progress-bar').forEach(el => {
+            el.classList.remove("progress-bar-animated", "progress-bar-striped");
+        });
+        document.querySelectorAll('.pipeline-step-active .pipeline-step-icon').forEach(el => {
+            el.innerHTML = '<i class="bi bi-circle"></i>';
+        });
       }
 
       function redirectFor(job) {
@@ -221,9 +351,6 @@
       function onTerminal(job) {
         stopped = true;
         if (job.status === "succeeded" && job.codebook_id) {
-          // Hold the "Done" state briefly so success is perceived rather than
-          // appearing as an instant page jump.
-          setBar(100);
           statusLine.textContent = "Done. Opening results…";
           cancelBtn.disabled = true;
           setTimeout(() => redirectFor(job), 500);
@@ -272,9 +399,6 @@
         }
       });
 
-      // If the user leaves before the job finishes, hand it to job_tracker.js
-      // so background polling and the completion toast still fire.
-      // `stopped` guards the terminal case so a finished job isn't re-tracked.
       window.addEventListener("pagehide", () => {
         if (stopped) return;
         window.ATAJobTracker?.track({ id: jobId, name, mode });
