@@ -1345,74 +1345,66 @@ class TraceableAnalysisService:
         )
         parser = JsonOutputParser(pydantic_object=CodebookPolishResult)
         chain_payload = {"codebook": json.dumps(payload, ensure_ascii=True, indent=2)}
+        chain = (
+            build_codebook_polish_prompt()
+            | build_chat_model(provider=self._provider, temperature=0.0)
+            | parser
+        )
 
-        for attempt in range(1, _POLISH_MAX_ATTEMPTS + 1):
-            try:
-                chain = (
-                    build_codebook_polish_prompt()
-                    | build_chat_model(provider=self._provider, temperature=0.0)
-                    | parser
-                )
-                raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
-                polish = (
-                    raw_result
-                    if isinstance(raw_result, CodebookPolishResult)
-                    else CodebookPolishResult(**raw_result)
-                )
-                polished, polished_codes, polished_evidence, applied_actions = self._apply_codebook_polish(
-                    synthesis=synthesis,
-                    consolidated_codes=consolidated_codes,
-                    quote_evidence=quote_evidence,
-                    polish=polish,
-                )
-                logger.info(
-                    "Traceable final codebook polish complete: code_renames={}, theme_renames={}",
-                    sum(1 for action in applied_actions if action.get("artifact_type") == "code"),
-                    sum(1 for action in applied_actions if action.get("artifact_type") in {"theme", "subtheme"}),
-                )
-                return (
-                    polished,
-                    polished_codes,
-                    polished_evidence,
-                    [
-                        {
-                            "action": "polish_final_codebook",
-                            "applied": bool(applied_actions),
-                            "code_count": len(polished.codes),
-                            "theme_path_count": len(polished.themes),
-                            "outputs": {
-                                "notes": polish.notes,
-                                "changes": applied_actions,
-                            },
-                        }
-                    ],
-                )
-            except Exception as exc:
-                if attempt >= _POLISH_MAX_ATTEMPTS:
-                    logger.warning(
-                        "Traceable final codebook polish failed after retries; keeping selected codebook: error={}",
-                        exc,
-                    )
-                    return (
-                        synthesis,
-                        consolidated_codes,
-                        quote_evidence,
-                        [
-                            {
-                                "action": "polish_final_codebook",
-                                "applied": False,
-                                "rejected_reason": str(exc),
-                            }
-                        ],
-                    )
-                logger.warning(
-                    "Traceable final codebook polish retry: attempt={}, error={}",
-                    attempt,
-                    exc,
-                )
-                await asyncio.sleep(0.5 * attempt)
+        async def _attempt() -> CodebookPolishResult:
+            raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
+            return raw_result if isinstance(raw_result, CodebookPolishResult) else CodebookPolishResult(**raw_result)
 
-        return synthesis, consolidated_codes, quote_evidence, []
+        try:
+            polish = await self._invoke_with_retries(label="final codebook polish", attempt=_attempt)
+        except Exception as exc:
+            # Optional refinement: polishing only renames/redescribes labels,
+            # so keep the already-selected codebook rather than fail the job.
+            logger.warning(
+                "Traceable final codebook polish failed after retries; keeping selected codebook: error={}",
+                exc,
+            )
+            return (
+                synthesis,
+                consolidated_codes,
+                quote_evidence,
+                [
+                    {
+                        "action": "polish_final_codebook",
+                        "applied": False,
+                        "rejected_reason": str(exc),
+                    }
+                ],
+            )
+
+        polished, polished_codes, polished_evidence, applied_actions = self._apply_codebook_polish(
+            synthesis=synthesis,
+            consolidated_codes=consolidated_codes,
+            quote_evidence=quote_evidence,
+            polish=polish,
+        )
+        logger.info(
+            "Traceable final codebook polish complete: code_renames={}, theme_renames={}",
+            sum(1 for action in applied_actions if action.get("artifact_type") == "code"),
+            sum(1 for action in applied_actions if action.get("artifact_type") in {"theme", "subtheme"}),
+        )
+        return (
+            polished,
+            polished_codes,
+            polished_evidence,
+            [
+                {
+                    "action": "polish_final_codebook",
+                    "applied": bool(applied_actions),
+                    "code_count": len(polished.codes),
+                    "theme_path_count": len(polished.themes),
+                    "outputs": {
+                        "notes": polish.notes,
+                        "changes": applied_actions,
+                    },
+                }
+            ],
+        )
 
     def _build_codebook_polish_payload(
         self,
@@ -1685,41 +1677,31 @@ class TraceableAnalysisService:
             "codebook": json.dumps(synthesis.model_dump(mode="json"), ensure_ascii=True, indent=2),
             "applications": json.dumps(payload, ensure_ascii=True, indent=2),
         }
-        for attempt in range(1, _EVALUATION_MAX_ATTEMPTS + 1):
-            try:
-                raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
-                result = CodebookQualityEvaluationResult(**raw_result)
-                result.fitness_score = self._clamp_confidence(result.fitness_score)
-                result.coverage_score = self._clamp_confidence(result.coverage_score)
-                return result
-            except Exception as exc:
-                if attempt >= _EVALUATION_MAX_ATTEMPTS:
-                    logger.warning(
-                        "Traceable quality evaluation failed after retries; using fallback metrics: "
-                        "documents={}, assignments={}, failed_documents={}, error={}",
-                        len(evaluation_documents),
-                        len(evaluation_evidence),
-                        failed_document_count,
-                        exc,
-                    )
-                    return self._fallback_quality_evaluation(
-                        evaluation_documents=evaluation_documents,
-                        evaluation_evidence=evaluation_evidence,
-                        failed_document_count=failed_document_count,
-                    )
-                logger.warning(
-                    "Traceable quality evaluation retry: attempt={}, documents={}, error={}",
-                    attempt,
-                    len(evaluation_documents),
-                    exc,
-                )
-                await asyncio.sleep(0.5 * attempt)
+        async def _attempt() -> CodebookQualityEvaluationResult:
+            raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
+            result = CodebookQualityEvaluationResult(**raw_result)
+            result.fitness_score = self._clamp_confidence(result.fitness_score)
+            result.coverage_score = self._clamp_confidence(result.coverage_score)
+            return result
 
-        return self._fallback_quality_evaluation(
-            evaluation_documents=evaluation_documents,
-            evaluation_evidence=evaluation_evidence,
-            failed_document_count=failed_document_count,
-        )
+        try:
+            return await self._invoke_with_retries(label="quality evaluation", attempt=_attempt)
+        except Exception as exc:
+            # Optional refinement input: iteration scoring can fall back to a
+            # deterministic heuristic rather than fail the whole job.
+            logger.warning(
+                "Traceable quality evaluation failed after retries; using fallback metrics: "
+                "documents={}, assignments={}, failed_documents={}, error={}",
+                len(evaluation_documents),
+                len(evaluation_evidence),
+                failed_document_count,
+                exc,
+            )
+            return self._fallback_quality_evaluation(
+                evaluation_documents=evaluation_documents,
+                evaluation_evidence=evaluation_evidence,
+                failed_document_count=failed_document_count,
+            )
 
     def _fallback_quality_evaluation(
         self,
