@@ -3803,33 +3803,27 @@ class TraceableAnalysisService:
         await _emit_progress(0)
         for document_index, document in enumerate(documents, start=1):
             await self._raise_if_cancelled(should_cancel)
-            result: TraceableApplicationResult | None = None
             payload = {
                 "codebook": codebook_context,
                 "transcript": document.content,
             }
-            for attempt in range(1, _APPLICATION_MAX_ATTEMPTS + 1):
-                try:
-                    raw_result = await chain.ainvoke(payload, config=self._llm_config())
-                    result = TraceableApplicationResult(**raw_result)
-                    break
-                except Exception as exc:
-                    if attempt >= _APPLICATION_MAX_ATTEMPTS:
-                        failed_document_ids.append(document.id)
-                        logger.warning(
-                            "Traceable application document failed after retries: document_id={}, attempts={}, error={}",
-                            document.id,
-                            attempt,
-                            exc,
-                        )
-                        break
-                    logger.warning(
-                        "Traceable application document retry: document_id={}, attempt={}, error={}",
-                        document.id,
-                        attempt,
-                        exc,
-                    )
-                    await asyncio.sleep(0.5 * attempt)
+
+            async def _attempt(payload: dict[str, str] = payload) -> TraceableApplicationResult:
+                raw_result = await chain.ainvoke(payload, config=self._llm_config())
+                return TraceableApplicationResult(**raw_result)
+
+            try:
+                result: TraceableApplicationResult | None = await self._invoke_with_retries(
+                    label="codebook application", attempt=_attempt
+                )
+            except Exception as exc:
+                result = None
+                failed_document_ids.append(document.id)
+                logger.warning(
+                    "Traceable application document failed after retries: document_id={}, error={}",
+                    document.id,
+                    exc,
+                )
             if result is None:
                 await _emit_progress(document_index)
                 continue
@@ -3863,68 +3857,57 @@ class TraceableAnalysisService:
                     ),
                     "transcript": document.content,
                 }
-                for attempt in range(1, _APPLICATION_MAX_ATTEMPTS + 1):
-                    try:
-                        raw_recall = await chain.ainvoke(recall_payload, config=self._llm_config())
-                        recall_result = TraceableApplicationResult(**raw_recall)
-                        recalled = self._append_application_assignments(
-                            document=document,
-                            result=recall_result,
-                            allowed_codes=allowed_codes,
-                            allowed_themes=allowed_themes,
-                            applied=applied,
-                            document_assignment_keys=document_assignment_keys,
-                            exact_only=True,
+                async def _attempt_recall(recall_payload: dict[str, str] = recall_payload) -> TraceableApplicationResult:
+                    raw_recall = await chain.ainvoke(recall_payload, config=self._llm_config())
+                    return TraceableApplicationResult(**raw_recall)
+
+                try:
+                    recall_result = await self._invoke_with_retries(
+                        label="application recall repair", attempt=_attempt_recall
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Traceable application recall repair skipped after retries: "
+                        "document_id={}, candidate_codes={}, error={}",
+                        document.id,
+                        len(recall_candidates),
+                        exc,
+                    )
+                    action_log.append(
+                        {
+                            "action": "application_recall_repair_skipped",
+                            "document_id": str(document.id),
+                            "candidate_codes": [code.code_label for code in recall_candidates],
+                            "error": str(exc),
+                        }
+                    )
+                else:
+                    recalled = self._append_application_assignments(
+                        document=document,
+                        result=recall_result,
+                        allowed_codes=allowed_codes,
+                        allowed_themes=allowed_themes,
+                        applied=applied,
+                        document_assignment_keys=document_assignment_keys,
+                        exact_only=True,
+                    )
+                    if recalled:
+                        action_log.append(
+                            {
+                                "action": "application_recall_repair",
+                                "document_id": str(document.id),
+                                "assignments": recalled,
+                                "candidate_codes": [code.code_label for code in recall_candidates],
+                                "quote_match_policy": "exact_only",
+                            }
                         )
-                        if recalled:
-                            action_log.append(
-                                {
-                                    "action": "application_recall_repair",
-                                    "document_id": str(document.id),
-                                    "assignments": recalled,
-                                    "candidate_codes": [code.code_label for code in recall_candidates],
-                                    "quote_match_policy": "exact_only",
-                                    "attempts": attempt,
-                                }
-                            )
-                            logger.info(
-                                "Traceable application recall repair added assignments: "
-                                "document_id={}, assignments={}, candidate_codes={}, attempts={}",
-                                document.id,
-                                recalled,
-                                len(recall_candidates),
-                                attempt,
-                            )
-                        break
-                    except Exception as exc:
-                        if attempt >= _APPLICATION_MAX_ATTEMPTS:
-                            logger.warning(
-                                "Traceable application recall repair skipped after retries: "
-                                "document_id={}, candidate_codes={}, attempts={}, error={}",
-                                document.id,
-                                len(recall_candidates),
-                                attempt,
-                                exc,
-                            )
-                            action_log.append(
-                                {
-                                    "action": "application_recall_repair_skipped",
-                                    "document_id": str(document.id),
-                                    "candidate_codes": [code.code_label for code in recall_candidates],
-                                    "attempts": attempt,
-                                    "error": str(exc),
-                                }
-                            )
-                            break
-                        logger.warning(
-                            "Traceable application recall repair retry: "
-                            "document_id={}, candidate_codes={}, attempt={}, error={}",
+                        logger.info(
+                            "Traceable application recall repair added assignments: "
+                            "document_id={}, assignments={}, candidate_codes={}",
                             document.id,
+                            recalled,
                             len(recall_candidates),
-                            attempt,
-                            exc,
                         )
-                        await asyncio.sleep(0.5 * attempt)
             logger.info(
                 "Traceable application document complete: document_id={}, assignments={}",
                 document.id,
