@@ -138,7 +138,9 @@ async def get_codebooks(
     description=(
         "Generate and persist a codebook immediately. "
         "If `transcript_document_ids` is provided, only those documents are used. "
-        "If omitted or empty, all documents in the selected corpus are used."
+        "If `transcript_sample_size` is provided, that many documents are randomly "
+        "sampled from the corpus. If neither is provided, all documents in the "
+        "selected corpus are used."
     ),
 )
 async def generate_codebook(
@@ -149,11 +151,17 @@ async def generate_codebook(
     # path, so this endpoint never silently runs on a different provider than
     # the one chosen in the UI.
     active_provider = await get_active_provider(session)
+    resolved_document_ids = await resolve_transcript_document_ids(
+        session,
+        corpus_id=payload.corpus_id,
+        transcript_document_ids=payload.transcript_document_ids,
+        transcript_sample_size=payload.transcript_sample_size,
+    )
     service = CodebookGenerationService(session)
     generated_codebook = await service.generate_codebook(
         codebook_name=payload.codebook_name,
         corpus_id=payload.corpus_id,
-        transcript_document_ids=payload.transcript_document_ids,
+        transcript_document_ids=resolved_document_ids,
         analysis_name=payload.analysis_name,
         custom_id=payload.custom_id,
         research_query=payload.research_query,
@@ -176,13 +184,21 @@ async def generate_codebook(
     description=(
         "Create an asynchronous codebook generation job and return immediately. "
         "If `transcript_document_ids` is provided, only those documents are used. "
-        "If omitted or empty, all documents in the selected corpus are used."
+        "If `transcript_sample_size` is provided, that many documents are randomly "
+        "sampled from the corpus. If neither is provided, all documents in the "
+        "selected corpus are used."
     ),
 )
 async def create_generate_codebook_job(
     payload: CodebookGenerationJobCreateRequest,
     session: DbSession,
 ) -> JSONResponse:
+    resolved_document_ids = await resolve_transcript_document_ids(
+        session,
+        corpus_id=payload.corpus_id,
+        transcript_document_ids=payload.transcript_document_ids,
+        transcript_sample_size=payload.transcript_sample_size,
+    )
     job = CodebookGenerationJob(
         id=uuid4(),
         status="queued",
@@ -191,7 +207,7 @@ async def create_generate_codebook_job(
         analysis_name=payload.analysis_name or payload.codebook_name,
         custom_id=payload.custom_id,
         corpus_id=payload.corpus_id,
-        transcript_document_ids_json=_serialize_document_ids(payload.transcript_document_ids),
+        transcript_document_ids_json=_serialize_document_ids(resolved_document_ids),
         cancel_requested=False,
         documents_total=0,
         documents_done=0,
