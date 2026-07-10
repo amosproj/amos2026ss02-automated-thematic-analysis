@@ -34,6 +34,16 @@
           <h3 class="h6 mb-1">Which Large Language Model is being used?</h3>
           <p class="small text-secondary mb-0">By default, we connect to the NHR@FAU cluster, which runs state-of-the-art open-weights models (such as Qwen or Mixtral) in a secure, privacy-compliant environment. You can change the active provider on the <a href="{{ url_for('main.index') }}">Home page</a>.</p>
         </div>
+
+        <div class="mb-3">
+          <h3 class="h6 mb-1">What is an embedding model and why is it used?</h3>
+          <p class="small text-secondary mb-0">An embedding model converts short pieces of text, such as code labels and descriptions, into numeric vectors so the system can compare their meaning. We use this to find similar or duplicate codes during automated codebook generation and consolidation before asking the LLM for deeper reasoning.</p>
+        </div>
+
+        <div class="mb-3">
+          <h3 class="h6 mb-1">Can I use a commercial embedding provider such as OpenAI?</h3>
+          <p class="small text-secondary mb-0">Yes, if the server administrator configures an OpenAI-compatible embeddings endpoint in the backend environment. The embedding model follows the same provider selected on the <a href="{{ url_for('main.index') }}">Home page</a>, so transcripts and generated code text are sent to that selected provider for AI processing.</p>
+        </div>
         
         <div class="mb-3">
           <h3 class="h6 mb-1">What happens to my data?</h3>

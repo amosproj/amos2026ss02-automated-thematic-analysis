@@ -19,6 +19,42 @@ UI, the active provider is stored in the backend `app_settings` table and read
 at job start. Long-running jobs keep using the provider they started with, even
 if the Home page setting changes while the job is running.
 
+## Embedding Model Selection
+
+The embedding model is selected through the same provider configuration as the
+chat model. There is currently no separate UI control for embeddings: if the
+active provider is `FAU`, the backend uses `EMBEDDING_MODEL_FAU`; if the active
+provider is `ACADEMIC`, it uses `EMBEDDING_MODEL`.
+
+Embeddings are used for semantic comparison, not for generating text. The model
+turns code labels and descriptions into numeric vectors so the backend can
+quickly find codes that are likely duplicates, equivalent, or related before
+asking the LLM to make a final relationship decision. This makes consolidation
+faster and reduces unnecessary LLM calls.
+
+The embedding endpoint is expected to be OpenAI-compatible:
+
+- endpoint: `${LLM_BASE_URL}/embeddings` or `${LLM_BASE_URL_FAU}/embeddings`
+- request fields: `model` and `input`
+- response shape: `data[].embedding`
+
+To use a commercial provider such as OpenAI, configure the `ACADEMIC` provider
+slot with the commercial provider's OpenAI-compatible API settings, for example:
+
+```env
+SELECTED_API=ACADEMIC
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=<your_openai_api_key>
+LLM_MODEL=gpt-4.1-mini
+EMBEDDING_MODEL=text-embedding-3-large
+```
+
+Then select **Academic Cloud** on the Home page. The label remains Academic
+Cloud unless a new provider entry is added to the backend registry, but the
+actual requests use the configured base URL and model names. Splitting chat
+models and embedding models across different providers would require a code
+change because embeddings currently follow the selected runtime provider.
+
 ## Hardware Availability at FAU Cluster
 
 The Friedrich-Alexander-Universität (FAU) provides access to various GPU clusters suitable for different computational needs:
