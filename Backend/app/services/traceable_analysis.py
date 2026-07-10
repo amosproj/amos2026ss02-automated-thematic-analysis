@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import math
-import re
 import uuid
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
@@ -13,7 +12,7 @@ from typing import Any, TypeVar, cast
 from uuid import UUID
 
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.runnables import RunnableConfig, RunnableLambda
+from langchain_core.runnables import RunnableConfig
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -630,25 +629,38 @@ class TraceableAnalysisService:
         should_cancel: Callable[[], Awaitable[bool]] | None,
     ) -> list[_QuoteEvidence]:
         parser = JsonOutputParser(pydantic_object=QuoteCodeExtractionResult)
-        sanitize: RunnableLambda[Any, Any] = RunnableLambda(lambda s: re.sub(r"\*+", "", s) if isinstance(s, str) else s)
-        chain = build_quote_code_extraction_prompt() | build_chat_model(provider=self._provider) | sanitize | parser
+        chain = build_quote_code_extraction_prompt() | build_chat_model(provider=self._provider) | parser
         evidence: list[_QuoteEvidence] = []
         if on_unit_progress is not None:
             await on_unit_progress(0, len(documents))
 
         for index, document in enumerate(documents, start=1):
             await self._raise_if_cancelled(should_cancel)
-            raw_result = await chain.ainvoke(
-                {
-                    "transcript": document.content,
-                    "research_query_block": build_research_query_block(research_query),
-                    "researcher_topics_block": build_researcher_topics_block(researcher_topics),
-                },
-                config=self._llm_config(),
-            )
-            if not raw_result:
-                continue
-            result = QuoteCodeExtractionResult(**raw_result)
+
+            async def _attempt(document: _DocumentText = document) -> QuoteCodeExtractionResult:
+                raw_result = await chain.ainvoke(
+                    {
+                        "transcript": document.content,
+                        "research_query_block": build_research_query_block(research_query),
+                        "researcher_topics_block": build_researcher_topics_block(researcher_topics),
+                    },
+                    config=self._llm_config(),
+                )
+                return QuoteCodeExtractionResult(**raw_result)
+
+            try:
+                result = await self._invoke_with_retries(label="quote/code extraction", attempt=_attempt)
+            except Exception as exc:
+                # Load-bearing: this document's evidence shapes the codebook
+                # itself, so a silently skipped document would shrink the
+                # analyzed corpus without the user ever knowing. Fail the
+                # whole job with a precise, actionable error instead.
+                raise UnprocessableError(
+                    "Quote/code extraction failed for transcript "
+                    f"'{document.title}' ({document.id}), document {index} of {len(documents)}, "
+                    f"after retries: {type(exc).__name__}: {exc}"
+                ) from exc
+
             document_pairs_before = len(evidence)
             for pair_index, pair in enumerate(result.quote_code_pairs, start=1):
                 label = self._normalize_label(pair.code_label)
@@ -718,37 +730,28 @@ class TraceableAnalysisService:
             "label_b": right.label,
             "description_b": right.description or "",
         }
-        for attempt in range(1, _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS + 1):
-            try:
-                raw_result = await self._code_relationship_chain.ainvoke(payload, config=self._llm_config())
-                return CodeRelationshipResult(**raw_result)
-            except Exception as exc:
-                if attempt >= _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS:
-                    logger.warning(
-                        "Traceable pair classification failed after retries; using conservative fallback: "
-                        "code_a='{}', code_b='{}', error={}",
-                        left.label,
-                        right.label,
-                        exc,
-                    )
-                    return CodeRelationshipResult(
-                        relationship="orthogonal",
-                        confidence=0.0,
-                        reason=f"Classification failed after retries: {type(exc).__name__}",
-                    )
-                logger.warning(
-                    "Traceable pair classification retry: attempt={}, code_a='{}', code_b='{}', error={}",
-                    attempt,
-                    left.label,
-                    right.label,
-                    exc,
-                )
-                await asyncio.sleep(0.5 * attempt)
-        return CodeRelationshipResult(
-            relationship="orthogonal",
-            confidence=0.0,
-            reason="Classification retry loop exhausted without a result.",
-        )
+
+        async def _attempt() -> CodeRelationshipResult:
+            raw_result = await self._code_relationship_chain.ainvoke(payload, config=self._llm_config())
+            return CodeRelationshipResult(**raw_result)
+
+        try:
+            return await self._invoke_with_retries(label="pair classification", attempt=_attempt)
+        except Exception as exc:
+            # Optional refinement input: consolidation can tolerate a
+            # conservative default rather than failing the whole job.
+            logger.warning(
+                "Traceable pair classification failed after retries; using conservative fallback: "
+                "code_a='{}', code_b='{}', error={}",
+                left.label,
+                right.label,
+                exc,
+            )
+            return CodeRelationshipResult(
+                relationship="orthogonal",
+                confidence=0.0,
+                reason=f"Classification failed after retries: {type(exc).__name__}",
+            )
 
     async def _classify_code_pairs(
         self,
@@ -776,34 +779,32 @@ class TraceableAnalysisService:
             for pair_id, left, right in pairs
         ]
         payload = {"pairs_json": json.dumps(pairs_payload, ensure_ascii=False)}
-        for attempt in range(1, _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS + 1):
-            try:
-                raw_result = await self._batch_code_relationship_chain.ainvoke(payload, config=self._llm_config())
-                parsed = BatchCodeRelationshipResults(**raw_result)
-                return {
-                    item.pair_id: CodeRelationshipResult(
-                        relationship=item.relationship,
-                        confidence=item.confidence,
-                        reason=item.reason,
-                    )
-                    for item in parsed.pairs
-                }
-            except Exception as exc:
-                if attempt >= _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS:
-                    logger.warning(
-                        "Traceable batch pair classification failed after retries: pairs={}, error={}",
-                        len(pairs),
-                        exc,
-                    )
-                    raise
-                logger.warning(
-                    "Traceable batch pair classification retry: attempt={}, pairs={}, error={}",
-                    attempt,
-                    len(pairs),
-                    exc,
+
+        async def _attempt() -> dict[int, CodeRelationshipResult]:
+            raw_result = await self._batch_code_relationship_chain.ainvoke(payload, config=self._llm_config())
+            parsed = BatchCodeRelationshipResults(**raw_result)
+            return {
+                item.pair_id: CodeRelationshipResult(
+                    relationship=item.relationship,
+                    confidence=item.confidence,
+                    reason=item.reason,
                 )
-                await asyncio.sleep(0.5 * attempt)
-        return {}
+                for item in parsed.pairs
+            }
+
+        # Unlike _classify_code_pair, this one re-raises on exhaustion by
+        # design: consolidate_code_candidates already catches batch failures
+        # and falls back to the per-pair classifier above, which has its own
+        # conservative fallback - degrading here too would just hide that.
+        try:
+            return await self._invoke_with_retries(label="batch pair classification", attempt=_attempt)
+        except Exception as exc:
+            logger.warning(
+                "Traceable batch pair classification failed after retries: pairs={}, error={}",
+                len(pairs),
+                exc,
+            )
+            raise
 
     async def _synthesize_codebook(
         self,
