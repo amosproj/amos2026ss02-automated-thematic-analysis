@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import desc, func, select
@@ -44,8 +43,9 @@ class ThemeQuotesService:
             else {theme_id}
         )
 
-        from app.models import CodeAssignment
         from sqlalchemy import union_all
+
+        from app.models import CodeAssignment
 
         theme_stmt = select(
             DocumentCoding.document_id,
@@ -136,10 +136,11 @@ class ThemeQuotesService:
     ) -> dict[tuple[UUID, str], list[UUID]]:
         if not document_ids:
             return {}
-            
-        from app.models import CodeAssignment
+
         from sqlalchemy import union_all
-            
+
+        from app.models import CodeAssignment
+
         theme_stmt = select(
             DocumentCoding.document_id,
             ThemeAssignment.quote,
@@ -152,7 +153,7 @@ class ThemeQuotesService:
             ThemeAssignment.is_present.is_(True),
             ThemeAssignment.quote.is_not(None),
         )
-        
+
         code_stmt = select(
             DocumentCoding.document_id,
             CodeAssignment.quote,
@@ -164,7 +165,7 @@ class ThemeQuotesService:
             DocumentCoding.document_id.in_(document_ids),
             CodeAssignment.quote.is_not(None),
         )
-        
+
         unified = union_all(theme_stmt, code_stmt).subquery("unified")
 
         rows = (

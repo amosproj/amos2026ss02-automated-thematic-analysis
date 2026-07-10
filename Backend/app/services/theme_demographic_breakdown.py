@@ -144,7 +144,7 @@ class ThemeDemographicBreakdownService:
 
     async def _ensure_node_in_codebook(self, *, codebook_id: UUID, node_id: UUID) -> None:
         from app.models import Code
-        
+
         theme_row = (
             await self._session.execute(
                 select(Theme.id).where(
@@ -155,7 +155,7 @@ class ThemeDemographicBreakdownService:
         ).scalar_one_or_none()
         if theme_row is not None:
             return
-            
+
         code_row = (
             await self._session.execute(
                 select(Code.id).where(
@@ -166,7 +166,7 @@ class ThemeDemographicBreakdownService:
         ).scalar_one_or_none()
         if code_row is not None:
             return
-            
+
         raise ThemeNotFoundError(
             f"Theme/Code '{node_id}' not found in codebook '{codebook_id}'."
         )
@@ -224,9 +224,10 @@ class ThemeDemographicBreakdownService:
     async def _load_present_document_ids(
         self, *, run_id: UUID, node_ids: set[UUID]
     ) -> set[UUID]:
-        from app.models import CodeAssignment
         from sqlalchemy import union
-        
+
+        from app.models import CodeAssignment
+
         theme_stmt = select(DocumentCoding.document_id).join(
             ThemeAssignment,
             ThemeAssignment.document_coding_id == DocumentCoding.id,
@@ -235,7 +236,7 @@ class ThemeDemographicBreakdownService:
             ThemeAssignment.theme_id.in_(node_ids),
             ThemeAssignment.is_present.is_(True),
         )
-        
+
         code_stmt = select(DocumentCoding.document_id).join(
             CodeAssignment,
             CodeAssignment.document_coding_id == DocumentCoding.id,
@@ -243,7 +244,7 @@ class ThemeDemographicBreakdownService:
             DocumentCoding.application_run_id == run_id,
             CodeAssignment.code_id.in_(node_ids),
         )
-        
+
         rows = (
             await self._session.execute(union(theme_stmt, code_stmt))
         ).scalars().all()

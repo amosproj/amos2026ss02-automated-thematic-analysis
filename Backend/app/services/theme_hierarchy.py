@@ -47,7 +47,7 @@ async def load_children_map(
     children: dict[UUID, set[UUID]] = defaultdict(set)
     for parent_id, child_id in rows:
         children[parent_id].add(child_id)
-        
+
     for parent_id, child_id in code_rows:
         children[parent_id].add(child_id)
 

@@ -155,7 +155,7 @@ class ThemeFrequencyService:
             .distinct()
         )
         codes = list((await self._session.scalars(stmt_codes)).all())
-        
+
         return themes + codes
 
     async def _load_document_ids_by_node_id(
@@ -168,7 +168,7 @@ class ThemeFrequencyService:
         del codebook_id
         if application_run_id is None or not node_ids:
             return {node_id: set() for node_id in node_ids}
-            
+
         stmt_themes = (
             select(ThemeAssignment.theme_id.label("node_id"), DocumentCoding.document_id)
             .join(DocumentCoding, ThemeAssignment.document_coding_id == DocumentCoding.id)
@@ -179,7 +179,7 @@ class ThemeFrequencyService:
             )
             .distinct()
         )
-        
+
         stmt_codes = (
             select(CodeAssignment.code_id.label("node_id"), DocumentCoding.document_id)
             .join(DocumentCoding, CodeAssignment.document_coding_id == DocumentCoding.id)
@@ -189,10 +189,10 @@ class ThemeFrequencyService:
             )
             .distinct()
         )
-        
+
         from sqlalchemy import union
         stmt = union(stmt_themes, stmt_codes)
-        
+
         rows = (await self._session.execute(stmt)).all()
         document_ids: dict[UUID, set[UUID]] = {node_id: set() for node_id in node_ids}
         for node_id, document_id in rows:
