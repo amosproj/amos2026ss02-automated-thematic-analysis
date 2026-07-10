@@ -2872,19 +2872,32 @@ class TraceableAnalysisService:
             | build_chat_model(provider=self._provider, temperature=0.0)
             | parser
         )
-        raw_result = await chain.ainvoke(
-            {
-                "codebook": json.dumps(synthesis.model_dump(mode="json"), ensure_ascii=True, indent=2),
-                "coverage_gaps": json.dumps(
-                    [gap.model_dump(mode="json") for gap in coverage_gaps or []],
-                    ensure_ascii=True,
-                    indent=2,
-                ),
-                "quote_evidence": json.dumps(evidence_payload, ensure_ascii=True, indent=2),
-            },
-            config=self._llm_config(),
-        )
-        result = MissingCodeGenerationResult(**raw_result)
+        chain_payload = {
+            "codebook": json.dumps(synthesis.model_dump(mode="json"), ensure_ascii=True, indent=2),
+            "coverage_gaps": json.dumps(
+                [gap.model_dump(mode="json") for gap in coverage_gaps or []],
+                ensure_ascii=True,
+                indent=2,
+            ),
+            "quote_evidence": json.dumps(evidence_payload, ensure_ascii=True, indent=2),
+        }
+
+        async def _attempt() -> MissingCodeGenerationResult:
+            raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
+            return MissingCodeGenerationResult(**raw_result)
+
+        try:
+            result = await self._invoke_with_retries(label="missing-code generation", attempt=_attempt)
+        except Exception as exc:
+            # Optional refinement: this only fills coverage gaps found during
+            # iteration review, the codebook is already valid without it.
+            logger.warning(
+                "Traceable missing-code generation failed after retries; generating no additional codes: "
+                "error={}",
+                exc,
+            )
+            return []
+
         missing: list[ConsolidatedCode] = []
         for item in result.codes:
             label = self._truncate_label(self._normalize_label(item.code_label))
@@ -3007,26 +3020,23 @@ class TraceableAnalysisService:
             | parser
         )
         chain_payload = {"codebook": json.dumps(payload, ensure_ascii=True, indent=2)}
-        for attempt in range(1, _REVIEW_MAX_ATTEMPTS + 1):
-            try:
-                raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
-                return self._coerce_review_result(raw_result)
-            except Exception as exc:
-                if attempt >= _REVIEW_MAX_ATTEMPTS:
-                    logger.warning(
-                        "Traceable codebook review failed after retries; continuing without reviewer edits: "
-                        "round={}, error={}",
-                        round_index,
-                        exc,
-                    )
-                    return CodebookReviewResult(actions=[])
-                logger.warning(
-                    "Traceable codebook review retry: round={}, attempt={}, error={}",
-                    round_index,
-                    attempt,
-                    exc,
-                )
-                await asyncio.sleep(0.5 * attempt)
+
+        async def _attempt() -> CodebookReviewResult:
+            raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
+            return self._coerce_review_result(raw_result)
+
+        try:
+            return await self._invoke_with_retries(label="codebook review", attempt=_attempt)
+        except Exception as exc:
+            # Optional refinement: no reviewer edits this round just means the
+            # codebook stays as-is, not that the job should fail.
+            logger.warning(
+                "Traceable codebook review failed after retries; continuing without reviewer edits: "
+                "round={}, error={}",
+                round_index,
+                exc,
+            )
+            return CodebookReviewResult(actions=[])
         return CodebookReviewResult(actions=[])
 
     def _coerce_review_result(self, raw_result: object) -> CodebookReviewResult:
