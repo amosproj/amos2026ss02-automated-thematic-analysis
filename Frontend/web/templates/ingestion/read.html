@@ -384,14 +384,35 @@
     );
 
     for (const ca of sorted) {
-      if (!ca.quote || !ca.theme_id) continue;
-      const color       = colorFor(ca.theme_id);
-      const themeInfo   = THEMES[ca.theme_id] || {};
-      const label       = themeInfo.label || 'Theme';
-      const tooltipText = themeInfo.description
-        ? label + ': ' + themeInfo.description
-        : label;
-      highlightQuote(container, ca.quote.trim(), color, tooltipText, ca.theme_id);
+      if (!ca.quote || (!ca.theme_id && !ca.code_id)) continue;
+      
+      const colorId = ca.theme_id || ca.code_id;
+      const color = colorFor(colorId);
+      
+      const themeInfo = ca.theme_id ? THEMES[ca.theme_id] : null;
+      const codeInfo = ca.code_id ? THEMES[ca.code_id] : null;
+      
+      let tooltipText = "";
+      if (themeInfo && codeInfo) {
+          tooltipText = `${themeInfo.label} → ${codeInfo.label}`;
+          if (codeInfo.description) {
+              tooltipText += `: ${codeInfo.description}`;
+          }
+      } else if (codeInfo) {
+          tooltipText = codeInfo.label;
+          if (codeInfo.description) {
+              tooltipText += `: ${codeInfo.description}`;
+          }
+      } else if (themeInfo) {
+          tooltipText = themeInfo.label;
+          if (themeInfo.description) {
+              tooltipText += `: ${themeInfo.description}`;
+          }
+      } else {
+          tooltipText = "Unknown Code";
+      }
+
+      highlightQuote(container, ca.quote.trim(), color, tooltipText, colorId);
     }
 
     /* Initialise Bootstrap tooltips on all freshly created marks */
