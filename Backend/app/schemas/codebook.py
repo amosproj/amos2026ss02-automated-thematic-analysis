@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Literal, Union
 from uuid import UUID
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 
 from app.schemas.common import BaseSchema
 from app.utils.sanitize import sanitize_research_query
@@ -115,6 +115,16 @@ class CodebookGenerateRequest(BaseSchema):
     )
     corpus_id: UUID
     transcript_document_ids: list[UUID] | None = None
+    transcript_sample_size: int | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Randomly sample this many transcripts from the corpus to use for "
+            "generation, instead of using every transcript. Reduces token usage "
+            "for large corpora. Mutually exclusive with transcript_document_ids "
+            "— to use specific transcripts, create a corpus containing only them."
+        ),
+    )
     research_query: str | None = Field(
         default=None,
         max_length=_QUERY_MAX,
@@ -203,6 +213,14 @@ class CodebookGenerateRequest(BaseSchema):
                 f"researcher_topics must be at most {_QUERY_MAX} characters (got {len(cleaned)})."
             )
         return cleaned
+
+    @model_validator(mode="after")
+    def validate_transcript_selection(self) -> "CodebookGenerateRequest":
+        if self.transcript_document_ids and self.transcript_sample_size:
+            raise ValueError(
+                "Provide either transcript_document_ids or transcript_sample_size, not both."
+            )
+        return self
 
 
 class GeneratedCodebookResponse(BaseSchema):

@@ -72,6 +72,48 @@ class CodebookGenerationCancelledError(Exception):
     pass
 
 
+async def resolve_transcript_document_ids(
+    session: AsyncSession,
+    *,
+    corpus_id: UUID,
+    transcript_document_ids: list[UUID] | None,
+    transcript_sample_size: int | None,
+) -> list[UUID] | None:
+    """Resolve which transcripts a generation request should use.
+
+    If `transcript_sample_size` is given, randomly picks that many document
+    ids from the corpus (unseeded — the story does not require reproducible
+    sampling). Otherwise returns `transcript_document_ids` unchanged, so the
+    caller's existing "explicit ids, or None/empty for all" behavior applies.
+    Called at request time (not inside the generation pipeline) so both the
+    sync and job endpoints get the same immediate validation, and the job
+    table can persist the concrete resolved ids like it already does for
+    explicit selections.
+    """
+    if not transcript_sample_size:
+        return transcript_document_ids
+
+    corpus = (
+        await session.execute(select(Corpus.id).where(Corpus.id == corpus_id))
+    ).scalar_one_or_none()
+    if corpus is None:
+        raise NotFoundError(f"Corpus '{corpus_id}' not found")
+
+    available_ids = list(
+        (
+            await session.scalars(
+                select(CorpusDocument.id).where(CorpusDocument.corpus_id == corpus_id)
+            )
+        ).all()
+    )
+    if transcript_sample_size > len(available_ids):
+        raise UnprocessableError(
+            f"Requested transcript_sample_size ({transcript_sample_size}) exceeds the "
+            f"number of transcripts available in the corpus ({len(available_ids)})."
+        )
+    return random.sample(available_ids, transcript_sample_size)
+
+
 class CodebookGenerationService:
     """Generate and persist a new codebook through the traceable pipeline."""
 
