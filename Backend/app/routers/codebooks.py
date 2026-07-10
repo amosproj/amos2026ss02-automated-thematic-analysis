@@ -9,8 +9,10 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.config import get_settings
 from app.dependencies import DbSession
 from app.exceptions import NotFoundError, UnprocessableError
+from app.llm import providers
 from app.models import Codebook, CodebookGenerationJob
 from app.schemas.codebook import (
     CodebookCreateRequest,
@@ -23,8 +25,6 @@ from app.schemas.codebook import (
     NodeInput,
 )
 from app.schemas.common import ResponseEnvelope
-from app.config import get_settings
-from app.llm import providers
 from app.services.app_settings import get_active_provider
 from app.services.codebook import CodebookService
 from app.services.codebook_generation import CodebookGenerationService
@@ -54,7 +54,7 @@ def _validate_provider_config(provider_id: str) -> None:
         raise UnprocessableError(f"API key is missing for selected provider '{spec.label}'.")
     if not getattr(settings, spec.model_attr, None):
         raise UnprocessableError(f"Chat model is missing for selected provider '{spec.label}'.")
-    
+
     embed_spec = spec
     if not spec.supports_embeddings:
         embed_spec = providers.get_provider(providers.DEFAULT_PROVIDER_ID)
@@ -171,7 +171,7 @@ async def generate_codebook(
     # runs on different AI providers than the one chosen in the UI.
     active_provider = await get_active_provider(session)
     _validate_provider_config(active_provider)
-    
+
     service = CodebookGenerationService(session)
     generated_codebook = await service.generate_codebook(
         codebook_name=payload.codebook_name,
