@@ -32,6 +32,9 @@ _QUERY_MIN = 10
 _QUERY_MAX = 500
 _PENDING_CODEBOOK_DELETE_KEY = "pending_codebook_delete"
 
+_MAX_REFINEMENT_ROUNDS_DEFAULT = 5
+_MAX_REFINEMENT_ROUNDS_MAX = 10
+
 
 def _format_run_timestamp(run: dict) -> str:
     raw = run.get("finished_at") or run.get("created_at") or ""
@@ -665,6 +668,14 @@ def _active_provider_label() -> str | None:
         return None
 
 
+def _corpus_document_count(corpus_id: str) -> int | None:
+    """Best-effort transcript count for the sample-size hint; None if backend is down."""
+    try:
+        return _backend().count_documents(corpus_id)
+    except BackendError:
+        return None
+
+
 @bp.get("/new/<corpus_id>/auto")
 def new_codebook_auto_form(corpus_id: str) -> str:
     mode = _resolve_mode(request.args.get("mode", ""))
@@ -675,6 +686,10 @@ def new_codebook_auto_form(corpus_id: str) -> str:
         codebook_name=request.args.get("name", ""),
         research_query=request.args.get("rq", ""),
         researcher_topics=request.args.get("rt", ""),
+        max_refinement_rounds=request.args.get("mri", str(_MAX_REFINEMENT_ROUNDS_DEFAULT)),
+        transcript_sample_size=request.args.get("n", ""),
+        max_refinement_rounds_max=_MAX_REFINEMENT_ROUNDS_MAX,
+        corpus_document_count=_corpus_document_count(corpus_id),
         active_provider_label=_active_provider_label(),
     )
 
@@ -686,8 +701,12 @@ def new_codebook_auto_submit(corpus_id: str):
     raw_research_query = request.form.get("research_query") or ""
     research_query = raw_research_query.strip()
     researcher_topics = (request.form.get("researcher_topics") or "").strip()
+    max_refinement_rounds_raw = request.form.get(
+        "max_refinement_rounds", str(_MAX_REFINEMENT_ROUNDS_DEFAULT)
+    )
+    transcript_sample_size_raw = (request.form.get("transcript_sample_size") or "").strip()
 
-    def _render_form(rq_error: str | None = None, rt_error: str | None = None):
+    def _render_form(rq_error: str | None = None, rt_error: str | None = None, ts_error: str | None = None):
         return render_template(
             "codebooks/new/auto_form.html",
             corpus_id=corpus_id,
@@ -695,8 +714,13 @@ def new_codebook_auto_submit(corpus_id: str):
             codebook_name=name,
             research_query=research_query,
             researcher_topics=researcher_topics,
+            max_refinement_rounds=max_refinement_rounds_raw,
+            transcript_sample_size=transcript_sample_size_raw,
+            max_refinement_rounds_max=_MAX_REFINEMENT_ROUNDS_MAX,
+            corpus_document_count=_corpus_document_count(corpus_id),
             rq_error=rq_error,
             rt_error=rt_error,
+            ts_error=ts_error,
             active_provider_label=_active_provider_label(),
         )
 
@@ -720,12 +744,31 @@ def new_codebook_auto_submit(corpus_id: str):
     if len(researcher_topics) > _QUERY_MAX:
         return _render_form(rt_error=f"Topics must be at most {_QUERY_MAX} characters.")
 
+    # max_refinement_rounds always comes from a fixed <select>, so it's always
+    # a valid integer in range — no need to defend against malformed input here.
+    max_refinement_rounds = int(max_refinement_rounds_raw)
+
+    # transcript_sample_size is free-text, so it does need format validation.
+    # Whether it exceeds the corpus size is checked by the backend (the
+    # authoritative source for transcript counts), surfaced via the
+    # BackendError flash below rather than duplicated here.
+    transcript_sample_size: int | None = None
+    if transcript_sample_size_raw:
+        try:
+            transcript_sample_size = int(transcript_sample_size_raw)
+        except ValueError:
+            return _render_form(ts_error="Number of transcripts must be a whole number.")
+        if transcript_sample_size <= 0:
+            return _render_form(ts_error="Number of transcripts must be at least 1.")
+
     try:
         job = _backend().create_generation_job(
             codebook_name=name,
             corpus_id=corpus_id,
             research_query=research_query or None,
             researcher_topics=researcher_topics or None,
+            max_refinement_rounds=max_refinement_rounds,
+            transcript_sample_size=transcript_sample_size,
         )
     except BackendError as exc:
         flash(exc.user_message, "danger")

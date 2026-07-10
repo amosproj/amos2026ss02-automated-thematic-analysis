@@ -84,6 +84,52 @@
         </div>
       </div>
 
+      <hr class="my-4">
+
+      <div class="mb-3">
+        <label for="max_refinement_rounds" class="form-label fw-semibold">
+          Max refinement iterations
+        </label>
+        <select class="form-select" id="max_refinement_rounds" name="max_refinement_rounds">
+          {% for value in range(1, max_refinement_rounds_max + 1) %}
+            <option value="{{ value }}" {% if (max_refinement_rounds | int) == value %}selected{% endif %}>
+              {% if value == max_refinement_rounds_max %}Unbounded ({{ value }}){% else %}{{ value }}{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+        <div class="form-text">
+          More iterations can improve codebook quality but use more tokens. The system
+          always enforces a safety maximum of {{ max_refinement_rounds_max }} regardless
+          of this setting.
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label for="transcript_sample_size" class="form-label fw-semibold">
+          Number of transcripts to use <span class="text-secondary fw-normal small">(optional)</span>
+        </label>
+        <input class="form-control{% if ts_error %} is-invalid{% endif %}"
+               type="number"
+               id="transcript_sample_size"
+               name="transcript_sample_size"
+               min="1"
+               {% if corpus_document_count %}max="{{ corpus_document_count }}"{% endif %}
+               value="{{ transcript_sample_size or '' }}"
+               aria-describedby="ts-help ts-error"
+               placeholder="e.g. 20">
+        <div id="ts-help" class="form-text">
+          {% if corpus_document_count is not none %}
+            This corpus has {{ corpus_document_count }} transcript{{ 's' if corpus_document_count != 1 else '' }} available.
+          {% endif %}
+          Leave blank to use all transcripts. If set, that many transcripts are chosen at
+          random from the corpus to reduce token usage. To use specific transcripts instead,
+          create a new corpus containing only those transcripts.
+        </div>
+        <div id="ts-error" class="invalid-feedback">
+          {{ ts_error or 'Number of transcripts must be a positive whole number.' }}
+        </div>
+      </div>
+
       <div class="d-flex gap-2">
         <a class="btn btn-outline-secondary"
            href="{{ url_for('codebooks.new_codebook_mode_select', corpus_id=corpus_id, mode=mode) }}">
@@ -102,6 +148,8 @@
       const nameInput = document.getElementById("codebook_name");
       const rqInput = document.getElementById("research_query");
       const rtInput = document.getElementById("researcher_topics");
+      const mriInput = document.getElementById("max_refinement_rounds");
+      const tsInput = document.getElementById("transcript_sample_size");
       const MAX = 500;
 
       function bindCounter(input, counterId) {
@@ -126,9 +174,13 @@
         const name = nameInput.value.trim();
         const q = rqInput.value.trim();
         const t = rtInput.value.trim();
+        const mri = mriInput.value.trim();
+        const n = tsInput.value.trim();
         if (name) url.searchParams.set("name", name); else url.searchParams.delete("name");
         if (q) url.searchParams.set("rq", q); else url.searchParams.delete("rq");
         if (t) url.searchParams.set("rt", t); else url.searchParams.delete("rt");
+        if (mri) url.searchParams.set("mri", mri); else url.searchParams.delete("mri");
+        if (n) url.searchParams.set("n", n); else url.searchParams.delete("n");
         window.history.replaceState(null, "", url.toString());
       });
     })();
