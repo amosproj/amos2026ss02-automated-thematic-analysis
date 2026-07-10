@@ -9,7 +9,7 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 from uuid import UUID
 
 from langchain_core.output_parsers import JsonOutputParser
@@ -86,11 +86,9 @@ class TraceableAnalysisCancelledError(Exception):
     pass
 
 
-_RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS = 3
-_APPLICATION_MAX_ATTEMPTS = 3
-_EVALUATION_MAX_ATTEMPTS = 2
-_REVIEW_MAX_ATTEMPTS = 2
-_POLISH_MAX_ATTEMPTS = 2
+_LLM_CALL_MAX_ATTEMPTS = 3
+
+T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -218,6 +216,38 @@ class TraceableAnalysisService:
         """Return the LangChain config needed for shared token accounting."""
 
         return {"callbacks": [self._token_tracker]}
+
+    @staticmethod
+    async def _invoke_with_retries(*, label: str, attempt: Callable[[], Awaitable[T]]) -> T:
+        """Run one LLM call + parse/validate step, retrying transient and malformed-output failures.
+
+        ``attempt`` must perform the full unit of work for one try - the chain
+        invocation and the Pydantic schema construction - so a parse/validation
+        failure is retried exactly like a network failure instead of raising
+        unguarded. Callers decide what happens once retries are exhausted (raise,
+        or degrade to a safe fallback); this helper only owns the retry loop.
+        """
+
+        for attempt_num in range(1, _LLM_CALL_MAX_ATTEMPTS + 1):
+            try:
+                return await attempt()
+            except Exception as exc:
+                if attempt_num >= _LLM_CALL_MAX_ATTEMPTS:
+                    logger.warning(
+                        "Traceable {} failed after {} attempts: error={}",
+                        label,
+                        attempt_num,
+                        exc,
+                    )
+                    raise
+                logger.warning(
+                    "Traceable {} retry: attempt={}, error={}",
+                    label,
+                    attempt_num,
+                    exc,
+                )
+                await asyncio.sleep(0.5 * attempt_num)
+        raise AssertionError("unreachable")
 
     async def run_analysis(
         self,
