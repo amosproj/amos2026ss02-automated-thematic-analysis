@@ -86,6 +86,8 @@ def _to_job_schema(job: CodebookApplicationJob) -> CodebookApplicationJobSchema:
         updated_at=job.updated_at,
         started_at=job.started_at,
         finished_at=job.finished_at,
+        llm_tokens_input=job.llm_tokens_input,
+        llm_tokens_output=job.llm_tokens_output,
     )
 
 

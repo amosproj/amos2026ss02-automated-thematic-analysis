@@ -51,22 +51,28 @@
     </div>
 
     <div class="row g-2 mb-3" aria-label="Application metrics">
-      <div class="col-12 col-sm-4">
+      <div class="col-12 col-sm-3">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Processed</div>
           <div id="metric-processed" class="fw-semibold">Waiting</div>
         </div>
       </div>
-      <div class="col-12 col-sm-4">
+      <div class="col-12 col-sm-3">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Coded</div>
           <div id="metric-coded" class="fw-semibold">Pending</div>
         </div>
       </div>
-      <div class="col-12 col-sm-4">
+      <div class="col-12 col-sm-3">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Failed</div>
           <div id="metric-failed" class="fw-semibold">0</div>
+        </div>
+      </div>
+      <div class="col-12 col-sm-3">
+        <div class="border rounded-2 px-3 py-2 h-100">
+          <div class="small text-secondary">Tokens (In/Out)</div>
+          <div id="metric-tokens" class="fw-semibold">0 / 0</div>
         </div>
       </div>
     </div>
@@ -98,6 +104,7 @@
       const metricProcessed = document.getElementById("metric-processed");
       const metricCoded = document.getElementById("metric-coded");
       const metricFailed = document.getElementById("metric-failed");
+      const metricTokens = document.getElementById("metric-tokens");
       const errorContainer = document.getElementById("progress-error-container");
       const errorEl = document.getElementById("progress-error");
       const cancelBtn = document.getElementById("cancel-btn");
@@ -143,6 +150,7 @@
           ? formatCount(job.documents_coded)
           : "Pending";
         metricFailed.textContent = formatCount(job.documents_failed || 0);
+        metricTokens.textContent = `${job.llm_tokens_input ? formatCount(job.llm_tokens_input) : "0"} / ${job.llm_tokens_output ? formatCount(job.llm_tokens_output) : "0"}`;
       }
 
       function activeCounter(job) {
