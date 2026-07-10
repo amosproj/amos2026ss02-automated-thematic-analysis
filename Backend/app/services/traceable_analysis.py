@@ -835,15 +835,26 @@ class TraceableAnalysisService:
             | build_chat_model(provider=self._provider, temperature=0.0)
             | subtheme_parser
         )
-        raw_subthemes = await subtheme_chain.ainvoke(
-            {
-                "codes": json.dumps(payload, ensure_ascii=True, indent=2),
-                "research_query_block": build_research_query_block(research_query),
-                "researcher_topics_block": build_researcher_topics_block(researcher_topics),
-            },
-            config=self._llm_config(),
-        )
-        subthemes = SubthemeSynthesisResult(**raw_subthemes)
+        async def _attempt_subthemes() -> SubthemeSynthesisResult:
+            raw_subthemes = await subtheme_chain.ainvoke(
+                {
+                    "codes": json.dumps(payload, ensure_ascii=True, indent=2),
+                    "research_query_block": build_research_query_block(research_query),
+                    "researcher_topics_block": build_researcher_topics_block(researcher_topics),
+                },
+                config=self._llm_config(),
+            )
+            return SubthemeSynthesisResult(**raw_subthemes)
+
+        try:
+            subthemes = await self._invoke_with_retries(label="subtheme synthesis", attempt=_attempt_subthemes)
+        except Exception as exc:
+            # Load-bearing: there is no meaningful partial codebook structure
+            # to fall back to, so fail the job clearly instead of continuing
+            # with an undefined synthesis result.
+            raise UnprocessableError(
+                f"Subtheme synthesis failed after retries: {type(exc).__name__}: {exc}"
+            ) from exc
         subthemes = self._ensure_subthemes_cover_codes(subthemes, consolidated_codes)
         logger.info(
             "Traceable subtheme synthesis complete: consolidated_codes={}, subthemes={}",
@@ -857,15 +868,23 @@ class TraceableAnalysisService:
             | build_chat_model(provider=self._provider, temperature=0.0)
             | theme_parser
         )
-        raw_themes = await theme_chain.ainvoke(
-            {
-                "subthemes": json.dumps(subthemes.model_dump(mode="json"), ensure_ascii=True, indent=2),
-                "research_query_block": build_research_query_block(research_query),
-                "researcher_topics_block": build_researcher_topics_block(researcher_topics),
-            },
-            config=self._llm_config(),
-        )
-        themes = ThemeSynthesisResult(**raw_themes)
+        async def _attempt_themes() -> ThemeSynthesisResult:
+            raw_themes = await theme_chain.ainvoke(
+                {
+                    "subthemes": json.dumps(subthemes.model_dump(mode="json"), ensure_ascii=True, indent=2),
+                    "research_query_block": build_research_query_block(research_query),
+                    "researcher_topics_block": build_researcher_topics_block(researcher_topics),
+                },
+                config=self._llm_config(),
+            )
+            return ThemeSynthesisResult(**raw_themes)
+
+        try:
+            themes = await self._invoke_with_retries(label="theme synthesis", attempt=_attempt_themes)
+        except Exception as exc:
+            raise UnprocessableError(
+                f"Theme synthesis failed after retries: {type(exc).__name__}: {exc}"
+            ) from exc
         themes = self._ensure_themes_cover_subthemes(themes, subthemes)
         logger.info(
             "Traceable theme synthesis complete: subthemes={}, themes={}",
