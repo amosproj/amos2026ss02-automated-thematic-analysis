@@ -82,6 +82,7 @@ class CodebookApplicationService:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+        self.traceable_service = TraceableAnalysisService(self._session)
 
     async def apply_codebook(
         self,
@@ -147,11 +148,10 @@ class CodebookApplicationService:
         if on_phase is not None:
             await on_phase("coding_documents")
 
-        traceable_service = TraceableAnalysisService(self._session)
         try:
             # Reuse the paper-style application pass without invoking the
             # generation/refinement loop.
-            application_result = await traceable_service._apply_codebook_to_documents(
+            application_result = await self.traceable_service._apply_codebook_to_documents(
                 documents=[
                     _TraceableDocumentText(
                         id=document.id,
@@ -188,8 +188,8 @@ class CodebookApplicationService:
             # Standalone application reports the tokens spent by this one
             # application job. Generate+apply handles full-job totals in
             # TraceableAnalysisService.
-            llm_tokens_input=traceable_service.llm_tokens_input,
-            llm_tokens_output=traceable_service.llm_tokens_output,
+            llm_tokens_input=self.traceable_service.llm_tokens_input,
+            llm_tokens_output=self.traceable_service.llm_tokens_output,
         )
         return CodebookApplicationSummary(
             application_run=application_run,

@@ -210,6 +210,22 @@
               </div>
             </div>
           </div>
+          
+          <!-- Item 10 -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingTen">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTen" aria-expanded="false" aria-controls="collapseTen">
+                Why are some transcripts held out during Codebook Generation (Train/Test Split)?
+              </button>
+            </h3>
+            <div id="collapseTen" class="accordion-collapse collapse" aria-labelledby="headingTen" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                <p>During the automatic Codebook Generation process, a portion of the uploaded transcripts is used to discover themes (the "Train" set), and the remaining transcripts are held out for evaluation (the "Test" set) during iterative improvements.</p>
+                <p>This is a standard machine learning practice to ensure the codebook generalizes well to unseen data. By default, 80% of transcripts are used to generate the codebook, and 20% are used to validate it.</p>
+                <p class="mb-0"><strong>How to change this:</strong> You can adjust this ratio by changing the <code>TRACEABLE_HELDOUT_RATIO</code> environment variable in your <code>Backend/.env</code> file. For example, setting <code>TRACEABLE_HELDOUT_RATIO=0.2</code> means 20% of transcripts are held out for validation.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
