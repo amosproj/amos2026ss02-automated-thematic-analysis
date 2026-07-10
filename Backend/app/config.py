@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     CODE_SUBORDINATE_MIN_SIMILARITY: float = 0.84
     TRACEABLE_MIN_CODE_FREQUENCY: int = 1
     TRACEABLE_HELDOUT_RATIO: float = 0.2
-    TRACEABLE_MAX_ITERATIONS: int = 5
+    TRACEABLE_MAX_ITERATIONS: int = 10
     TRACEABLE_REFINEMENT_JACCARD_THRESHOLD: float = 0.98
 
     # Select which provider is active: "FAU" | "ACADEMIC"
