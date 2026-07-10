@@ -44,20 +44,39 @@ class ThemeQuotesService:
             else {theme_id}
         )
 
-        base_filter = (
+        from app.models import CodeAssignment
+        from sqlalchemy import union_all
+
+        theme_stmt = select(
+            DocumentCoding.document_id,
+            ThemeAssignment.quote,
+            ThemeAssignment.confidence,
+            ThemeAssignment.theme_id.label("node_id"),
+        ).join(DocumentCoding, ThemeAssignment.document_coding_id == DocumentCoding.id).where(
             DocumentCoding.application_run_id == run_id,
             ThemeAssignment.theme_id.in_(theme_ids),
             ThemeAssignment.is_present.is_(True),
             ThemeAssignment.quote.is_not(None),
         )
 
+        code_stmt = select(
+            DocumentCoding.document_id,
+            CodeAssignment.quote,
+            CodeAssignment.confidence,
+            CodeAssignment.code_id.label("node_id"),
+        ).join(DocumentCoding, CodeAssignment.document_coding_id == DocumentCoding.id).where(
+            DocumentCoding.application_run_id == run_id,
+            CodeAssignment.code_id.in_(theme_ids),
+            CodeAssignment.quote.is_not(None),
+        )
+
+        unified_assignment = union_all(theme_stmt, code_stmt).subquery("unified_assignment")
+
         total: int = (
             await self._session.execute(
                 select(func.count()).select_from(
-                    select(DocumentCoding.document_id, ThemeAssignment.quote)
-                    .join(DocumentCoding, ThemeAssignment.document_coding_id == DocumentCoding.id)
-                    .where(*base_filter)
-                    .group_by(DocumentCoding.document_id, ThemeAssignment.quote)
+                    select(unified_assignment.c.document_id, unified_assignment.c.quote)
+                    .group_by(unified_assignment.c.document_id, unified_assignment.c.quote)
                     .subquery()
                 )
             )
@@ -66,34 +85,32 @@ class ThemeQuotesService:
         pages = math.ceil(total / page_size) if total > 0 else 0
         offset = (page - 1) * page_size
 
-        confidence = func.max(ThemeAssignment.confidence).label("confidence")
+        confidence_col = func.max(unified_assignment.c.confidence).label("confidence")
         page_rows = (
             await self._session.execute(
                 select(
-                    DocumentCoding.document_id,
-                    ThemeAssignment.quote,
-                    confidence,
+                    unified_assignment.c.document_id,
+                    unified_assignment.c.quote,
+                    confidence_col,
                     CorpusDocument.title,
                     DemographicRow.interviewee_id,
                 )
-                .join(DocumentCoding, ThemeAssignment.document_coding_id == DocumentCoding.id)
-                .join(CorpusDocument, DocumentCoding.document_id == CorpusDocument.id)
+                .join(CorpusDocument, unified_assignment.c.document_id == CorpusDocument.id)
                 .outerjoin(DemographicRow, CorpusDocument.demographic_row_id == DemographicRow.id)
-                .where(*base_filter)
                 .group_by(
-                    DocumentCoding.document_id,
-                    ThemeAssignment.quote,
+                    unified_assignment.c.document_id,
+                    unified_assignment.c.quote,
                     CorpusDocument.title,
                     DemographicRow.interviewee_id,
                 )
-                .order_by(desc(confidence), DocumentCoding.document_id, ThemeAssignment.quote)
+                .order_by(desc(confidence_col), unified_assignment.c.document_id, unified_assignment.c.quote)
                 .offset(offset)
                 .limit(page_size)
             )
         ).all()
 
         theme_ids_by_key = await self._load_tags_for_quotes(
-            base_filter=base_filter,
+            run_id=run_id,
             document_ids={row.document_id for row in page_rows},
         )
 
@@ -114,28 +131,57 @@ class ThemeQuotesService:
     async def _load_tags_for_quotes(
         self,
         *,
-        base_filter: tuple[Any, ...],
+        run_id: UUID,
         document_ids: set[UUID],
     ) -> dict[tuple[UUID, str], list[UUID]]:
         if not document_ids:
             return {}
+            
+        from app.models import CodeAssignment
+        from sqlalchemy import union_all
+            
+        theme_stmt = select(
+            DocumentCoding.document_id,
+            ThemeAssignment.quote,
+            ThemeAssignment.theme_id.label("node_id"),
+            ThemeAssignment.confidence,
+            ThemeAssignment.id,
+        ).join(DocumentCoding, ThemeAssignment.document_coding_id == DocumentCoding.id).where(
+            DocumentCoding.application_run_id == run_id,
+            DocumentCoding.document_id.in_(document_ids),
+            ThemeAssignment.is_present.is_(True),
+            ThemeAssignment.quote.is_not(None),
+        )
+        
+        code_stmt = select(
+            DocumentCoding.document_id,
+            CodeAssignment.quote,
+            CodeAssignment.code_id.label("node_id"),
+            CodeAssignment.confidence,
+            CodeAssignment.id,
+        ).join(DocumentCoding, CodeAssignment.document_coding_id == DocumentCoding.id).where(
+            DocumentCoding.application_run_id == run_id,
+            DocumentCoding.document_id.in_(document_ids),
+            CodeAssignment.quote.is_not(None),
+        )
+        
+        unified = union_all(theme_stmt, code_stmt).subquery("unified")
+
         rows = (
             await self._session.execute(
                 select(
-                    DocumentCoding.document_id,
-                    ThemeAssignment.quote,
-                    ThemeAssignment.theme_id,
+                    unified.c.document_id,
+                    unified.c.quote,
+                    unified.c.node_id,
                 )
-                .join(DocumentCoding, ThemeAssignment.document_coding_id == DocumentCoding.id)
-                .where(*base_filter, DocumentCoding.document_id.in_(document_ids))
-                .order_by(desc(ThemeAssignment.confidence), ThemeAssignment.id)
+                .order_by(desc(unified.c.confidence), unified.c.id)
             )
         ).all()
         theme_ids_by_key: dict[tuple[UUID, str], list[UUID]] = defaultdict(list)
         for row in rows:
             ids = theme_ids_by_key[(row.document_id, row.quote)]
-            if row.theme_id not in ids:
-                ids.append(row.theme_id)
+            if row.node_id not in ids:
+                ids.append(row.node_id)
         return theme_ids_by_key
 
     async def _resolve_run_id(self, codebook_id: UUID, application_run_id: UUID | None) -> UUID | None:

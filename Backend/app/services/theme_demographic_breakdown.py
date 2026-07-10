@@ -88,7 +88,7 @@ class ThemeDemographicBreakdownService:
         application_run_id: UUID | None = None,
     ) -> ThemeDemographicBreakdownResponse:
         corpus_id = await self._resolve_codebook_corpus(codebook_id=codebook_id)
-        await self._ensure_theme_in_codebook(codebook_id=codebook_id, theme_id=theme_id)
+        await self._ensure_node_in_codebook(codebook_id=codebook_id, node_id=theme_id)
         run_id = await self._resolve_run_id(
             codebook_id=codebook_id, application_run_id=application_run_id
         )
@@ -116,7 +116,7 @@ class ThemeDemographicBreakdownService:
             self._session, codebook_id=codebook_id, theme_id=theme_id
         )
         present_document_ids = await self._load_present_document_ids(
-            run_id=run_id, theme_ids=theme_ids
+            run_id=run_id, node_ids=theme_ids
         )
 
         return ThemeDemographicBreakdownResponse(
@@ -142,19 +142,34 @@ class ThemeDemographicBreakdownService:
             raise ThemeNotFoundError(f"Codebook '{codebook_id}' not found.")
         return corpus_id
 
-    async def _ensure_theme_in_codebook(self, *, codebook_id: UUID, theme_id: UUID) -> None:
+    async def _ensure_node_in_codebook(self, *, codebook_id: UUID, node_id: UUID) -> None:
+        from app.models import Code
+        
         theme_row = (
             await self._session.execute(
                 select(Theme.id).where(
-                    Theme.id == theme_id,
+                    Theme.id == node_id,
                     Theme.codebook_id == codebook_id,
                 )
             )
         ).scalar_one_or_none()
-        if theme_row is None:
-            raise ThemeNotFoundError(
-                f"Theme '{theme_id}' not found in codebook '{codebook_id}'."
+        if theme_row is not None:
+            return
+            
+        code_row = (
+            await self._session.execute(
+                select(Code.id).where(
+                    Code.id == node_id,
+                    Code.codebook_id == codebook_id,
+                )
             )
+        ).scalar_one_or_none()
+        if code_row is not None:
+            return
+            
+        raise ThemeNotFoundError(
+            f"Theme/Code '{node_id}' not found in codebook '{codebook_id}'."
+        )
 
     async def _resolve_run_id(
         self,
@@ -207,21 +222,30 @@ class ThemeDemographicBreakdownService:
         return [(row.document_id, row.data) for row in rows]
 
     async def _load_present_document_ids(
-        self, *, run_id: UUID, theme_ids: set[UUID]
+        self, *, run_id: UUID, node_ids: set[UUID]
     ) -> set[UUID]:
+        from app.models import CodeAssignment
+        from sqlalchemy import union
+        
+        theme_stmt = select(DocumentCoding.document_id).join(
+            ThemeAssignment,
+            ThemeAssignment.document_coding_id == DocumentCoding.id,
+        ).where(
+            DocumentCoding.application_run_id == run_id,
+            ThemeAssignment.theme_id.in_(node_ids),
+            ThemeAssignment.is_present.is_(True),
+        )
+        
+        code_stmt = select(DocumentCoding.document_id).join(
+            CodeAssignment,
+            CodeAssignment.document_coding_id == DocumentCoding.id,
+        ).where(
+            DocumentCoding.application_run_id == run_id,
+            CodeAssignment.code_id.in_(node_ids),
+        )
+        
         rows = (
-            await self._session.execute(
-                select(DocumentCoding.document_id)
-                .join(
-                    ThemeAssignment,
-                    ThemeAssignment.document_coding_id == DocumentCoding.id,
-                )
-                .where(
-                    DocumentCoding.application_run_id == run_id,
-                    ThemeAssignment.theme_id.in_(theme_ids),
-                    ThemeAssignment.is_present.is_(True),
-                )
-            )
+            await self._session.execute(union(theme_stmt, code_stmt))
         ).scalars().all()
         return set(rows)
 

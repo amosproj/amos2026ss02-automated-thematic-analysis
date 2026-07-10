@@ -29,8 +29,26 @@ async def load_children_map(
             )
         )
     ).all()
+
+    # Also load code relationships so codes are descendants of themes
+    from app.models.code import ThemeCodeRelationship
+    code_rows = (
+        await session.execute(
+            select(
+                ThemeCodeRelationship.theme_id,
+                ThemeCodeRelationship.code_id,
+            ).where(
+                ThemeCodeRelationship.codebook_id == codebook_id,
+                ThemeCodeRelationship.is_active.is_(True),
+            )
+        )
+    ).all()
+
     children: dict[UUID, set[UUID]] = defaultdict(set)
     for parent_id, child_id in rows:
+        children[parent_id].add(child_id)
+        
+    for parent_id, child_id in code_rows:
         children[parent_id].add(child_id)
 
     return dict(children)

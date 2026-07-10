@@ -6,8 +6,11 @@ from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
+    Code,
+    CodeAssignment,
     Codebook,
     CodebookApplicationRun,
+    CodebookCodeRelationship,
     CodebookThemeRelationship,
     DocumentCoding,
     Theme,
@@ -35,22 +38,22 @@ class ThemeFrequencyService:
             codebook_id=codebook_id,
             application_run_id=application_run_id,
         )
-        themes = await self._load_active_themes(codebook_id=codebook_id)
-        theme_ids = {theme.id for theme in themes}
-        document_ids_by_theme_id = await self._load_document_ids_by_theme_id(
+        nodes = await self._load_active_nodes(codebook_id=codebook_id)
+        node_ids = {node.id for node in nodes}
+        document_ids_by_node_id = await self._load_document_ids_by_node_id(
             codebook_id=codebook_id,
             application_run_id=selected_run_id,
-            theme_ids=theme_ids,
+            node_ids=node_ids,
         )
 
         children_map = await load_children_map(self._session, codebook_id=codebook_id)
-        parent_occurrence_by_theme_id = {
-            theme_id: len(
+        parent_occurrence_by_node_id = {
+            node_id: len(
                 set().union(
-                    *(document_ids_by_theme_id.get(d, set()) for d in descendants_and_self(theme_id, children_map))
+                    *(document_ids_by_node_id.get(d, set()) for d in descendants_and_self(node_id, children_map))
                 )
             )
-            for theme_id in theme_ids
+            for node_id in node_ids
         }
         total_interviews_in_corpus = await self._load_total_interviews_in_corpus(
             codebook_id=codebook_id,
@@ -58,13 +61,13 @@ class ThemeFrequencyService:
         )
 
         payload = []
-        for theme in themes:
-            own_occurrence = len(document_ids_by_theme_id.get(theme.id, set()))
-            parent_occurrence = parent_occurrence_by_theme_id.get(theme.id, own_occurrence)
+        for node in nodes:
+            own_occurrence = len(document_ids_by_node_id.get(node.id, set()))
+            parent_occurrence = parent_occurrence_by_node_id.get(node.id, own_occurrence)
             payload.append(
                 ThemeFrequencyItem(
-                    theme_id=theme.id,
-                    theme_name=theme.label,
+                    theme_id=node.id,
+                    theme_name=node.label,
                     occurrence_count=own_occurrence,
                     interview_coverage_percentage=self._to_coverage_percentage(
                         occurrence_count=own_occurrence,
@@ -116,8 +119,8 @@ class ThemeFrequencyService:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def _load_active_themes(self, *, codebook_id: UUID) -> list[Theme]:
-        stmt = (
+    async def _load_active_nodes(self, *, codebook_id: UUID) -> list[Theme | Code]:
+        stmt_themes = (
             select(Theme)
             .join(
                 CodebookThemeRelationship,
@@ -133,32 +136,67 @@ class ThemeFrequencyService:
             )
             .distinct()
         )
-        return list((await self._session.scalars(stmt)).all())
+        themes = list((await self._session.scalars(stmt_themes)).all())
 
-    async def _load_document_ids_by_theme_id(
+        stmt_codes = (
+            select(Code)
+            .join(
+                CodebookCodeRelationship,
+                and_(
+                    CodebookCodeRelationship.code_id == Code.id,
+                    CodebookCodeRelationship.codebook_id == codebook_id,
+                    CodebookCodeRelationship.is_active.is_(True),
+                ),
+            )
+            .where(
+                Code.is_active.is_(True),
+                Code.codebook_id == codebook_id,
+            )
+            .distinct()
+        )
+        codes = list((await self._session.scalars(stmt_codes)).all())
+        
+        return themes + codes
+
+    async def _load_document_ids_by_node_id(
         self,
         *,
         codebook_id: UUID,
         application_run_id: UUID | None,
-        theme_ids: set[UUID],
+        node_ids: set[UUID],
     ) -> dict[UUID, set[UUID]]:
         del codebook_id
-        if application_run_id is None or not theme_ids:
-            return {theme_id: set() for theme_id in theme_ids}
-        stmt = (
-            select(ThemeAssignment.theme_id, DocumentCoding.document_id)
+        if application_run_id is None or not node_ids:
+            return {node_id: set() for node_id in node_ids}
+            
+        stmt_themes = (
+            select(ThemeAssignment.theme_id.label("node_id"), DocumentCoding.document_id)
             .join(DocumentCoding, ThemeAssignment.document_coding_id == DocumentCoding.id)
             .where(
                 DocumentCoding.application_run_id == application_run_id,
-                ThemeAssignment.theme_id.in_(theme_ids),
+                ThemeAssignment.theme_id.in_(node_ids),
                 ThemeAssignment.is_present.is_(True),
             )
             .distinct()
         )
+        
+        stmt_codes = (
+            select(CodeAssignment.code_id.label("node_id"), DocumentCoding.document_id)
+            .join(DocumentCoding, CodeAssignment.document_coding_id == DocumentCoding.id)
+            .where(
+                DocumentCoding.application_run_id == application_run_id,
+                CodeAssignment.code_id.in_(node_ids),
+            )
+            .distinct()
+        )
+        
+        from sqlalchemy import union
+        stmt = union(stmt_themes, stmt_codes)
+        
         rows = (await self._session.execute(stmt)).all()
-        document_ids: dict[UUID, set[UUID]] = {theme_id: set() for theme_id in theme_ids}
-        for theme_id, document_id in rows:
-            document_ids[theme_id].add(document_id)
+        document_ids: dict[UUID, set[UUID]] = {node_id: set() for node_id in node_ids}
+        for node_id, document_id in rows:
+            document_ids[node_id].add(document_id)
         return document_ids
 
     async def _load_total_interviews_in_corpus(
