@@ -25,7 +25,10 @@ from app.schemas.codebook import (
 from app.schemas.common import ResponseEnvelope
 from app.services.app_settings import get_active_provider
 from app.services.codebook import CodebookService
-from app.services.codebook_generation import CodebookGenerationService
+from app.services.codebook_generation import (
+    CodebookGenerationService,
+    resolve_transcript_document_ids,
+)
 from app.services.codebook_generation_jobs import codebook_generation_job_runner
 from app.services.codebook_parser import parse_codebook_csv
 
