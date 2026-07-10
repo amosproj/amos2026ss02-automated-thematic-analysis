@@ -82,3 +82,34 @@ class TestResearchQueryValidation:
         query = "What do users mean when they say ' OR 1=1 in conversations?"
         req = CodebookGenerateRequest(**_make_request(research_query=query))
         assert "OR 1=1" in req.research_query
+
+
+class TestTranscriptSampleSizeValidation:
+    def test_missing_sample_size_accepted(self) -> None:
+        req = CodebookGenerateRequest(**_make_request())
+        assert req.transcript_sample_size is None
+
+    def test_positive_sample_size_accepted(self) -> None:
+        req = CodebookGenerateRequest(**_make_request(transcript_sample_size=20))
+        assert req.transcript_sample_size == 20
+
+    def test_zero_sample_size_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            CodebookGenerateRequest(**_make_request(transcript_sample_size=0))
+
+    def test_negative_sample_size_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            CodebookGenerateRequest(**_make_request(transcript_sample_size=-5))
+
+    def test_sample_size_with_explicit_document_ids_raises(self) -> None:
+        with pytest.raises(ValidationError):
+            CodebookGenerateRequest(
+                **_make_request(
+                    transcript_sample_size=5,
+                    transcript_document_ids=[_VALID_CORPUS_ID],
+                )
+            )
+
+    def test_sample_size_alone_without_document_ids_accepted(self) -> None:
+        req = CodebookGenerateRequest(**_make_request(transcript_sample_size=5))
+        assert req.transcript_document_ids is None
