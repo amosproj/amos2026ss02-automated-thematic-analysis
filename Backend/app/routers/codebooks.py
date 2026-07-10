@@ -57,7 +57,10 @@ def _validate_provider_config(provider_id: str) -> None:
 
     embed_spec = spec
     if not spec.supports_embeddings:
-        embed_spec = providers.get_provider(providers.DEFAULT_PROVIDER_ID)
+        fallback_spec = providers.get_provider(providers.DEFAULT_PROVIDER_ID)
+        if fallback_spec is None:
+            raise UnprocessableError("Default embedding provider is unknown.")
+        embed_spec = fallback_spec
 
     if not getattr(settings, embed_spec.api_key_attr, None):
         raise UnprocessableError(f"API key is missing for embedding provider '{embed_spec.label}'.")
