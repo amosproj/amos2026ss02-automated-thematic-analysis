@@ -176,6 +176,13 @@ class BackendClient:
             sub_key="items",
         )
 
+    def copy_documents(self, source_corpus_id: str, target_corpus_id: str, document_ids: list[str]) -> dict:
+        """Copy documents from source to target corpus."""
+        return self._post(
+            f"/ingestion/corpora/{source_corpus_id}/documents/copy",
+            json={"target_corpus_id": target_corpus_id, "document_ids": document_ids},
+        )
+
     def get_document_content(self, corpus_id: str, document_id: str) -> dict:
         """Fetch a single document including its full text content."""
         return self._get(f"/ingestion/corpora/{corpus_id}/documents/{document_id}")
