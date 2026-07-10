@@ -923,6 +923,7 @@ async def test_generate_codebook_persists_researcher_topics_on_codebook(
     async with session_factory() as session:
         codebook = (await session.execute(select(Codebook).where(Codebook.id == codebook_id))).scalar_one()
         assert codebook.researcher_topics == topics
+        assert codebook.research_query is None
 
 
 async def test_generate_codebook_samples_requested_number_of_transcripts(
@@ -1009,4 +1010,3 @@ async def test_generate_codebook_sample_size_returns_404_for_unknown_corpus(clie
     )
     assert response.status_code == 404
     assert response.json()["success"] is False
-        assert codebook.research_query is None
