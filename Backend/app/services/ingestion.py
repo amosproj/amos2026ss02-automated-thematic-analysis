@@ -156,6 +156,44 @@ class IngestionService:
 
         return result
 
+    async def copy_documents(
+        self,
+        source_corpus_id: uuid.UUID,
+        target_corpus_id: uuid.UUID,
+        document_ids: list[uuid.UUID]
+    ) -> IngestResult:
+        """Copy multiple documents to a target corpus."""
+        await self.get_corpus(source_corpus_id)
+        await self.get_corpus(target_corpus_id)
+
+        docs = (await self._session.execute(
+            select(CorpusDocument).where(
+                CorpusDocument.corpus_id == source_corpus_id,
+                CorpusDocument.id.in_(document_ids)
+            )
+        )).scalars().all()
+
+        if not docs:
+            return IngestResult()
+
+        result = IngestResult()
+        try:
+            for doc in docs:
+                new_doc = CorpusDocument(
+                    corpus_id=target_corpus_id,
+                    title=doc.title,
+                    filename=doc.filename,
+                    content=doc.content,
+                )
+                self._session.add(new_doc)
+                result.documents.append(new_doc)
+            await self._session.commit()
+        except Exception as exc:
+            await self._session.rollback()
+            raise UnprocessableError(f"Copy failed: {exc}") from exc
+
+        return result
+
     async def get_document(self, corpus_id: uuid.UUID, document_id: uuid.UUID) -> CorpusDocument:
         """Fetch a single document by ID within the given corpus. Raises NotFoundError if absent."""
         result = await self._session.execute(

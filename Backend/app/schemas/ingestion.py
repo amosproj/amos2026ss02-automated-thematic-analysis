@@ -35,6 +35,13 @@ class BulkDocumentIngestRequest(BaseSchema):
     documents: list[DocumentInput]
 
 
+class CopyDocumentsRequest(BaseSchema):
+    """Request body for copying documents to another corpus."""
+
+    target_corpus_id: uuid.UUID
+    document_ids: list[uuid.UUID]
+
+
 class CorpusDocumentSchema(BaseSchema):
     """API response shape for a stored document (no content — fetch via document endpoint)."""
 
