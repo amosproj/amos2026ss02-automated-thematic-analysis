@@ -580,11 +580,12 @@ def test_auto_submit_creates_job_and_redirects_to_codebook_list(client, fake_bac
         "codebook_name": "Interview Codebook",
         "corpus_id": "corpus-xyz",
         "transcript_document_ids": None,
+        "transcript_sample_size": None,
         "research_query": None,
         "researcher_topics": None,
         "analysis_name": None,
         "custom_id": None,
-        "max_refinement_rounds": None,
+        "max_refinement_rounds": 5,
         "apply_after_generation": None,
     }
 
@@ -632,11 +633,12 @@ def test_auto_submit_forwards_research_query_and_topics(client, fake_backend):
         "codebook_name": "Interview Codebook",
         "corpus_id": "corpus-xyz",
         "transcript_document_ids": None,
+        "transcript_sample_size": None,
         "research_query": "How do participants describe remote work challenges?",
         "researcher_topics": "isolation, productivity",
         "analysis_name": None,
         "custom_id": None,
-        "max_refinement_rounds": None,
+        "max_refinement_rounds": 5,
         "apply_after_generation": None,
     }
 
@@ -669,6 +671,90 @@ def test_auto_submit_rejects_whitespace_only_research_query(client, fake_backend
     assert resp.status_code == 200
     assert b"only whitespace" in resp.data
     assert fake_backend.last_generation_job_request is None
+
+
+# Wizard step 2: max iterations dropdown + transcript sample size -----------
+
+
+def test_auto_form_renders_iterations_dropdown_and_sample_size_input(client, fake_backend):
+    fake_backend.documents = [{"id": "doc1"}, {"id": "doc2"}, {"id": "doc3"}]
+    resp = client.get("/codebooks/new/corpus-xyz/auto?mode=auto")
+    assert resp.status_code == 200
+    assert b'name="max_refinement_rounds"' in resp.data
+    assert b'name="transcript_sample_size"' in resp.data
+    # Default selection is 5, and the top of the range is labelled "Unbounded".
+    assert b'value="5" selected' in resp.data
+    assert b"Unbounded (10)" in resp.data
+    assert b"This corpus has 3 transcripts available." in resp.data
+
+
+def test_auto_submit_forwards_max_refinement_rounds_and_sample_size(client, fake_backend):
+    resp = client.post(
+        "/codebooks/new/corpus-xyz/auto",
+        data={
+            "mode": "auto",
+            "codebook_name": "Interview Codebook",
+            "max_refinement_rounds": "7",
+            "transcript_sample_size": "20",
+        },
+    )
+    assert resp.status_code == 302
+    assert fake_backend.last_generation_job_request == {
+        "codebook_name": "Interview Codebook",
+        "corpus_id": "corpus-xyz",
+        "transcript_document_ids": None,
+        "transcript_sample_size": 20,
+        "research_query": None,
+        "researcher_topics": None,
+        "analysis_name": None,
+        "custom_id": None,
+        "max_refinement_rounds": 7,
+        "apply_after_generation": None,
+    }
+
+
+def test_auto_submit_rejects_non_numeric_sample_size(client, fake_backend):
+    resp = client.post(
+        "/codebooks/new/corpus-xyz/auto",
+        data={
+            "mode": "auto",
+            "codebook_name": "Interview Codebook",
+            "transcript_sample_size": "twenty",
+        },
+    )
+    assert resp.status_code == 200
+    assert b"must be a whole number" in resp.data
+    assert fake_backend.last_generation_job_request is None
+
+
+def test_auto_submit_rejects_zero_sample_size(client, fake_backend):
+    resp = client.post(
+        "/codebooks/new/corpus-xyz/auto",
+        data={
+            "mode": "auto",
+            "codebook_name": "Interview Codebook",
+            "transcript_sample_size": "0",
+        },
+    )
+    assert resp.status_code == 200
+    assert b"at least 1" in resp.data
+    assert fake_backend.last_generation_job_request is None
+
+
+def test_auto_submit_surfaces_backend_error_for_oversized_sample_size(client, fake_backend):
+    # The backend is the source of truth for corpus size, so an oversized
+    # request is rejected server-side and surfaced as a normal flash error.
+    fake_backend.raise_on = "create_generation_job"
+    resp = client.post(
+        "/codebooks/new/corpus-xyz/auto",
+        data={
+            "mode": "auto",
+            "codebook_name": "Interview Codebook",
+            "transcript_sample_size": "500",
+        },
+    )
+    assert resp.status_code == 200
+    assert b"simulated create_generation_job failure" in resp.data
 
 
 # Wizard step 3: progress page + JSON poller --------------------------------
