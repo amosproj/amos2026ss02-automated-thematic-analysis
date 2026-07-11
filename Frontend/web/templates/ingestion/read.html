@@ -386,7 +386,7 @@
     for (const ca of sorted) {
       if (!ca.quote || (!ca.theme_id && !ca.code_id)) continue;
       
-      const colorId = ca.theme_id || ca.code_id;
+      const colorId = ca.code_id || ca.theme_id;
       const color = colorFor(colorId);
       
       const themeInfo = ca.theme_id ? THEMES[ca.theme_id] : null;

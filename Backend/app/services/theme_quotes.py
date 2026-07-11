@@ -112,6 +112,7 @@ class ThemeQuotesService:
         theme_ids_by_key = await self._load_tags_for_quotes(
             run_id=run_id,
             document_ids={row.document_id for row in page_rows},
+            node_ids=theme_ids,
         )
 
         items = [
@@ -133,6 +134,7 @@ class ThemeQuotesService:
         *,
         run_id: UUID,
         document_ids: set[UUID],
+        node_ids: set[UUID],
     ) -> dict[tuple[UUID, str], list[UUID]]:
         if not document_ids:
             return {}
@@ -150,6 +152,7 @@ class ThemeQuotesService:
         ).join(DocumentCoding, ThemeAssignment.document_coding_id == DocumentCoding.id).where(
             DocumentCoding.application_run_id == run_id,
             DocumentCoding.document_id.in_(document_ids),
+            ThemeAssignment.theme_id.in_(node_ids),
             ThemeAssignment.is_present.is_(True),
             ThemeAssignment.quote.is_not(None),
         )
@@ -163,6 +166,7 @@ class ThemeQuotesService:
         ).join(DocumentCoding, CodeAssignment.document_coding_id == DocumentCoding.id).where(
             DocumentCoding.application_run_id == run_id,
             DocumentCoding.document_id.in_(document_ids),
+            CodeAssignment.code_id.in_(node_ids),
             CodeAssignment.quote.is_not(None),
         )
 
