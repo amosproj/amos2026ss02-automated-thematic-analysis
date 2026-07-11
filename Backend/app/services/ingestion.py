@@ -20,6 +20,7 @@ class IngestResult:
     """Internal result of an ingestion call. Converted to IngestResultSchema before returning to the client."""
 
     documents: list[CorpusDocument] = field(default_factory=list)
+    missing_document_ids: list[uuid.UUID] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -173,10 +174,13 @@ class IngestionService:
             )
         )).scalars().all()
 
-        if not docs:
-            return IngestResult()
+        found_ids = {doc.id for doc in docs}
+        missing = [did for did in document_ids if did not in found_ids]
 
-        result = IngestResult()
+        if not docs:
+            return IngestResult(missing_document_ids=missing)
+
+        result = IngestResult(missing_document_ids=missing)
         try:
             for doc in docs:
                 new_doc = CorpusDocument(
@@ -193,6 +197,63 @@ class IngestionService:
             raise UnprocessableError(f"Copy failed: {exc}") from exc
 
         return result
+
+    async def create_corpus_with_documents(
+        self,
+        source_corpus_id: uuid.UUID,
+        name: str,
+        document_ids: list[uuid.UUID],
+    ) -> tuple[Corpus, IngestResult]:
+        """Atomically create a new corpus and copy documents into it.
+
+        Both operations share a single transaction: if the copy fails the
+        corpus creation is rolled back as well, preventing empty corpora.
+        """
+        await self.get_corpus(source_corpus_id)
+
+        docs = (await self._session.execute(
+            select(CorpusDocument).where(
+                CorpusDocument.corpus_id == source_corpus_id,
+                CorpusDocument.id.in_(document_ids),
+            )
+        )).scalars().all()
+
+        found_ids = {doc.id for doc in docs}
+        missing = [did for did in document_ids if did not in found_ids]
+
+        if not docs:
+            raise NotFoundError(
+                f"None of the requested documents were found in corpus '{source_corpus_id}'"
+            )
+
+        try:
+            corpus = Corpus(
+                id=uuid.uuid4(),
+                project_id=uuid.uuid4(),
+                name=name,
+            )
+            self._session.add(corpus)
+
+            result = IngestResult(missing_document_ids=missing)
+            for doc in docs:
+                new_doc = CorpusDocument(
+                    corpus_id=corpus.id,
+                    title=doc.title,
+                    filename=doc.filename,
+                    content=doc.content,
+                )
+                self._session.add(new_doc)
+                result.documents.append(new_doc)
+
+            await self._session.commit()
+            await self._session.refresh(corpus)
+        except Exception as exc:
+            await self._session.rollback()
+            raise UnprocessableError(
+                f"Failed to create corpus with documents: {exc}"
+            ) from exc
+
+        return corpus, result
 
     async def get_document(self, corpus_id: uuid.UUID, document_id: uuid.UUID) -> CorpusDocument:
         """Fetch a single document by ID within the given corpus. Raises NotFoundError if absent."""
