@@ -5,19 +5,22 @@ import math
 import httpx
 
 from app.config import Settings, get_settings
+from app.llm import providers
 
 
 class RemoteEmbeddingClient:
-    """OpenAI-compatible embeddings client for the FAU gateway."""
+    """OpenAI-compatible embeddings client for the selected embedding provider."""
 
     def __init__(
         self,
         settings: Settings | None = None,
         client: httpx.AsyncClient | None = None,
+        provider: str | None = None,
     ) -> None:
         self._settings = settings or get_settings()
         self._client = client
         self._owns_client = client is None
+        self._provider = provider
 
     async def aclose(self) -> None:
         if self._owns_client and self._client is not None:
@@ -33,12 +36,27 @@ class RemoteEmbeddingClient:
     async def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
-        if not self._settings.LLM_API_KEY_FAU:
-            raise RuntimeError("LLM_API_KEY_FAU is required for FAU embeddings.")
 
-        base_url = self._settings.LLM_BASE_URL_FAU.rstrip("/")
+        provider_id = providers.normalize(self._provider) or providers.resolve_default(self._settings)
+        spec = providers.get_provider(provider_id)
+        if spec is None:
+            raise RuntimeError(f"Embedding provider '{provider_id}' is not configured.")
+
+        if not spec.supports_embeddings:
+            spec = providers.get_provider(providers.DEFAULT_PROVIDER_ID)
+            if spec is None:
+                raise RuntimeError("Default embedding provider is not configured.")
+
+        api_key = getattr(self._settings, spec.api_key_attr)
+        if not api_key:
+            raise RuntimeError(f"{spec.api_key_attr} is required for {spec.label} embeddings.")
+        model_name = getattr(self._settings, spec.embedding_model_attr, None)
+        if not model_name:
+            raise RuntimeError(f"{spec.embedding_model_attr} is required for {spec.label} embeddings.")
+
+        base_url = getattr(self._settings, spec.base_url_attr).rstrip("/")
         headers = {
-            "Authorization": f"Bearer {self._settings.LLM_API_KEY_FAU}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         client = self._client
@@ -49,7 +67,7 @@ class RemoteEmbeddingClient:
         embeddings: list[list[float]] = []
         for batch in self._chunked(texts, max(1, self._settings.EMBEDDING_BATCH_SIZE)):
             payload = {
-                "model": self._settings.EMBEDDING_MODEL_FAU,
+                "model": model_name,
                 "input": batch,
             }
             response = await client.post(f"{base_url}/embeddings", json=payload, headers=headers)
