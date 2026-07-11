@@ -548,6 +548,18 @@
     font-size: 0.78rem;
 }
 
+/* Legal notices */
+.legal-notices-table td {
+    vertical-align: top;
+}
+
+.legal-notices-source {
+    min-width: 220px;
+    max-width: 420px;
+    word-break: break-word;
+    font-size: 0.82rem;
+}
+
 @media (max-width: 767.98px) {
     .footer-logo { height: 32px; }
     .footer-partner-name { font-size: 0.82rem; }

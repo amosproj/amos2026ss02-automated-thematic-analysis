@@ -1,0 +1,1056 @@
+{
+  "generated_at": "2026-07-11T08:54:44+00:00",
+  "generated_by": "uv 0.11.8 (0e961dd9a 2026-04-27 x86_64-pc-windows-msvc); scripts/generate_compliance_artifacts.py; license labels from Python package metadata and declared CDN assets",
+  "scope": "Includes backend and frontend Python dependencies resolved with uv including development groups, the Python runtime declared by the Dockerfiles, plus Bootstrap CDN assets referenced by the frontend layout.",
+  "review_note": "License information is automatically generated from dependency metadata. No manual legal clearing was performed.",
+  "sbom_path": "sbom.cdx.json",
+  "entries": [
+    {
+      "name": "bootstrap",
+      "version": "5.3.3",
+      "ecosystem": "JavaScript/CSS",
+      "license": "MIT",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/",
+      "purl": "pkg:npm/bootstrap@5.3.3"
+    },
+    {
+      "name": "bootstrap-icons",
+      "version": "1.11.3",
+      "ecosystem": "JavaScript/CSS",
+      "license": "MIT",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/",
+      "purl": "pkg:npm/bootstrap-icons@1.11.3"
+    },
+    {
+      "name": "aiosqlite",
+      "version": "0.22.1",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://aiosqlite.omnilib.dev",
+      "purl": "pkg:pypi/aiosqlite@0.22.1"
+    },
+    {
+      "name": "annotated-doc",
+      "version": "0.0.4",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/fastapi/annotated-doc",
+      "purl": "pkg:pypi/annotated-doc@0.0.4"
+    },
+    {
+      "name": "annotated-types",
+      "version": "0.7.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend",
+        "Frontend"
+      ],
+      "source": "https://github.com/annotated-types/annotated-types",
+      "purl": "pkg:pypi/annotated-types@0.7.0"
+    },
+    {
+      "name": "anyio",
+      "version": "4.13.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/agronholm/anyio",
+      "purl": "pkg:pypi/anyio@4.13.0"
+    },
+    {
+      "name": "anyio",
+      "version": "4.14.1",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/agronholm/anyio",
+      "purl": "pkg:pypi/anyio@4.14.1"
+    },
+    {
+      "name": "anytree",
+      "version": "2.13.0",
+      "ecosystem": "Python",
+      "license": "Apache-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/c0fec0de/anytree",
+      "purl": "pkg:pypi/anytree@2.13.0"
+    },
+    {
+      "name": "asyncpg",
+      "version": "0.31.0",
+      "ecosystem": "Python",
+      "license": "Apache-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "pkg:pypi/asyncpg@0.31.0",
+      "purl": "pkg:pypi/asyncpg@0.31.0"
+    },
+    {
+      "name": "blinker",
+      "version": "1.9.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/pallets-eco/blinker/",
+      "purl": "pkg:pypi/blinker@1.9.0"
+    },
+    {
+      "name": "certifi",
+      "version": "2026.4.22",
+      "ecosystem": "Python",
+      "license": "MPL-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/certifi/python-certifi",
+      "purl": "pkg:pypi/certifi@2026.4.22"
+    },
+    {
+      "name": "certifi",
+      "version": "2026.6.17",
+      "ecosystem": "Python",
+      "license": "MPL-2.0",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/certifi/python-certifi",
+      "purl": "pkg:pypi/certifi@2026.6.17"
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.4.7",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://charset-normalizer.readthedocs.io/",
+      "purl": "pkg:pypi/charset-normalizer@3.4.7"
+    },
+    {
+      "name": "click",
+      "version": "8.3.3",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/pallets/click/",
+      "purl": "pkg:pypi/click@8.3.3"
+    },
+    {
+      "name": "click",
+      "version": "8.4.2",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/pallets/click/",
+      "purl": "pkg:pypi/click@8.4.2"
+    },
+    {
+      "name": "colorama",
+      "version": "0.4.6",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend",
+        "Frontend"
+      ],
+      "source": "https://github.com/tartley/colorama",
+      "purl": "pkg:pypi/colorama@0.4.6"
+    },
+    {
+      "name": "coverage",
+      "version": "7.13.5",
+      "ecosystem": "Python",
+      "license": "Apache-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://coverage.readthedocs.io/en/7.13.5",
+      "purl": "pkg:pypi/coverage@7.13.5"
+    },
+    {
+      "name": "distro",
+      "version": "1.9.0",
+      "ecosystem": "Python",
+      "license": "Apache-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/python-distro/distro",
+      "purl": "pkg:pypi/distro@1.9.0"
+    },
+    {
+      "name": "fastapi",
+      "version": "0.136.1",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/fastapi/fastapi",
+      "purl": "pkg:pypi/fastapi@0.136.1"
+    },
+    {
+      "name": "flask",
+      "version": "3.1.3",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/pallets/flask/",
+      "purl": "pkg:pypi/flask@3.1.3"
+    },
+    {
+      "name": "greenlet",
+      "version": "3.5.0",
+      "ecosystem": "Python",
+      "license": "MIT AND PSF-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/python-greenlet/greenlet",
+      "purl": "pkg:pypi/greenlet@3.5.0"
+    },
+    {
+      "name": "h11",
+      "version": "0.16.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend",
+        "Frontend"
+      ],
+      "source": "https://github.com/python-hyper/h11",
+      "purl": "pkg:pypi/h11@0.16.0"
+    },
+    {
+      "name": "httpcore",
+      "version": "1.0.9",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend",
+        "Frontend"
+      ],
+      "source": "https://github.com/encode/httpcore",
+      "purl": "pkg:pypi/httpcore@1.0.9"
+    },
+    {
+      "name": "httptools",
+      "version": "0.7.1",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/MagicStack/httptools",
+      "purl": "pkg:pypi/httptools@0.7.1"
+    },
+    {
+      "name": "httpx",
+      "version": "0.28.1",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend",
+        "Frontend"
+      ],
+      "source": "https://github.com/encode/httpx",
+      "purl": "pkg:pypi/httpx@0.28.1"
+    },
+    {
+      "name": "idna",
+      "version": "3.13",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/kjd/idna",
+      "purl": "pkg:pypi/idna@3.13"
+    },
+    {
+      "name": "idna",
+      "version": "3.18",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/kjd/idna",
+      "purl": "pkg:pypi/idna@3.18"
+    },
+    {
+      "name": "iniconfig",
+      "version": "2.3.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend",
+        "Frontend"
+      ],
+      "source": "https://github.com/pytest-dev/iniconfig",
+      "purl": "pkg:pypi/iniconfig@2.3.0"
+    },
+    {
+      "name": "itsdangerous",
+      "version": "2.2.0",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/pallets/itsdangerous/",
+      "purl": "pkg:pypi/itsdangerous@2.2.0"
+    },
+    {
+      "name": "jinja2",
+      "version": "3.1.6",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/pallets/jinja/",
+      "purl": "pkg:pypi/jinja2@3.1.6"
+    },
+    {
+      "name": "jiter",
+      "version": "0.16.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/pydantic/jiter/",
+      "purl": "pkg:pypi/jiter@0.16.0"
+    },
+    {
+      "name": "jsonpatch",
+      "version": "1.33",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/stefankoegl/python-json-patch.git",
+      "purl": "pkg:pypi/jsonpatch@1.33"
+    },
+    {
+      "name": "jsonpointer",
+      "version": "3.1.1",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/stefankoegl/python-json-pointer",
+      "purl": "pkg:pypi/jsonpointer@3.1.1"
+    },
+    {
+      "name": "langchain",
+      "version": "1.3.12",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/langchain-ai/langchain",
+      "purl": "pkg:pypi/langchain@1.3.12"
+    },
+    {
+      "name": "langchain-core",
+      "version": "1.4.9",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/langchain-ai/langchain",
+      "purl": "pkg:pypi/langchain-core@1.4.9"
+    },
+    {
+      "name": "langchain-openai",
+      "version": "1.3.4",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/langchain-ai/langchain",
+      "purl": "pkg:pypi/langchain-openai@1.3.4"
+    },
+    {
+      "name": "langchain-protocol",
+      "version": "0.0.18",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/langchain-ai/agent-protocol",
+      "purl": "pkg:pypi/langchain-protocol@0.0.18"
+    },
+    {
+      "name": "langgraph",
+      "version": "1.2.9",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/langchain-ai/langgraph/tree/main/libs/langgraph",
+      "purl": "pkg:pypi/langgraph@1.2.9"
+    },
+    {
+      "name": "langgraph-checkpoint",
+      "version": "4.1.1",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/langchain-ai/langgraph/tree/main/libs/checkpoint",
+      "purl": "pkg:pypi/langgraph-checkpoint@4.1.1"
+    },
+    {
+      "name": "langgraph-prebuilt",
+      "version": "1.1.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/langchain-ai/langgraph/tree/main/libs/prebuilt",
+      "purl": "pkg:pypi/langgraph-prebuilt@1.1.0"
+    },
+    {
+      "name": "langgraph-sdk",
+      "version": "0.4.2",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/langchain-ai/langgraph/tree/main/libs/sdk-py",
+      "purl": "pkg:pypi/langgraph-sdk@0.4.2"
+    },
+    {
+      "name": "langsmith",
+      "version": "0.8.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/langchain-ai/langsmith-sdk",
+      "purl": "pkg:pypi/langsmith@0.8.0"
+    },
+    {
+      "name": "librt",
+      "version": "0.9.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/mypyc/librt",
+      "purl": "pkg:pypi/librt@0.9.0"
+    },
+    {
+      "name": "loguru",
+      "version": "0.7.3",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/Delgan/loguru",
+      "purl": "pkg:pypi/loguru@0.7.3"
+    },
+    {
+      "name": "lxml",
+      "version": "6.1.1",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/lxml/lxml",
+      "purl": "pkg:pypi/lxml@6.1.1"
+    },
+    {
+      "name": "markupsafe",
+      "version": "3.0.3",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/pallets/markupsafe/",
+      "purl": "pkg:pypi/markupsafe@3.0.3"
+    },
+    {
+      "name": "mypy",
+      "version": "1.20.2",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/python/mypy",
+      "purl": "pkg:pypi/mypy@1.20.2"
+    },
+    {
+      "name": "mypy-extensions",
+      "version": "1.1.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/python/mypy_extensions",
+      "purl": "pkg:pypi/mypy-extensions@1.1.0"
+    },
+    {
+      "name": "openai",
+      "version": "2.45.0",
+      "ecosystem": "Python",
+      "license": "Apache-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/openai/openai-python",
+      "purl": "pkg:pypi/openai@2.45.0"
+    },
+    {
+      "name": "orjson",
+      "version": "3.11.8",
+      "ecosystem": "Python",
+      "license": "MPL-2.0 AND (Apache-2.0 OR MIT)",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/ijl/orjson",
+      "purl": "pkg:pypi/orjson@3.11.8"
+    },
+    {
+      "name": "ormsgpack",
+      "version": "1.12.2",
+      "ecosystem": "Python",
+      "license": "Apache-2.0 OR MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/ormsgpack/ormsgpack",
+      "purl": "pkg:pypi/ormsgpack@1.12.2"
+    },
+    {
+      "name": "packaging",
+      "version": "26.2",
+      "ecosystem": "Python",
+      "license": "Apache-2.0 OR BSD-2-Clause",
+      "used_in": [
+        "Backend",
+        "Frontend"
+      ],
+      "source": "https://github.com/pypa/packaging",
+      "purl": "pkg:pypi/packaging@26.2"
+    },
+    {
+      "name": "pathspec",
+      "version": "1.1.1",
+      "ecosystem": "Python",
+      "license": "MPL-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/cpburnz/python-pathspec",
+      "purl": "pkg:pypi/pathspec@1.1.1"
+    },
+    {
+      "name": "pluggy",
+      "version": "1.6.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend",
+        "Frontend"
+      ],
+      "source": "pkg:pypi/pluggy@1.6.0",
+      "purl": "pkg:pypi/pluggy@1.6.0"
+    },
+    {
+      "name": "pydantic",
+      "version": "2.13.3",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/pydantic/pydantic",
+      "purl": "pkg:pypi/pydantic@2.13.3"
+    },
+    {
+      "name": "pydantic",
+      "version": "2.13.4",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/pydantic/pydantic",
+      "purl": "pkg:pypi/pydantic@2.13.4"
+    },
+    {
+      "name": "pydantic-core",
+      "version": "2.46.3",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/pydantic/pydantic/tree/main/pydantic-core",
+      "purl": "pkg:pypi/pydantic-core@2.46.3"
+    },
+    {
+      "name": "pydantic-core",
+      "version": "2.46.4",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/pydantic/pydantic/tree/main/pydantic-core",
+      "purl": "pkg:pypi/pydantic-core@2.46.4"
+    },
+    {
+      "name": "pydantic-settings",
+      "version": "2.14.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/pydantic/pydantic-settings",
+      "purl": "pkg:pypi/pydantic-settings@2.14.0"
+    },
+    {
+      "name": "pydantic-settings",
+      "version": "2.14.2",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/pydantic/pydantic-settings",
+      "purl": "pkg:pypi/pydantic-settings@2.14.2"
+    },
+    {
+      "name": "pygments",
+      "version": "2.20.0",
+      "ecosystem": "Python",
+      "license": "BSD-2-Clause",
+      "used_in": [
+        "Backend",
+        "Frontend"
+      ],
+      "source": "https://github.com/pygments/pygments",
+      "purl": "pkg:pypi/pygments@2.20.0"
+    },
+    {
+      "name": "pypdf",
+      "version": "5.9.0",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/py-pdf/pypdf",
+      "purl": "pkg:pypi/pypdf@5.9.0"
+    },
+    {
+      "name": "pytest",
+      "version": "8.4.2",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend",
+        "Frontend"
+      ],
+      "source": "https://github.com/pytest-dev/pytest",
+      "purl": "pkg:pypi/pytest@8.4.2"
+    },
+    {
+      "name": "pytest-asyncio",
+      "version": "1.3.0",
+      "ecosystem": "Python",
+      "license": "Apache-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/pytest-dev/pytest-asyncio",
+      "purl": "pkg:pypi/pytest-asyncio@1.3.0"
+    },
+    {
+      "name": "pytest-cov",
+      "version": "7.1.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/pytest-dev/pytest-cov",
+      "purl": "pkg:pypi/pytest-cov@7.1.0"
+    },
+    {
+      "name": "python-docx",
+      "version": "1.2.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/python-openxml/python-docx",
+      "purl": "pkg:pypi/python-docx@1.2.0"
+    },
+    {
+      "name": "python-dotenv",
+      "version": "1.2.2",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend",
+        "Frontend"
+      ],
+      "source": "https://github.com/theskumar/python-dotenv",
+      "purl": "pkg:pypi/python-dotenv@1.2.2"
+    },
+    {
+      "name": "python-multipart",
+      "version": "0.0.27",
+      "ecosystem": "Python",
+      "license": "Apache-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/Kludex/python-multipart",
+      "purl": "pkg:pypi/python-multipart@0.0.27"
+    },
+    {
+      "name": "pyyaml",
+      "version": "6.0.3",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/yaml/pyyaml",
+      "purl": "pkg:pypi/pyyaml@6.0.3"
+    },
+    {
+      "name": "regex",
+      "version": "2026.6.28",
+      "ecosystem": "Python",
+      "license": "Apache-2.0 AND CNRI-Python",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/mrabarnett/mrab-regex",
+      "purl": "pkg:pypi/regex@2026.6.28"
+    },
+    {
+      "name": "requests",
+      "version": "2.33.1",
+      "ecosystem": "Python",
+      "license": "Apache-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/psf/requests",
+      "purl": "pkg:pypi/requests@2.33.1"
+    },
+    {
+      "name": "requests-toolbelt",
+      "version": "1.0.0",
+      "ecosystem": "Python",
+      "license": "Apache-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/requests/toolbelt",
+      "purl": "pkg:pypi/requests-toolbelt@1.0.0"
+    },
+    {
+      "name": "ruff",
+      "version": "0.15.12",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/astral-sh/ruff",
+      "purl": "pkg:pypi/ruff@0.15.12"
+    },
+    {
+      "name": "sniffio",
+      "version": "1.3.1",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/python-trio/sniffio",
+      "purl": "pkg:pypi/sniffio@1.3.1"
+    },
+    {
+      "name": "sqlalchemy",
+      "version": "2.0.49",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://docs.sqlalchemy.org",
+      "purl": "pkg:pypi/sqlalchemy@2.0.49"
+    },
+    {
+      "name": "starlette",
+      "version": "1.0.0",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/Kludex/starlette",
+      "purl": "pkg:pypi/starlette@1.0.0"
+    },
+    {
+      "name": "tenacity",
+      "version": "9.1.4",
+      "ecosystem": "Python",
+      "license": "Apache-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/jd/tenacity",
+      "purl": "pkg:pypi/tenacity@9.1.4"
+    },
+    {
+      "name": "tiktoken",
+      "version": "0.13.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/openai/tiktoken",
+      "purl": "pkg:pypi/tiktoken@0.13.0"
+    },
+    {
+      "name": "tomli",
+      "version": "2.4.1",
+      "ecosystem": "Python",
+      "license": "NOASSERTION",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "pkg:pypi/tomli@2.4.1",
+      "purl": "pkg:pypi/tomli@2.4.1"
+    },
+    {
+      "name": "tqdm",
+      "version": "4.68.4",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/tqdm/tqdm",
+      "purl": "pkg:pypi/tqdm@4.68.4"
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.15.0",
+      "ecosystem": "Python",
+      "license": "PSF-2.0",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/python/typing_extensions",
+      "purl": "pkg:pypi/typing-extensions@4.15.0"
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.16.0",
+      "ecosystem": "Python",
+      "license": "PSF-2.0",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/python/typing_extensions",
+      "purl": "pkg:pypi/typing-extensions@4.16.0"
+    },
+    {
+      "name": "typing-inspection",
+      "version": "0.4.2",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend",
+        "Frontend"
+      ],
+      "source": "https://github.com/pydantic/typing-inspection",
+      "purl": "pkg:pypi/typing-inspection@0.4.2"
+    },
+    {
+      "name": "urllib3",
+      "version": "2.6.3",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://urllib3.readthedocs.io",
+      "purl": "pkg:pypi/urllib3@2.6.3"
+    },
+    {
+      "name": "uuid-utils",
+      "version": "0.14.1",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/aminalaee/uuid-utils",
+      "purl": "pkg:pypi/uuid-utils@0.14.1"
+    },
+    {
+      "name": "uvicorn",
+      "version": "0.46.0",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/Kludex/uvicorn",
+      "purl": "pkg:pypi/uvicorn@0.46.0"
+    },
+    {
+      "name": "uvloop",
+      "version": "0.22.1",
+      "ecosystem": "Python",
+      "license": "NOASSERTION",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "pkg:pypi/uvloop@0.22.1",
+      "purl": "pkg:pypi/uvloop@0.22.1"
+    },
+    {
+      "name": "watchfiles",
+      "version": "1.1.1",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/samuelcolvin/watchfiles",
+      "purl": "pkg:pypi/watchfiles@1.1.1"
+    },
+    {
+      "name": "websockets",
+      "version": "15.0.1",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/python-websockets/websockets",
+      "purl": "pkg:pypi/websockets@15.0.1"
+    },
+    {
+      "name": "werkzeug",
+      "version": "3.1.8",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Frontend"
+      ],
+      "source": "https://github.com/pallets/werkzeug/",
+      "purl": "pkg:pypi/werkzeug@3.1.8"
+    },
+    {
+      "name": "win32-setctime",
+      "version": "1.2.0",
+      "ecosystem": "Python",
+      "license": "MIT",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/Delgan/win32-setctime",
+      "purl": "pkg:pypi/win32-setctime@1.2.0"
+    },
+    {
+      "name": "xxhash",
+      "version": "3.7.0",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/ifduyue/python-xxhash",
+      "purl": "pkg:pypi/xxhash@3.7.0"
+    },
+    {
+      "name": "zstandard",
+      "version": "0.25.0",
+      "ecosystem": "Python",
+      "license": "BSD-3-Clause",
+      "used_in": [
+        "Backend"
+      ],
+      "source": "https://github.com/indygreg/python-zstandard",
+      "purl": "pkg:pypi/zstandard@0.25.0"
+    },
+    {
+      "name": "Python",
+      "version": "3.11",
+      "ecosystem": "Runtime",
+      "license": "Python-2.0",
+      "used_in": [
+        "Backend",
+        "Frontend"
+      ],
+      "source": "https://www.python.org/",
+      "purl": "pkg:generic/python@3.11"
+    }
+  ]
+}

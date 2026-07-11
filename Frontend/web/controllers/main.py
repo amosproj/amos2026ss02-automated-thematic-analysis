@@ -1,8 +1,12 @@
+import json
+from pathlib import Path
+
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from web.services.backend_client import BackendError, get_backend_client as _backend
 
 bp = Blueprint("main", __name__)
+_LEGAL_NOTICES_PATH = Path(__file__).resolve().parents[1] / "static" / "legal_notices.json"
 
 # Shown when the backend is unreachable so the Home page still renders a sane,
 # read-only provider card instead of erroring out.
@@ -62,6 +66,13 @@ def set_llm_provider():
 @bp.get("/help")
 def help_page() -> str:
     return render_template("help.html")
+
+
+@bp.get("/legal-notices")
+def legal_notices() -> str:
+    with _LEGAL_NOTICES_PATH.open(encoding="utf-8") as notices_file:
+        notices = json.load(notices_file)
+    return render_template("legal_notices.html", notices=notices)
 
 
 @bp.get("/health")

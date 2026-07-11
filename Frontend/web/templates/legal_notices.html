@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Legal Notices{% endblock %}
+{% block content %}
+  <div class="mb-4 d-flex justify-content-between align-items-end flex-wrap gap-3">
+    <div>
+      <h1 class="h3 mb-1">Legal Notices</h1>
+      <p class="text-secondary mb-0">
+        Third-party dependency notices for the final project release.
+      </p>
+    </div>
+    <div style="width: 100%; max-width: 320px;" class="position-relative">
+      <i class="bi bi-search position-absolute text-secondary" style="top: 50%; left: 12px; transform: translateY(-50%);"></i>
+      <input type="search"
+             id="legalNoticeSearch"
+             class="form-control"
+             style="padding-left: 36px;"
+             placeholder="Search legal notices..."
+             aria-label="Search legal notices">
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+      <div class="bg-white border rounded-2 p-3 h-100">
+        <p class="footer-label mb-1">Generated</p>
+        <p class="mb-0">{{ notices.generated_at }}</p>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="bg-white border rounded-2 p-3 h-100">
+        <p class="footer-label mb-1">Components</p>
+        <p class="mb-0">{{ notices.entries|length }} notices</p>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="bg-white border rounded-2 p-3 h-100">
+        <p class="footer-label mb-1">SBOM</p>
+        <p class="mb-0"><code>{{ notices.sbom_path }}</code></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white border rounded-2 p-4 mb-4">
+    <p class="text-secondary mb-2">{{ notices.scope }}</p>
+    <p class="text-secondary small mb-0">{{ notices.review_note }}</p>
+  </div>
+
+  <div class="bg-white border rounded-2">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 legal-notices-table">
+        <thead class="theme-table-head">
+          <tr>
+            <th scope="col">Component</th>
+            <th scope="col">Version</th>
+            <th scope="col">Used in</th>
+            <th scope="col">License</th>
+            <th scope="col">Source</th>
+          </tr>
+        </thead>
+        <tbody id="legalNoticeRows">
+          {% for entry in notices.entries %}
+            <tr data-legal-notice-row>
+              <td>
+                <div class="fw-semibold">{{ entry.name }}</div>
+                <div class="text-secondary small">{{ entry.ecosystem }}</div>
+              </td>
+              <td><code>{{ entry.version }}</code></td>
+              <td>
+                {% for scope in entry.used_in %}
+                  <span class="badge text-bg-light border">{{ scope }}</span>
+                {% endfor %}
+              </td>
+              <td><code>{{ entry.license }}</code></td>
+              <td class="legal-notices-source">
+                {% if entry.source.startswith("http") %}
+                  <a href="{{ entry.source }}" target="_blank" rel="noopener">{{ entry.source }}</a>
+                {% else %}
+                  <code>{{ entry.source }}</code>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const input = document.getElementById("legalNoticeSearch");
+      const rows = document.querySelectorAll("[data-legal-notice-row]");
+
+      if (!input) return;
+
+      input.addEventListener("input", () => {
+        const query = input.value.trim().toLowerCase();
+        rows.forEach((row) => {
+          row.hidden = query.length > 0 && !row.textContent.toLowerCase().includes(query);
+        });
+      });
+    });
+  </script>
+{% endblock %}

@@ -1,0 +1,3481 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "serialNumber": "urn:uuid:f8f4b66a-777c-451b-914e-0c58dec4e94e",
+  "metadata": {
+    "timestamp": "2026-07-11T08:54:44+00:00",
+    "tools": [
+      {
+        "vendor": "Astral Software Inc.",
+        "name": "uv",
+        "version": "0.11.8"
+      },
+      {
+        "vendor": "AMOS SS 2026 Project",
+        "name": "scripts/generate_compliance_artifacts.py",
+        "version": "1"
+      }
+    ],
+    "component": {
+      "type": "application",
+      "bom-ref": "automated-thematic-analysis@0.1.0",
+      "name": "automated-thematic-analysis",
+      "version": "0.1.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "backend:backend-1@0.1.0",
+      "name": "backend",
+      "version": "0.1.0",
+      "properties": [
+        {
+          "name": "uv:package:is_project_root",
+          "value": "true"
+        },
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:aiosqlite-2@0.22.1",
+      "name": "aiosqlite",
+      "version": "0.22.1",
+      "purl": "pkg:pypi/aiosqlite@0.22.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://aiosqlite.omnilib.dev"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:annotated-doc-3@0.0.4",
+      "name": "annotated-doc",
+      "version": "0.0.4",
+      "purl": "pkg:pypi/annotated-doc@0.0.4",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/fastapi/annotated-doc"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:annotated-types-4@0.7.0",
+      "name": "annotated-types",
+      "version": "0.7.0",
+      "purl": "pkg:pypi/annotated-types@0.7.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/annotated-types/annotated-types"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:anyio-5@4.13.0",
+      "name": "anyio",
+      "version": "4.13.0",
+      "purl": "pkg:pypi/anyio@4.13.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/agronholm/anyio"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:anytree-6@2.13.0",
+      "name": "anytree",
+      "version": "2.13.0",
+      "purl": "pkg:pypi/anytree@2.13.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/c0fec0de/anytree"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:asyncpg-7@0.31.0",
+      "name": "asyncpg",
+      "version": "0.31.0",
+      "purl": "pkg:pypi/asyncpg@0.31.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:certifi-8@2026.4.22",
+      "name": "certifi",
+      "version": "2026.4.22",
+      "purl": "pkg:pypi/certifi@2026.4.22",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/certifi/python-certifi"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:charset-normalizer-9@3.4.7",
+      "name": "charset-normalizer",
+      "version": "3.4.7",
+      "purl": "pkg:pypi/charset-normalizer@3.4.7",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://charset-normalizer.readthedocs.io/"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:click-10@8.3.3",
+      "name": "click",
+      "version": "8.3.3",
+      "purl": "pkg:pypi/click@8.3.3",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pallets/click/"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:colorama-11@0.4.6",
+      "name": "colorama",
+      "version": "0.4.6",
+      "purl": "pkg:pypi/colorama@0.4.6",
+      "properties": [
+        {
+          "name": "uv:package:marker",
+          "value": "sys_platform == 'win32'"
+        },
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/tartley/colorama"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:coverage-12@7.13.5",
+      "name": "coverage",
+      "version": "7.13.5",
+      "purl": "pkg:pypi/coverage@7.13.5",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://coverage.readthedocs.io/en/7.13.5"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:distro-13@1.9.0",
+      "name": "distro",
+      "version": "1.9.0",
+      "purl": "pkg:pypi/distro@1.9.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/python-distro/distro"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:fastapi-14@0.136.1",
+      "name": "fastapi",
+      "version": "0.136.1",
+      "purl": "pkg:pypi/fastapi@0.136.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/fastapi/fastapi"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:greenlet-15@3.5.0",
+      "name": "greenlet",
+      "version": "3.5.0",
+      "purl": "pkg:pypi/greenlet@3.5.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT AND PSF-2.0"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/python-greenlet/greenlet"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:h11-16@0.16.0",
+      "name": "h11",
+      "version": "0.16.0",
+      "purl": "pkg:pypi/h11@0.16.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/python-hyper/h11"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:httpcore-17@1.0.9",
+      "name": "httpcore",
+      "version": "1.0.9",
+      "purl": "pkg:pypi/httpcore@1.0.9",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/encode/httpcore"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:httptools-18@0.7.1",
+      "name": "httptools",
+      "version": "0.7.1",
+      "purl": "pkg:pypi/httptools@0.7.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/MagicStack/httptools"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:httpx-19@0.28.1",
+      "name": "httpx",
+      "version": "0.28.1",
+      "purl": "pkg:pypi/httpx@0.28.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/encode/httpx"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:idna-20@3.13",
+      "name": "idna",
+      "version": "3.13",
+      "purl": "pkg:pypi/idna@3.13",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/kjd/idna"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:iniconfig-21@2.3.0",
+      "name": "iniconfig",
+      "version": "2.3.0",
+      "purl": "pkg:pypi/iniconfig@2.3.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pytest-dev/iniconfig"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:jiter-22@0.16.0",
+      "name": "jiter",
+      "version": "0.16.0",
+      "purl": "pkg:pypi/jiter@0.16.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pydantic/jiter/"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:jsonpatch-23@1.33",
+      "name": "jsonpatch",
+      "version": "1.33",
+      "purl": "pkg:pypi/jsonpatch@1.33",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/stefankoegl/python-json-patch.git"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:jsonpointer-24@3.1.1",
+      "name": "jsonpointer",
+      "version": "3.1.1",
+      "purl": "pkg:pypi/jsonpointer@3.1.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/stefankoegl/python-json-pointer"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:langchain-25@1.3.12",
+      "name": "langchain",
+      "version": "1.3.12",
+      "purl": "pkg:pypi/langchain@1.3.12",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/langchain-ai/langchain"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:langchain-core-26@1.4.9",
+      "name": "langchain-core",
+      "version": "1.4.9",
+      "purl": "pkg:pypi/langchain-core@1.4.9",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/langchain-ai/langchain"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:langchain-openai-27@1.3.4",
+      "name": "langchain-openai",
+      "version": "1.3.4",
+      "purl": "pkg:pypi/langchain-openai@1.3.4",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/langchain-ai/langchain"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:langchain-protocol-28@0.0.18",
+      "name": "langchain-protocol",
+      "version": "0.0.18",
+      "purl": "pkg:pypi/langchain-protocol@0.0.18",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/langchain-ai/agent-protocol"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:langgraph-29@1.2.9",
+      "name": "langgraph",
+      "version": "1.2.9",
+      "purl": "pkg:pypi/langgraph@1.2.9",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/langchain-ai/langgraph/tree/main/libs/langgraph"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:langgraph-checkpoint-30@4.1.1",
+      "name": "langgraph-checkpoint",
+      "version": "4.1.1",
+      "purl": "pkg:pypi/langgraph-checkpoint@4.1.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/langchain-ai/langgraph/tree/main/libs/checkpoint"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:langgraph-prebuilt-31@1.1.0",
+      "name": "langgraph-prebuilt",
+      "version": "1.1.0",
+      "purl": "pkg:pypi/langgraph-prebuilt@1.1.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/langchain-ai/langgraph/tree/main/libs/prebuilt"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:langgraph-sdk-32@0.4.2",
+      "name": "langgraph-sdk",
+      "version": "0.4.2",
+      "purl": "pkg:pypi/langgraph-sdk@0.4.2",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/langchain-ai/langgraph/tree/main/libs/sdk-py"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:langsmith-33@0.8.0",
+      "name": "langsmith",
+      "version": "0.8.0",
+      "purl": "pkg:pypi/langsmith@0.8.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/langchain-ai/langsmith-sdk"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:librt-34@0.9.0",
+      "name": "librt",
+      "version": "0.9.0",
+      "purl": "pkg:pypi/librt@0.9.0",
+      "properties": [
+        {
+          "name": "uv:package:marker",
+          "value": "platform_python_implementation != 'PyPy'"
+        },
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/mypyc/librt"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:loguru-35@0.7.3",
+      "name": "loguru",
+      "version": "0.7.3",
+      "purl": "pkg:pypi/loguru@0.7.3",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/Delgan/loguru"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:lxml-36@6.1.1",
+      "name": "lxml",
+      "version": "6.1.1",
+      "purl": "pkg:pypi/lxml@6.1.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/lxml/lxml"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:mypy-37@1.20.2",
+      "name": "mypy",
+      "version": "1.20.2",
+      "purl": "pkg:pypi/mypy@1.20.2",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/python/mypy"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:mypy-extensions-38@1.1.0",
+      "name": "mypy-extensions",
+      "version": "1.1.0",
+      "purl": "pkg:pypi/mypy-extensions@1.1.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/python/mypy_extensions"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:openai-39@2.45.0",
+      "name": "openai",
+      "version": "2.45.0",
+      "purl": "pkg:pypi/openai@2.45.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/openai/openai-python"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:orjson-40@3.11.8",
+      "name": "orjson",
+      "version": "3.11.8",
+      "purl": "pkg:pypi/orjson@3.11.8",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MPL-2.0 AND (Apache-2.0 OR MIT)"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/ijl/orjson"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:ormsgpack-41@1.12.2",
+      "name": "ormsgpack",
+      "version": "1.12.2",
+      "purl": "pkg:pypi/ormsgpack@1.12.2",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/ormsgpack/ormsgpack"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:packaging-42@26.2",
+      "name": "packaging",
+      "version": "26.2",
+      "purl": "pkg:pypi/packaging@26.2",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR BSD-2-Clause"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pypa/packaging"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:pathspec-43@1.1.1",
+      "name": "pathspec",
+      "version": "1.1.1",
+      "purl": "pkg:pypi/pathspec@1.1.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/cpburnz/python-pathspec"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:pluggy-44@1.6.0",
+      "name": "pluggy",
+      "version": "1.6.0",
+      "purl": "pkg:pypi/pluggy@1.6.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:pydantic-45@2.13.3",
+      "name": "pydantic",
+      "version": "2.13.3",
+      "purl": "pkg:pypi/pydantic@2.13.3",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pydantic/pydantic"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:pydantic-core-46@2.46.3",
+      "name": "pydantic-core",
+      "version": "2.46.3",
+      "purl": "pkg:pypi/pydantic-core@2.46.3",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pydantic/pydantic/tree/main/pydantic-core"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:pydantic-settings-47@2.14.0",
+      "name": "pydantic-settings",
+      "version": "2.14.0",
+      "purl": "pkg:pypi/pydantic-settings@2.14.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pydantic/pydantic-settings"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:pygments-48@2.20.0",
+      "name": "pygments",
+      "version": "2.20.0",
+      "purl": "pkg:pypi/pygments@2.20.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-2-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pygments/pygments"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:pypdf-49@5.9.0",
+      "name": "pypdf",
+      "version": "5.9.0",
+      "purl": "pkg:pypi/pypdf@5.9.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/py-pdf/pypdf"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:pytest-50@8.4.2",
+      "name": "pytest",
+      "version": "8.4.2",
+      "purl": "pkg:pypi/pytest@8.4.2",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pytest-dev/pytest"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:pytest-asyncio-51@1.3.0",
+      "name": "pytest-asyncio",
+      "version": "1.3.0",
+      "purl": "pkg:pypi/pytest-asyncio@1.3.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pytest-dev/pytest-asyncio"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:pytest-cov-52@7.1.0",
+      "name": "pytest-cov",
+      "version": "7.1.0",
+      "purl": "pkg:pypi/pytest-cov@7.1.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pytest-dev/pytest-cov"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:python-docx-53@1.2.0",
+      "name": "python-docx",
+      "version": "1.2.0",
+      "purl": "pkg:pypi/python-docx@1.2.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/python-openxml/python-docx"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:python-dotenv-54@1.2.2",
+      "name": "python-dotenv",
+      "version": "1.2.2",
+      "purl": "pkg:pypi/python-dotenv@1.2.2",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/theskumar/python-dotenv"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:python-multipart-55@0.0.27",
+      "name": "python-multipart",
+      "version": "0.0.27",
+      "purl": "pkg:pypi/python-multipart@0.0.27",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/Kludex/python-multipart"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:pyyaml-56@6.0.3",
+      "name": "pyyaml",
+      "version": "6.0.3",
+      "purl": "pkg:pypi/pyyaml@6.0.3",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/yaml/pyyaml"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:regex-57@2026.6.28",
+      "name": "regex",
+      "version": "2026.6.28",
+      "purl": "pkg:pypi/regex@2026.6.28",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 AND CNRI-Python"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/mrabarnett/mrab-regex"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:requests-58@2.33.1",
+      "name": "requests",
+      "version": "2.33.1",
+      "purl": "pkg:pypi/requests@2.33.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/psf/requests"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:requests-toolbelt-59@1.0.0",
+      "name": "requests-toolbelt",
+      "version": "1.0.0",
+      "purl": "pkg:pypi/requests-toolbelt@1.0.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/requests/toolbelt"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:ruff-60@0.15.12",
+      "name": "ruff",
+      "version": "0.15.12",
+      "purl": "pkg:pypi/ruff@0.15.12",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/astral-sh/ruff"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:sniffio-61@1.3.1",
+      "name": "sniffio",
+      "version": "1.3.1",
+      "purl": "pkg:pypi/sniffio@1.3.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/python-trio/sniffio"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:sqlalchemy-62@2.0.49",
+      "name": "sqlalchemy",
+      "version": "2.0.49",
+      "purl": "pkg:pypi/sqlalchemy@2.0.49",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://docs.sqlalchemy.org"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:starlette-63@1.0.0",
+      "name": "starlette",
+      "version": "1.0.0",
+      "purl": "pkg:pypi/starlette@1.0.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/Kludex/starlette"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:tenacity-64@9.1.4",
+      "name": "tenacity",
+      "version": "9.1.4",
+      "purl": "pkg:pypi/tenacity@9.1.4",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/jd/tenacity"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:tiktoken-65@0.13.0",
+      "name": "tiktoken",
+      "version": "0.13.0",
+      "purl": "pkg:pypi/tiktoken@0.13.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/openai/tiktoken"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:tomli-66@2.4.1",
+      "name": "tomli",
+      "version": "2.4.1",
+      "purl": "pkg:pypi/tomli@2.4.1",
+      "properties": [
+        {
+          "name": "uv:package:marker",
+          "value": "python_full_version <= '3.11'"
+        },
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "NOASSERTION"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:tqdm-67@4.68.4",
+      "name": "tqdm",
+      "version": "4.68.4",
+      "purl": "pkg:pypi/tqdm@4.68.4",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/tqdm/tqdm"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:typing-extensions-68@4.15.0",
+      "name": "typing-extensions",
+      "version": "4.15.0",
+      "purl": "pkg:pypi/typing-extensions@4.15.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "PSF-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/python/typing_extensions"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:typing-inspection-69@0.4.2",
+      "name": "typing-inspection",
+      "version": "0.4.2",
+      "purl": "pkg:pypi/typing-inspection@0.4.2",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pydantic/typing-inspection"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:urllib3-70@2.6.3",
+      "name": "urllib3",
+      "version": "2.6.3",
+      "purl": "pkg:pypi/urllib3@2.6.3",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://urllib3.readthedocs.io"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:uuid-utils-71@0.14.1",
+      "name": "uuid-utils",
+      "version": "0.14.1",
+      "purl": "pkg:pypi/uuid-utils@0.14.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/aminalaee/uuid-utils"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:uvicorn-72@0.46.0",
+      "name": "uvicorn",
+      "version": "0.46.0",
+      "purl": "pkg:pypi/uvicorn@0.46.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/Kludex/uvicorn"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:uvloop-73@0.22.1",
+      "name": "uvloop",
+      "version": "0.22.1",
+      "purl": "pkg:pypi/uvloop@0.22.1",
+      "properties": [
+        {
+          "name": "uv:package:marker",
+          "value": "platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'"
+        },
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "name": "NOASSERTION"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:watchfiles-74@1.1.1",
+      "name": "watchfiles",
+      "version": "1.1.1",
+      "purl": "pkg:pypi/watchfiles@1.1.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/samuelcolvin/watchfiles"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:websockets-75@15.0.1",
+      "name": "websockets",
+      "version": "15.0.1",
+      "purl": "pkg:pypi/websockets@15.0.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/python-websockets/websockets"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:win32-setctime-76@1.2.0",
+      "name": "win32-setctime",
+      "version": "1.2.0",
+      "purl": "pkg:pypi/win32-setctime@1.2.0",
+      "properties": [
+        {
+          "name": "uv:package:marker",
+          "value": "sys_platform == 'win32'"
+        },
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/Delgan/win32-setctime"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:xxhash-77@3.7.0",
+      "name": "xxhash",
+      "version": "3.7.0",
+      "purl": "pkg:pypi/xxhash@3.7.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/ifduyue/python-xxhash"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "backend:zstandard-78@0.25.0",
+      "name": "zstandard",
+      "version": "0.25.0",
+      "purl": "pkg:pypi/zstandard@0.25.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/indygreg/python-zstandard"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:frontend-1@0.1.0",
+      "name": "frontend",
+      "version": "0.1.0",
+      "properties": [
+        {
+          "name": "uv:package:is_project_root",
+          "value": "true"
+        },
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:annotated-types-2@0.7.0",
+      "name": "annotated-types",
+      "version": "0.7.0",
+      "purl": "pkg:pypi/annotated-types@0.7.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/annotated-types/annotated-types"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:anyio-3@4.14.1",
+      "name": "anyio",
+      "version": "4.14.1",
+      "purl": "pkg:pypi/anyio@4.14.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/agronholm/anyio"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:blinker-4@1.9.0",
+      "name": "blinker",
+      "version": "1.9.0",
+      "purl": "pkg:pypi/blinker@1.9.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pallets-eco/blinker/"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:certifi-5@2026.6.17",
+      "name": "certifi",
+      "version": "2026.6.17",
+      "purl": "pkg:pypi/certifi@2026.6.17",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/certifi/python-certifi"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:click-6@8.4.2",
+      "name": "click",
+      "version": "8.4.2",
+      "purl": "pkg:pypi/click@8.4.2",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pallets/click/"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:colorama-7@0.4.6",
+      "name": "colorama",
+      "version": "0.4.6",
+      "purl": "pkg:pypi/colorama@0.4.6",
+      "properties": [
+        {
+          "name": "uv:package:marker",
+          "value": "sys_platform == 'win32'"
+        },
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/tartley/colorama"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:flask-8@3.1.3",
+      "name": "flask",
+      "version": "3.1.3",
+      "purl": "pkg:pypi/flask@3.1.3",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pallets/flask/"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:h11-9@0.16.0",
+      "name": "h11",
+      "version": "0.16.0",
+      "purl": "pkg:pypi/h11@0.16.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/python-hyper/h11"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:httpcore-10@1.0.9",
+      "name": "httpcore",
+      "version": "1.0.9",
+      "purl": "pkg:pypi/httpcore@1.0.9",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/encode/httpcore"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:httpx-11@0.28.1",
+      "name": "httpx",
+      "version": "0.28.1",
+      "purl": "pkg:pypi/httpx@0.28.1",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/encode/httpx"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:idna-12@3.18",
+      "name": "idna",
+      "version": "3.18",
+      "purl": "pkg:pypi/idna@3.18",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/kjd/idna"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:iniconfig-13@2.3.0",
+      "name": "iniconfig",
+      "version": "2.3.0",
+      "purl": "pkg:pypi/iniconfig@2.3.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pytest-dev/iniconfig"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:itsdangerous-14@2.2.0",
+      "name": "itsdangerous",
+      "version": "2.2.0",
+      "purl": "pkg:pypi/itsdangerous@2.2.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pallets/itsdangerous/"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:jinja2-15@3.1.6",
+      "name": "jinja2",
+      "version": "3.1.6",
+      "purl": "pkg:pypi/jinja2@3.1.6",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pallets/jinja/"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:markupsafe-16@3.0.3",
+      "name": "markupsafe",
+      "version": "3.0.3",
+      "purl": "pkg:pypi/markupsafe@3.0.3",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pallets/markupsafe/"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:packaging-17@26.2",
+      "name": "packaging",
+      "version": "26.2",
+      "purl": "pkg:pypi/packaging@26.2",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR BSD-2-Clause"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pypa/packaging"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:pluggy-18@1.6.0",
+      "name": "pluggy",
+      "version": "1.6.0",
+      "purl": "pkg:pypi/pluggy@1.6.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:pydantic-19@2.13.4",
+      "name": "pydantic",
+      "version": "2.13.4",
+      "purl": "pkg:pypi/pydantic@2.13.4",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pydantic/pydantic"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:pydantic-core-20@2.46.4",
+      "name": "pydantic-core",
+      "version": "2.46.4",
+      "purl": "pkg:pypi/pydantic-core@2.46.4",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pydantic/pydantic/tree/main/pydantic-core"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:pydantic-settings-21@2.14.2",
+      "name": "pydantic-settings",
+      "version": "2.14.2",
+      "purl": "pkg:pypi/pydantic-settings@2.14.2",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pydantic/pydantic-settings"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:pygments-22@2.20.0",
+      "name": "pygments",
+      "version": "2.20.0",
+      "purl": "pkg:pypi/pygments@2.20.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-2-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pygments/pygments"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:pytest-23@8.4.2",
+      "name": "pytest",
+      "version": "8.4.2",
+      "purl": "pkg:pypi/pytest@8.4.2",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pytest-dev/pytest"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:python-dotenv-24@1.2.2",
+      "name": "python-dotenv",
+      "version": "1.2.2",
+      "purl": "pkg:pypi/python-dotenv@1.2.2",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/theskumar/python-dotenv"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:typing-extensions-25@4.16.0",
+      "name": "typing-extensions",
+      "version": "4.16.0",
+      "purl": "pkg:pypi/typing-extensions@4.16.0",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "PSF-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/python/typing_extensions"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:typing-inspection-26@0.4.2",
+      "name": "typing-inspection",
+      "version": "0.4.2",
+      "purl": "pkg:pypi/typing-inspection@0.4.2",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pydantic/typing-inspection"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "frontend:werkzeug-27@3.1.8",
+      "name": "werkzeug",
+      "version": "3.1.8",
+      "purl": "pkg:pypi/werkzeug@3.1.8",
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pallets/werkzeug/"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "cdn:bootstrap@5.3.3",
+      "name": "bootstrap",
+      "version": "5.3.3",
+      "purl": "pkg:npm/bootstrap@5.3.3",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/"
+        }
+      ],
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        },
+        {
+          "name": "ata:source",
+          "value": "CDN asset referenced by base.html"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "cdn:bootstrap-icons@1.11.3",
+      "name": "bootstrap-icons",
+      "version": "1.11.3",
+      "purl": "pkg:npm/bootstrap-icons@1.11.3",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/"
+        }
+      ],
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        },
+        {
+          "name": "ata:source",
+          "value": "CDN asset referenced by base.html"
+        }
+      ]
+    },
+    {
+      "type": "platform",
+      "bom-ref": "runtime:python@3.11",
+      "name": "Python",
+      "version": "3.11",
+      "purl": "pkg:generic/python@3.11",
+      "licenses": [
+        {
+          "license": {
+            "id": "Python-2.0"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://www.python.org/"
+        }
+      ],
+      "properties": [
+        {
+          "name": "ata:project",
+          "value": "Backend"
+        },
+        {
+          "name": "ata:project",
+          "value": "Frontend"
+        },
+        {
+          "name": "ata:source",
+          "value": "Docker runtime image python:3.11-slim"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "backend:aiosqlite-2@0.22.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:annotated-doc-3@0.0.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:annotated-types-4@0.7.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:anyio-5@4.13.0",
+      "dependsOn": [
+        "backend:idna-20@3.13",
+        "backend:typing-extensions-68@4.15.0"
+      ]
+    },
+    {
+      "ref": "backend:anytree-6@2.13.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:asyncpg-7@0.31.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:backend-1@0.1.0",
+      "dependsOn": [
+        "backend:aiosqlite-2@0.22.1",
+        "backend:anytree-6@2.13.0",
+        "backend:asyncpg-7@0.31.0",
+        "backend:fastapi-14@0.136.1",
+        "backend:httpx-19@0.28.1",
+        "backend:langchain-25@1.3.12",
+        "backend:langchain-core-26@1.4.9",
+        "backend:langchain-openai-27@1.3.4",
+        "backend:loguru-35@0.7.3",
+        "backend:mypy-37@1.20.2",
+        "backend:pydantic-45@2.13.3",
+        "backend:pydantic-settings-47@2.14.0",
+        "backend:pypdf-49@5.9.0",
+        "backend:pytest-50@8.4.2",
+        "backend:pytest-asyncio-51@1.3.0",
+        "backend:pytest-cov-52@7.1.0",
+        "backend:python-docx-53@1.2.0",
+        "backend:python-dotenv-54@1.2.2",
+        "backend:python-multipart-55@0.0.27",
+        "backend:ruff-60@0.15.12",
+        "backend:sqlalchemy-62@2.0.49",
+        "backend:tiktoken-65@0.13.0",
+        "backend:uvicorn-72@0.46.0"
+      ]
+    },
+    {
+      "ref": "backend:certifi-8@2026.4.22",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:charset-normalizer-9@3.4.7",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:click-10@8.3.3",
+      "dependsOn": [
+        "backend:colorama-11@0.4.6"
+      ]
+    },
+    {
+      "ref": "backend:colorama-11@0.4.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:coverage-12@7.13.5",
+      "dependsOn": [
+        "backend:tomli-66@2.4.1"
+      ]
+    },
+    {
+      "ref": "backend:distro-13@1.9.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:fastapi-14@0.136.1",
+      "dependsOn": [
+        "backend:annotated-doc-3@0.0.4",
+        "backend:pydantic-45@2.13.3",
+        "backend:starlette-63@1.0.0",
+        "backend:typing-extensions-68@4.15.0",
+        "backend:typing-inspection-69@0.4.2"
+      ]
+    },
+    {
+      "ref": "backend:greenlet-15@3.5.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:h11-16@0.16.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:httpcore-17@1.0.9",
+      "dependsOn": [
+        "backend:certifi-8@2026.4.22",
+        "backend:h11-16@0.16.0"
+      ]
+    },
+    {
+      "ref": "backend:httptools-18@0.7.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:httpx-19@0.28.1",
+      "dependsOn": [
+        "backend:anyio-5@4.13.0",
+        "backend:certifi-8@2026.4.22",
+        "backend:httpcore-17@1.0.9",
+        "backend:idna-20@3.13"
+      ]
+    },
+    {
+      "ref": "backend:idna-20@3.13",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:iniconfig-21@2.3.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:jiter-22@0.16.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:jsonpatch-23@1.33",
+      "dependsOn": [
+        "backend:jsonpointer-24@3.1.1"
+      ]
+    },
+    {
+      "ref": "backend:jsonpointer-24@3.1.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:langchain-25@1.3.12",
+      "dependsOn": [
+        "backend:langchain-core-26@1.4.9",
+        "backend:langgraph-29@1.2.9",
+        "backend:pydantic-45@2.13.3"
+      ]
+    },
+    {
+      "ref": "backend:langchain-core-26@1.4.9",
+      "dependsOn": [
+        "backend:jsonpatch-23@1.33",
+        "backend:langchain-protocol-28@0.0.18",
+        "backend:langsmith-33@0.8.0",
+        "backend:packaging-42@26.2",
+        "backend:pydantic-45@2.13.3",
+        "backend:pyyaml-56@6.0.3",
+        "backend:tenacity-64@9.1.4",
+        "backend:typing-extensions-68@4.15.0",
+        "backend:uuid-utils-71@0.14.1"
+      ]
+    },
+    {
+      "ref": "backend:langchain-openai-27@1.3.4",
+      "dependsOn": [
+        "backend:langchain-core-26@1.4.9",
+        "backend:openai-39@2.45.0",
+        "backend:tiktoken-65@0.13.0"
+      ]
+    },
+    {
+      "ref": "backend:langchain-protocol-28@0.0.18",
+      "dependsOn": [
+        "backend:typing-extensions-68@4.15.0"
+      ]
+    },
+    {
+      "ref": "backend:langgraph-29@1.2.9",
+      "dependsOn": [
+        "backend:langchain-core-26@1.4.9",
+        "backend:langgraph-checkpoint-30@4.1.1",
+        "backend:langgraph-prebuilt-31@1.1.0",
+        "backend:langgraph-sdk-32@0.4.2",
+        "backend:pydantic-45@2.13.3",
+        "backend:xxhash-77@3.7.0"
+      ]
+    },
+    {
+      "ref": "backend:langgraph-checkpoint-30@4.1.1",
+      "dependsOn": [
+        "backend:langchain-core-26@1.4.9",
+        "backend:ormsgpack-41@1.12.2"
+      ]
+    },
+    {
+      "ref": "backend:langgraph-prebuilt-31@1.1.0",
+      "dependsOn": [
+        "backend:langchain-core-26@1.4.9",
+        "backend:langgraph-checkpoint-30@4.1.1"
+      ]
+    },
+    {
+      "ref": "backend:langgraph-sdk-32@0.4.2",
+      "dependsOn": [
+        "backend:httpx-19@0.28.1",
+        "backend:langchain-core-26@1.4.9",
+        "backend:langchain-protocol-28@0.0.18",
+        "backend:orjson-40@3.11.8",
+        "backend:websockets-75@15.0.1"
+      ]
+    },
+    {
+      "ref": "backend:langsmith-33@0.8.0",
+      "dependsOn": [
+        "backend:httpx-19@0.28.1",
+        "backend:orjson-40@3.11.8",
+        "backend:packaging-42@26.2",
+        "backend:pydantic-45@2.13.3",
+        "backend:requests-58@2.33.1",
+        "backend:requests-toolbelt-59@1.0.0",
+        "backend:uuid-utils-71@0.14.1",
+        "backend:xxhash-77@3.7.0",
+        "backend:zstandard-78@0.25.0"
+      ]
+    },
+    {
+      "ref": "backend:librt-34@0.9.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:loguru-35@0.7.3",
+      "dependsOn": [
+        "backend:colorama-11@0.4.6",
+        "backend:win32-setctime-76@1.2.0"
+      ]
+    },
+    {
+      "ref": "backend:lxml-36@6.1.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:mypy-37@1.20.2",
+      "dependsOn": [
+        "backend:librt-34@0.9.0",
+        "backend:mypy-extensions-38@1.1.0",
+        "backend:pathspec-43@1.1.1",
+        "backend:typing-extensions-68@4.15.0"
+      ]
+    },
+    {
+      "ref": "backend:mypy-extensions-38@1.1.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:openai-39@2.45.0",
+      "dependsOn": [
+        "backend:anyio-5@4.13.0",
+        "backend:distro-13@1.9.0",
+        "backend:httpx-19@0.28.1",
+        "backend:jiter-22@0.16.0",
+        "backend:pydantic-45@2.13.3",
+        "backend:sniffio-61@1.3.1",
+        "backend:tqdm-67@4.68.4",
+        "backend:typing-extensions-68@4.15.0"
+      ]
+    },
+    {
+      "ref": "backend:orjson-40@3.11.8",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:ormsgpack-41@1.12.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:packaging-42@26.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:pathspec-43@1.1.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:pluggy-44@1.6.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:pydantic-45@2.13.3",
+      "dependsOn": [
+        "backend:annotated-types-4@0.7.0",
+        "backend:pydantic-core-46@2.46.3",
+        "backend:typing-extensions-68@4.15.0",
+        "backend:typing-inspection-69@0.4.2"
+      ]
+    },
+    {
+      "ref": "backend:pydantic-core-46@2.46.3",
+      "dependsOn": [
+        "backend:typing-extensions-68@4.15.0"
+      ]
+    },
+    {
+      "ref": "backend:pydantic-settings-47@2.14.0",
+      "dependsOn": [
+        "backend:pydantic-45@2.13.3",
+        "backend:python-dotenv-54@1.2.2",
+        "backend:typing-inspection-69@0.4.2"
+      ]
+    },
+    {
+      "ref": "backend:pygments-48@2.20.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:pypdf-49@5.9.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:pytest-50@8.4.2",
+      "dependsOn": [
+        "backend:colorama-11@0.4.6",
+        "backend:iniconfig-21@2.3.0",
+        "backend:packaging-42@26.2",
+        "backend:pluggy-44@1.6.0",
+        "backend:pygments-48@2.20.0"
+      ]
+    },
+    {
+      "ref": "backend:pytest-asyncio-51@1.3.0",
+      "dependsOn": [
+        "backend:pytest-50@8.4.2",
+        "backend:typing-extensions-68@4.15.0"
+      ]
+    },
+    {
+      "ref": "backend:pytest-cov-52@7.1.0",
+      "dependsOn": [
+        "backend:coverage-12@7.13.5",
+        "backend:pluggy-44@1.6.0",
+        "backend:pytest-50@8.4.2"
+      ]
+    },
+    {
+      "ref": "backend:python-docx-53@1.2.0",
+      "dependsOn": [
+        "backend:lxml-36@6.1.1",
+        "backend:typing-extensions-68@4.15.0"
+      ]
+    },
+    {
+      "ref": "backend:python-dotenv-54@1.2.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:python-multipart-55@0.0.27",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:pyyaml-56@6.0.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:regex-57@2026.6.28",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:requests-58@2.33.1",
+      "dependsOn": [
+        "backend:certifi-8@2026.4.22",
+        "backend:charset-normalizer-9@3.4.7",
+        "backend:idna-20@3.13",
+        "backend:urllib3-70@2.6.3"
+      ]
+    },
+    {
+      "ref": "backend:requests-toolbelt-59@1.0.0",
+      "dependsOn": [
+        "backend:requests-58@2.33.1"
+      ]
+    },
+    {
+      "ref": "backend:ruff-60@0.15.12",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:sniffio-61@1.3.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:sqlalchemy-62@2.0.49",
+      "dependsOn": [
+        "backend:greenlet-15@3.5.0",
+        "backend:typing-extensions-68@4.15.0"
+      ]
+    },
+    {
+      "ref": "backend:starlette-63@1.0.0",
+      "dependsOn": [
+        "backend:anyio-5@4.13.0",
+        "backend:typing-extensions-68@4.15.0"
+      ]
+    },
+    {
+      "ref": "backend:tenacity-64@9.1.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:tiktoken-65@0.13.0",
+      "dependsOn": [
+        "backend:regex-57@2026.6.28",
+        "backend:requests-58@2.33.1"
+      ]
+    },
+    {
+      "ref": "backend:tomli-66@2.4.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:tqdm-67@4.68.4",
+      "dependsOn": [
+        "backend:colorama-11@0.4.6"
+      ]
+    },
+    {
+      "ref": "backend:typing-extensions-68@4.15.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:typing-inspection-69@0.4.2",
+      "dependsOn": [
+        "backend:typing-extensions-68@4.15.0"
+      ]
+    },
+    {
+      "ref": "backend:urllib3-70@2.6.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:uuid-utils-71@0.14.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:uvicorn-72@0.46.0",
+      "dependsOn": [
+        "backend:click-10@8.3.3",
+        "backend:colorama-11@0.4.6",
+        "backend:h11-16@0.16.0",
+        "backend:httptools-18@0.7.1",
+        "backend:python-dotenv-54@1.2.2",
+        "backend:pyyaml-56@6.0.3",
+        "backend:uvloop-73@0.22.1",
+        "backend:watchfiles-74@1.1.1",
+        "backend:websockets-75@15.0.1"
+      ]
+    },
+    {
+      "ref": "backend:uvloop-73@0.22.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:watchfiles-74@1.1.1",
+      "dependsOn": [
+        "backend:anyio-5@4.13.0"
+      ]
+    },
+    {
+      "ref": "backend:websockets-75@15.0.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:win32-setctime-76@1.2.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:xxhash-77@3.7.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "backend:zstandard-78@0.25.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:annotated-types-2@0.7.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:anyio-3@4.14.1",
+      "dependsOn": [
+        "frontend:idna-12@3.18",
+        "frontend:typing-extensions-25@4.16.0"
+      ]
+    },
+    {
+      "ref": "frontend:blinker-4@1.9.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:certifi-5@2026.6.17",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:click-6@8.4.2",
+      "dependsOn": [
+        "frontend:colorama-7@0.4.6"
+      ]
+    },
+    {
+      "ref": "frontend:colorama-7@0.4.6",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:flask-8@3.1.3",
+      "dependsOn": [
+        "frontend:blinker-4@1.9.0",
+        "frontend:click-6@8.4.2",
+        "frontend:itsdangerous-14@2.2.0",
+        "frontend:jinja2-15@3.1.6",
+        "frontend:markupsafe-16@3.0.3",
+        "frontend:werkzeug-27@3.1.8"
+      ]
+    },
+    {
+      "ref": "frontend:frontend-1@0.1.0",
+      "dependsOn": [
+        "frontend:flask-8@3.1.3",
+        "frontend:httpx-11@0.28.1",
+        "frontend:jinja2-15@3.1.6",
+        "frontend:pydantic-settings-21@2.14.2",
+        "frontend:pytest-23@8.4.2",
+        "frontend:python-dotenv-24@1.2.2"
+      ]
+    },
+    {
+      "ref": "frontend:h11-9@0.16.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:httpcore-10@1.0.9",
+      "dependsOn": [
+        "frontend:certifi-5@2026.6.17",
+        "frontend:h11-9@0.16.0"
+      ]
+    },
+    {
+      "ref": "frontend:httpx-11@0.28.1",
+      "dependsOn": [
+        "frontend:anyio-3@4.14.1",
+        "frontend:certifi-5@2026.6.17",
+        "frontend:httpcore-10@1.0.9",
+        "frontend:idna-12@3.18"
+      ]
+    },
+    {
+      "ref": "frontend:idna-12@3.18",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:iniconfig-13@2.3.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:itsdangerous-14@2.2.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:jinja2-15@3.1.6",
+      "dependsOn": [
+        "frontend:markupsafe-16@3.0.3"
+      ]
+    },
+    {
+      "ref": "frontend:markupsafe-16@3.0.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:packaging-17@26.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:pluggy-18@1.6.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:pydantic-19@2.13.4",
+      "dependsOn": [
+        "frontend:annotated-types-2@0.7.0",
+        "frontend:pydantic-core-20@2.46.4",
+        "frontend:typing-extensions-25@4.16.0",
+        "frontend:typing-inspection-26@0.4.2"
+      ]
+    },
+    {
+      "ref": "frontend:pydantic-core-20@2.46.4",
+      "dependsOn": [
+        "frontend:typing-extensions-25@4.16.0"
+      ]
+    },
+    {
+      "ref": "frontend:pydantic-settings-21@2.14.2",
+      "dependsOn": [
+        "frontend:pydantic-19@2.13.4",
+        "frontend:python-dotenv-24@1.2.2",
+        "frontend:typing-inspection-26@0.4.2"
+      ]
+    },
+    {
+      "ref": "frontend:pygments-22@2.20.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:pytest-23@8.4.2",
+      "dependsOn": [
+        "frontend:colorama-7@0.4.6",
+        "frontend:iniconfig-13@2.3.0",
+        "frontend:packaging-17@26.2",
+        "frontend:pluggy-18@1.6.0",
+        "frontend:pygments-22@2.20.0"
+      ]
+    },
+    {
+      "ref": "frontend:python-dotenv-24@1.2.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:typing-extensions-25@4.16.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "frontend:typing-inspection-26@0.4.2",
+      "dependsOn": [
+        "frontend:typing-extensions-25@4.16.0"
+      ]
+    },
+    {
+      "ref": "frontend:werkzeug-27@3.1.8",
+      "dependsOn": [
+        "frontend:markupsafe-16@3.0.3"
+      ]
+    },
+    {
+      "ref": "cdn:bootstrap@5.3.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "cdn:bootstrap-icons@1.11.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "runtime:python@3.11",
+      "dependsOn": []
+    },
+    {
+      "ref": "automated-thematic-analysis@0.1.0",
+      "dependsOn": [
+        "backend:backend-1@0.1.0",
+        "cdn:bootstrap-icons@1.11.3",
+        "cdn:bootstrap@5.3.3",
+        "frontend:frontend-1@0.1.0",
+        "runtime:python@3.11"
+      ]
+    }
+  ]
+}
