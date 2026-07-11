@@ -2,9 +2,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
   "version": 1,
-  "serialNumber": "urn:uuid:f8f4b66a-777c-451b-914e-0c58dec4e94e",
+  "serialNumber": "urn:uuid:a86dd2d9-55a9-4f50-9418-a88ce6ca648e",
   "metadata": {
-    "timestamp": "2026-07-11T08:54:44+00:00",
+    "timestamp": "2026-07-11T09:01:21+00:00",
     "tools": [
       {
         "vendor": "Astral Software Inc.",
@@ -63,7 +63,7 @@
       "externalReferences": [
         {
           "type": "website",
-          "url": "https://aiosqlite.omnilib.dev"
+          "url": "https://github.com/omnilib/aiosqlite"
         }
       ]
     },
@@ -188,6 +188,12 @@
           "license": {
             "id": "Apache-2.0"
           }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/MagicStack/asyncpg"
         }
       ]
     },
@@ -1710,8 +1716,14 @@
       "licenses": [
         {
           "license": {
-            "name": "NOASSERTION"
+            "id": "MIT"
           }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/hukkin/tomli"
         }
       ]
     },
@@ -1890,8 +1902,14 @@
       "licenses": [
         {
           "license": {
-            "name": "NOASSERTION"
+            "id": "MIT"
           }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/MagicStack/uvloop"
         }
       ]
     },

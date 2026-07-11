@@ -23,6 +23,8 @@ PROJECTS = {
     "Frontend": ROOT / "Frontend",
 }
 LOCAL_PROJECT_NAMES = {"backend", "frontend"}
+TARGET_PYTHON_VERSION = "3.11"
+TARGET_PYTHON_PLATFORM = "linux"
 
 SBOM_PATH = ROOT / "sbom.cdx.json"
 LEGAL_MD_PATH = ROOT / "LEGAL_NOTICES.md"
@@ -119,6 +121,7 @@ def main() -> None:
     metadata_by_project = {
         name: read_python_metadata(path) for name, path in PROJECTS.items()
     }
+    fill_missing_python_metadata(project_boms, metadata_by_project)
 
     combined = build_combined_sbom(
         project_boms, metadata_by_project, timestamp, uv_version_number
@@ -174,6 +177,12 @@ def uv_export_cyclonedx(project_dir: Path) -> dict[str, Any]:
 def read_python_metadata(project_dir: Path) -> dict[tuple[str, str], dict[str, Any]]:
     output = run(["uv", "run", "python", "-c", METADATA_SNIPPET], project_dir)
     metadata_rows = json.loads(output)
+    return metadata_rows_by_name_version(metadata_rows)
+
+
+def metadata_rows_by_name_version(
+    metadata_rows: list[dict[str, Any]],
+) -> dict[tuple[str, str], dict[str, Any]]:
     by_name_version: dict[tuple[str, str], dict[str, Any]] = {}
     for row in metadata_rows:
         name = row.get("name")
@@ -182,6 +191,71 @@ def read_python_metadata(project_dir: Path) -> dict[tuple[str, str], dict[str, A
             continue
         by_name_version[(canonical_name(name), version)] = row
     return by_name_version
+
+
+def fill_missing_python_metadata(
+    project_boms: dict[str, dict[str, Any]],
+    metadata_by_project: dict[str, dict[tuple[str, str], dict[str, Any]]],
+) -> None:
+    for project_name, bom in project_boms.items():
+        metadata_map = metadata_by_project[project_name]
+        missing_specs: list[str] = []
+        for component in bom.get("components", []):
+            name = component.get("name", "")
+            version = component.get("version", "")
+            key = (canonical_name(name), version)
+            if not name or not version or canonical_name(name) in LOCAL_PROJECT_NAMES:
+                continue
+            if key not in metadata_map:
+                missing_specs.append(f"{name}=={version}")
+
+        if not missing_specs:
+            continue
+        metadata_map.update(read_target_python_metadata(sorted(set(missing_specs))))
+
+
+def read_target_python_metadata(
+    package_specs: list[str],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        target = Path(temp_dir) / "site-packages"
+        subprocess.run(
+            [
+                "uv",
+                "pip",
+                "install",
+                "--target",
+                str(target),
+                "--python-version",
+                TARGET_PYTHON_VERSION,
+                "--python-platform",
+                TARGET_PYTHON_PLATFORM,
+                "--quiet",
+                *package_specs,
+            ],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        snippet = (
+            "import importlib.metadata as m, json; "
+            f"path = r'{target}'; "
+            "records = []; "
+            "records.extend({"
+            "'name': d.metadata.get('Name'), "
+            "'version': d.version, "
+            "'license_expression': d.metadata.get('License-Expression'), "
+            "'license': d.metadata.get('License'), "
+            "'classifiers': d.metadata.get_all('Classifier') or [], "
+            "'summary': d.metadata.get('Summary'), "
+            "'home_page': d.metadata.get('Home-page'), "
+            "'project_url': d.metadata.get_all('Project-URL') or []"
+            "} for d in m.distributions(path=[path])); "
+            "print(json.dumps(records, ensure_ascii=True))"
+        )
+        output = run(["python", "-c", snippet], ROOT)
+    return metadata_rows_by_name_version(json.loads(output))
 
 
 def build_combined_sbom(
@@ -470,7 +544,14 @@ def source_from_metadata(metadata: dict[str, Any] | None) -> str:
         return ""
     home_page = metadata.get("home_page") or ""
     project_urls = metadata.get("project_url") or []
-    preferred_labels = ("source", "repository", "homepage", "documentation", "code")
+    preferred_labels = (
+        "source",
+        "repository",
+        "github",
+        "homepage",
+        "documentation",
+        "code",
+    )
     parsed: list[tuple[str, str]] = []
     for raw in project_urls:
         label, separator, url = raw.partition(",")

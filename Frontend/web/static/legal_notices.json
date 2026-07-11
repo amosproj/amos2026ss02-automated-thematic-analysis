@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-11T08:54:44+00:00",
+  "generated_at": "2026-07-11T09:01:21+00:00",
   "generated_by": "uv 0.11.8 (0e961dd9a 2026-04-27 x86_64-pc-windows-msvc); scripts/generate_compliance_artifacts.py; license labels from Python package metadata and declared CDN assets",
   "scope": "Includes backend and frontend Python dependencies resolved with uv including development groups, the Python runtime declared by the Dockerfiles, plus Bootstrap CDN assets referenced by the frontend layout.",
   "review_note": "License information is automatically generated from dependency metadata. No manual legal clearing was performed.",
@@ -35,7 +35,7 @@
       "used_in": [
         "Backend"
       ],
-      "source": "https://aiosqlite.omnilib.dev",
+      "source": "https://github.com/omnilib/aiosqlite",
       "purl": "pkg:pypi/aiosqlite@0.22.1"
     },
     {
@@ -102,7 +102,7 @@
       "used_in": [
         "Backend"
       ],
-      "source": "pkg:pypi/asyncpg@0.31.0",
+      "source": "https://github.com/MagicStack/asyncpg",
       "purl": "pkg:pypi/asyncpg@0.31.0"
     },
     {
@@ -878,11 +878,11 @@
       "name": "tomli",
       "version": "2.4.1",
       "ecosystem": "Python",
-      "license": "NOASSERTION",
+      "license": "MIT",
       "used_in": [
         "Backend"
       ],
-      "source": "pkg:pypi/tomli@2.4.1",
+      "source": "https://github.com/hukkin/tomli",
       "purl": "pkg:pypi/tomli@2.4.1"
     },
     {
@@ -967,11 +967,11 @@
       "name": "uvloop",
       "version": "0.22.1",
       "ecosystem": "Python",
-      "license": "NOASSERTION",
+      "license": "MIT",
       "used_in": [
         "Backend"
       ],
-      "source": "pkg:pypi/uvloop@0.22.1",
+      "source": "https://github.com/MagicStack/uvloop",
       "purl": "pkg:pypi/uvloop@0.22.1"
     },
     {

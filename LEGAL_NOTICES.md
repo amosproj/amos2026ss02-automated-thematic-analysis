@@ -1,6 +1,6 @@
 # Legal Notices
 
-Generated: 2026-07-11T08:54:44+00:00
+Generated: 2026-07-11T09:01:21+00:00
 
 Includes backend and frontend Python dependencies resolved with uv including development groups, the Python runtime declared by the Dockerfiles, plus Bootstrap CDN assets referenced by the frontend layout.
 
@@ -12,13 +12,13 @@ Complete SBOM: `sbom.cdx.json`
 |---|---:|---|---|---|---|
 | bootstrap | 5.3.3 | JavaScript/CSS | Frontend | MIT | https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/ |
 | bootstrap-icons | 1.11.3 | JavaScript/CSS | Frontend | MIT | https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/ |
-| aiosqlite | 0.22.1 | Python | Backend | MIT | https://aiosqlite.omnilib.dev |
+| aiosqlite | 0.22.1 | Python | Backend | MIT | https://github.com/omnilib/aiosqlite |
 | annotated-doc | 0.0.4 | Python | Backend | MIT | https://github.com/fastapi/annotated-doc |
 | annotated-types | 0.7.0 | Python | Backend, Frontend | MIT | https://github.com/annotated-types/annotated-types |
 | anyio | 4.13.0 | Python | Backend | MIT | https://github.com/agronholm/anyio |
 | anyio | 4.14.1 | Python | Frontend | MIT | https://github.com/agronholm/anyio |
 | anytree | 2.13.0 | Python | Backend | Apache-2.0 | https://github.com/c0fec0de/anytree |
-| asyncpg | 0.31.0 | Python | Backend | Apache-2.0 | pkg:pypi/asyncpg@0.31.0 |
+| asyncpg | 0.31.0 | Python | Backend | Apache-2.0 | https://github.com/MagicStack/asyncpg |
 | blinker | 1.9.0 | Python | Frontend | MIT | https://github.com/pallets-eco/blinker/ |
 | certifi | 2026.4.22 | Python | Backend | MPL-2.0 | https://github.com/certifi/python-certifi |
 | certifi | 2026.6.17 | Python | Frontend | MPL-2.0 | https://github.com/certifi/python-certifi |
@@ -88,7 +88,7 @@ Complete SBOM: `sbom.cdx.json`
 | starlette | 1.0.0 | Python | Backend | BSD-3-Clause | https://github.com/Kludex/starlette |
 | tenacity | 9.1.4 | Python | Backend | Apache-2.0 | https://github.com/jd/tenacity |
 | tiktoken | 0.13.0 | Python | Backend | MIT | https://github.com/openai/tiktoken |
-| tomli | 2.4.1 | Python | Backend | NOASSERTION | pkg:pypi/tomli@2.4.1 |
+| tomli | 2.4.1 | Python | Backend | MIT | https://github.com/hukkin/tomli |
 | tqdm | 4.68.4 | Python | Backend | MIT | https://github.com/tqdm/tqdm |
 | typing-extensions | 4.15.0 | Python | Backend | PSF-2.0 | https://github.com/python/typing_extensions |
 | typing-extensions | 4.16.0 | Python | Frontend | PSF-2.0 | https://github.com/python/typing_extensions |
@@ -96,7 +96,7 @@ Complete SBOM: `sbom.cdx.json`
 | urllib3 | 2.6.3 | Python | Backend | MIT | https://urllib3.readthedocs.io |
 | uuid-utils | 0.14.1 | Python | Backend | BSD-3-Clause | https://github.com/aminalaee/uuid-utils |
 | uvicorn | 0.46.0 | Python | Backend | BSD-3-Clause | https://github.com/Kludex/uvicorn |
-| uvloop | 0.22.1 | Python | Backend | NOASSERTION | pkg:pypi/uvloop@0.22.1 |
+| uvloop | 0.22.1 | Python | Backend | MIT | https://github.com/MagicStack/uvloop |
 | watchfiles | 1.1.1 | Python | Backend | MIT | https://github.com/samuelcolvin/watchfiles |
 | websockets | 15.0.1 | Python | Backend | BSD-3-Clause | https://github.com/python-websockets/websockets |
 | werkzeug | 3.1.8 | Python | Frontend | BSD-3-Clause | https://github.com/pallets/werkzeug/ |
