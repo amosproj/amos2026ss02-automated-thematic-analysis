@@ -9,6 +9,8 @@ from app.schemas.common import Page, PageMeta, ResponseEnvelope
 from app.schemas.ingestion import (
     BulkDocumentIngestRequest,
     CopyDocumentsRequest,
+    CreateCorpusFromDocumentsRequest,
+    CreateCorpusFromDocumentsResultSchema,
     CorpusCreate,
     CorpusDocumentContentSchema,
     CorpusDocumentSchema,
