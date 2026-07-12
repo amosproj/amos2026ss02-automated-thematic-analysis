@@ -14,3 +14,6 @@ Demographic import pipeline reference:
 
 Codebook generation reference:
 - `codebook-generation.md` (sync + async generation endpoints, job lifecycle, and selection behavior)
+
+Build, deploy, and release compliance reference:
+- `Build-&-Deploy.md` (stack setup, verification, tests, SBOM/legal notice regeneration)

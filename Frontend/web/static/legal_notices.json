@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-11T09:01:21+00:00",
+  "generated_at": "2026-07-12T11:16:04+00:00",
   "generated_by": "uv 0.11.8 (0e961dd9a 2026-04-27 x86_64-pc-windows-msvc); scripts/generate_compliance_artifacts.py; license labels from Python package metadata and declared CDN assets",
   "scope": "Includes backend and frontend Python dependencies resolved with uv including development groups, the Python runtime declared by the Dockerfiles, plus Bootstrap CDN assets referenced by the frontend layout.",
   "review_note": "License information is automatically generated from dependency metadata. No manual legal clearing was performed.",

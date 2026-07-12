@@ -2,7 +2,8 @@
 
 The script intentionally relies on uv for dependency resolution because both
 application services are pyproject-based and uv-managed. License labels are
-derived from installed Python package metadata and the frontend CDN assets.
+derived from Python package metadata, the declared Python runtime, and frontend
+CDN assets.
 """
 
 from __future__ import annotations
@@ -23,6 +24,10 @@ PROJECTS = {
     "Frontend": ROOT / "Frontend",
 }
 LOCAL_PROJECT_NAMES = {"backend", "frontend"}
+
+# The production Dockerfiles use python:3.11-slim. A local developer may run
+# this script on Windows or another Python version, so missing package metadata
+# is resolved against a Linux/Python 3.11 target to match the release runtime.
 TARGET_PYTHON_VERSION = "3.11"
 TARGET_PYTHON_PLATFORM = "linux"
 
@@ -50,6 +55,8 @@ for dist in m.distributions():
 print(json.dumps(records, ensure_ascii=True))
 """
 
+# Frontend libraries loaded from a CDN are not visible in Python dependency
+# metadata, so they are declared explicitly here.
 CDN_COMPONENTS: list[dict[str, Any]] = [
     {
         "type": "library",
@@ -89,6 +96,9 @@ CDN_COMPONENTS: list[dict[str, Any]] = [
     },
 ]
 
+# The Python interpreter is part of the deployed runtime even though it is not a
+# package resolved by uv. Keep this aligned with Backend/Dockerfile and
+# Frontend/Dockerfile.
 RUNTIME_COMPONENTS: list[dict[str, Any]] = [
     {
         "type": "platform",
@@ -153,6 +163,7 @@ def run(cmd: list[str], cwd: Path) -> str:
 
 
 def uv_export_cyclonedx(project_dir: Path) -> dict[str, Any]:
+    """Export one uv project as CycloneDX before merging service-level SBOMs."""
     with tempfile.TemporaryDirectory() as temp_dir:
         output_file = Path(temp_dir) / "sbom.cdx.json"
         subprocess.run(
@@ -175,6 +186,7 @@ def uv_export_cyclonedx(project_dir: Path) -> dict[str, Any]:
 
 
 def read_python_metadata(project_dir: Path) -> dict[tuple[str, str], dict[str, Any]]:
+    """Read license/source metadata from packages installed by uv for a service."""
     output = run(["uv", "run", "python", "-c", METADATA_SNIPPET], project_dir)
     metadata_rows = json.loads(output)
     return metadata_rows_by_name_version(metadata_rows)
@@ -197,6 +209,13 @@ def fill_missing_python_metadata(
     project_boms: dict[str, dict[str, Any]],
     metadata_by_project: dict[str, dict[tuple[str, str], dict[str, Any]]],
 ) -> None:
+    """Resolve metadata for platform-conditional packages absent on this host.
+
+    Example: uvloop is part of the Linux runtime dependency graph, but it is not
+    installed when this script is executed on Windows. Installing missing
+    packages into a temporary Linux-target directory lets importlib.metadata read
+    their wheel metadata without modifying the project environment.
+    """
     for project_name, bom in project_boms.items():
         metadata_map = metadata_by_project[project_name]
         missing_specs: list[str] = []
@@ -264,6 +283,7 @@ def build_combined_sbom(
     timestamp: str,
     uv_version: str,
 ) -> dict[str, Any]:
+    """Merge backend, frontend, runtime, and CDN components into one SBOM."""
     root_ref = "automated-thematic-analysis@0.1.0"
     components: list[dict[str, Any]] = []
     dependencies: list[dict[str, Any]] = []
@@ -356,6 +376,7 @@ def build_combined_sbom(
 def build_legal_notice_data(
     sbom: dict[str, Any], timestamp: str, uv_version: str
 ) -> dict[str, Any]:
+    """Project the SBOM into the compact data shape consumed by the UI."""
     entries_by_key: dict[tuple[str, str, str, str], dict[str, Any]] = {}
 
     for component in sbom.get("components", []):
@@ -497,6 +518,7 @@ def clean_license_value(value: str | None) -> str:
 
 
 def normalise_license_text(value: str) -> str:
+    """Map common metadata/classifier strings to SPDX-style identifiers."""
     lower = value.lower()
     if "mit" in lower:
         return "MIT"

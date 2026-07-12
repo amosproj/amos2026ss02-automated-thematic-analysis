@@ -1,6 +1,6 @@
 # Legal Notices
 
-Generated: 2026-07-11T09:01:21+00:00
+Generated: 2026-07-12T11:16:04+00:00
 
 Includes backend and frontend Python dependencies resolved with uv including development groups, the Python runtime declared by the Dockerfiles, plus Bootstrap CDN assets referenced by the frontend layout.
 
