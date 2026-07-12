@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -259,7 +260,7 @@ def read_target_python_metadata(
         )
         snippet = (
             "import importlib.metadata as m, json; "
-            f"path = r'{target}'; "
+            f"path = {json.dumps(str(target))}; "
             "records = []; "
             "records.extend({"
             "'name': d.metadata.get('Name'), "
@@ -273,7 +274,7 @@ def read_target_python_metadata(
             "} for d in m.distributions(path=[path])); "
             "print(json.dumps(records, ensure_ascii=True))"
         )
-        output = run(["python", "-c", snippet], ROOT)
+        output = run([sys.executable, "-c", snippet], ROOT)
     return metadata_rows_by_name_version(json.loads(output))
 
 

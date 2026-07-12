@@ -293,6 +293,10 @@ Regenerate the artifacts from the repository root:
 python scripts\generate_compliance_artifacts.py
 ```
 
+```bash
+python3 scripts/generate_compliance_artifacts.py
+```
+
 This writes:
 
 | File | Purpose |
