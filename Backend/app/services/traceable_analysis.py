@@ -741,6 +741,7 @@ class TraceableAnalysisService:
             self._code_relationship_chain = (
                 build_code_relationship_prompt() | build_chat_model(provider=self._provider, temperature=0.0) | parser
             )
+        chain = self._code_relationship_chain
         payload = {
             "label_a": left.label,
             "description_a": left.description or "",
@@ -749,7 +750,7 @@ class TraceableAnalysisService:
         }
 
         async def _attempt() -> CodeRelationshipResult:
-            raw_result = await self._code_relationship_chain.ainvoke(payload, config=self._llm_config())
+            raw_result = await chain.ainvoke(payload, config=self._llm_config())
             return CodeRelationshipResult(**raw_result)
 
         try:
@@ -781,6 +782,7 @@ class TraceableAnalysisService:
                 | build_chat_model(provider=self._provider, temperature=0.0)
                 | parser
             )
+        chain = self._batch_code_relationship_chain
         pairs_payload = [
             {
                 "pair_id": pair_id,
@@ -798,7 +800,7 @@ class TraceableAnalysisService:
         payload = {"pairs_json": json.dumps(pairs_payload, ensure_ascii=False)}
 
         async def _attempt() -> dict[int, CodeRelationshipResult]:
-            raw_result = await self._batch_code_relationship_chain.ainvoke(payload, config=self._llm_config())
+            raw_result = await chain.ainvoke(payload, config=self._llm_config())
             parsed = BatchCodeRelationshipResults(**raw_result)
             return {
                 item.pair_id: CodeRelationshipResult(
