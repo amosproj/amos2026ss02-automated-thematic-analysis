@@ -21,22 +21,22 @@
     if (!Array.isArray(dimensions) || dimensions.length === 0) return;
 
     const breakdownUrlTemplate = appRoot.dataset.breakdownUrlTemplate || "";
-    const applicationRunId     = appRoot.dataset.applicationRunId || "";
-    const codebookId           = appRoot.dataset.codebookId || "";
+    const applicationRunId = appRoot.dataset.applicationRunId || "";
+    const codebookId = appRoot.dataset.codebookId || "";
 
-    const picker     = document.getElementById("breakdown-dimension-picker");
-    const emptyEl    = document.getElementById("breakdown-empty");
-    const loadingEl  = document.getElementById("breakdown-loading");
-    const errorEl    = document.getElementById("breakdown-error");
-    const resultsEl  = document.getElementById("breakdown-results");
+    const picker = document.getElementById("breakdown-dimension-picker");
+    const emptyEl = document.getElementById("breakdown-empty");
+    const loadingEl = document.getElementById("breakdown-loading");
+    const errorEl = document.getElementById("breakdown-error");
+    const resultsEl = document.getElementById("breakdown-results");
     const themeNameEl = document.getElementById("breakdown-theme-name");
     const checkboxes = Array.from(document.querySelectorAll("[data-breakdown-dimension]"));
 
     if (!picker || !resultsEl || checkboxes.length === 0) return;
 
-    let currentThemeId   = null;
+    let currentThemeId = null;
     let currentThemeName = "";
-    let requestToken     = 0;
+    let requestToken = 0;
 
     // ------------------------------------------------------------------
     // Per-theme selection persistence
@@ -111,6 +111,9 @@
         return Math.round(typeof value === "number" ? value : 0) + "%";
     }
 
+    // [FEATURE DISABLED] The small sample badge feature is currently disabled 
+    // to reduce UI clutter. Uncomment this function and its calls to re-enable it
+    /* 
     function smallSampleBadge() {
         const badge = document.createElement("span");
         badge.className = "breakdown-small-sample";
@@ -118,6 +121,7 @@
         badge.title = "Few interviews in this group; percentage may be unreliable.";
         return badge;
     }
+    */
 
     function renderChart(groups) {
         const chart = document.createElement("div");
@@ -130,7 +134,12 @@
             const label = document.createElement("div");
             label.className = "breakdown-row-label";
             label.textContent = group.group_value;
+            // [FEATURE DISABLED] Uncomment to show the small sample badge
+            // if (group.small_sample) label.appendChild(smallSampleBadge());
+
             label.title = group.group_value;
+            label.setAttribute("data-bs-toggle", "tooltip");
+            new bootstrap.Tooltip(label, { trigger: "hover focus" });
             row.appendChild(label);
 
             const track = document.createElement("div");
@@ -155,55 +164,7 @@
         return chart;
     }
 
-    function renderTable(groups) {
-        const wrap = document.createElement("div");
-        wrap.className = "table-responsive";
 
-        const table = document.createElement("table");
-        table.className = "table table-sm align-middle mb-0 breakdown-table";
-
-        const thead = document.createElement("thead");
-        const headRow = document.createElement("tr");
-        ["Group", "Count", "Group total", "% within group"].forEach((text, idx) => {
-            const th = document.createElement("th");
-            th.textContent = text;
-            if (idx > 0) th.className = "text-end";
-            headRow.appendChild(th);
-        });
-        thead.appendChild(headRow);
-        table.appendChild(thead);
-
-        const tbody = document.createElement("tbody");
-        for (const group of groups) {
-            const tr = document.createElement("tr");
-
-            const groupCell = document.createElement("td");
-            groupCell.textContent = group.group_value;
-            if (group.small_sample) groupCell.appendChild(smallSampleBadge());
-            tr.appendChild(groupCell);
-
-            const countCell = document.createElement("td");
-            countCell.className = "text-end";
-            countCell.textContent = String(group.present_count);
-            if (group.present_count === 0) countCell.classList.add("theme-zero");
-            tr.appendChild(countCell);
-
-            const totalCell = document.createElement("td");
-            totalCell.className = "text-end";
-            totalCell.textContent = String(group.group_total);
-            tr.appendChild(totalCell);
-
-            const pctCell = document.createElement("td");
-            pctCell.className = "text-end";
-            pctCell.textContent = formatPct(group.percentage);
-            tr.appendChild(pctCell);
-
-            tbody.appendChild(tr);
-        }
-        table.appendChild(tbody);
-        wrap.appendChild(table);
-        return wrap;
-    }
 
     function renderDimension(dim) {
         const wrap = document.createElement("div");
@@ -224,7 +185,6 @@
         }
 
         wrap.appendChild(renderChart(groups));
-        wrap.appendChild(renderTable(groups));
         return wrap;
     }
 
@@ -238,12 +198,14 @@
             return;
         }
 
-        let anySmallSample = false;
+        // [FEATURE DISABLED] Uncomment to calculate and display the small sample warning
+        // let anySmallSample = false;
         for (const dim of dims) {
             resultsEl.appendChild(renderDimension(dim));
-            if ((dim.groups || []).some((g) => g.small_sample)) anySmallSample = true;
+            // if ((dim.groups || []).some((g) => g.small_sample)) anySmallSample = true;
         }
 
+        /*
         if (anySmallSample) {
             const note = document.createElement("p");
             note.className = "text-secondary small mt-2 mb-0";
@@ -252,6 +214,7 @@
                 "read their percentages with caution.";
             resultsEl.appendChild(note);
         }
+        */
     }
 
     // ------------------------------------------------------------------

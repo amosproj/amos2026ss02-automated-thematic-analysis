@@ -49,8 +49,9 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://chat-ai.academiccloud.de/v1"
     LLM_API_KEY: str | None = None
     LLM_MODEL: str = "gemma-4-31b-it"  # "mistral-large-3-675b-instruct-2512" or qwen variants
+    EMBEDDING_MODEL: str = "multilingual-e5-large-instruct"
     LLM_TEMPERATURE: float = 0.2
-    LLM_REQUEST_TIMEOUT_S: float = 120.0  # too generous for the current test with a single interview file
+    LLM_REQUEST_TIMEOUT_S: float = 300.0  # generous to handle slow cluster responses under load
 
     # NHR@FAU LLM gateway (https://hpc.fau.de/request-llm-api-key/)
     LLM_API_KEY_FAU: str | None = None

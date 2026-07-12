@@ -232,7 +232,7 @@
 
 .breakdown-chart {
     display: grid;
-    grid-template-columns: minmax(90px, 160px) 1fr auto auto;
+    grid-template-columns: minmax(auto, 160px) 1fr auto auto;
     align-items: center;
     gap: 0.5rem 0.75rem;
     margin-bottom: 0.9rem;
@@ -245,7 +245,7 @@
 .breakdown-row-label {
     font-size: 0.82rem;
     color: #374151;
-    text-align: right;
+    text-align: left;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -546,6 +546,18 @@
     background: #f3f4f6;
     color: #6b7280;
     font-size: 0.78rem;
+}
+
+/* Legal notices */
+.legal-notices-table td {
+    vertical-align: top;
+}
+
+.legal-notices-source {
+    min-width: 220px;
+    max-width: 420px;
+    word-break: break-word;
+    font-size: 0.82rem;
 }
 
 @media (max-width: 767.98px) {
@@ -932,4 +944,132 @@
     border-color: #99f6e4;
     color: #0f766e;
     transform: translateX(2px);
+}
+
+/* Pipeline Stepper */
+.pipeline-stepper {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 1.5rem 0;
+}
+
+.pipeline-step {
+    display: flex;
+    position: relative;
+    padding-bottom: 1.25rem;
+}
+
+.pipeline-step:last-child {
+    padding-bottom: 0;
+}
+
+.pipeline-step::before {
+    content: '';
+    position: absolute;
+    left: 0.8rem;
+    top: 1.6rem;
+    bottom: 0;
+    width: 2px;
+    background-color: #e5e7eb;
+}
+
+.pipeline-step:last-child::before {
+    display: none;
+}
+
+.pipeline-step-icon {
+    flex-shrink: 0;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f3f4f6;
+    color: #9ca3af;
+    z-index: 1;
+    font-size: 0.85rem;
+    border: 2px solid white;
+}
+
+.pipeline-step-content {
+    margin-left: 1rem;
+    flex-grow: 1;
+    padding-top: 0.1rem;
+}
+
+.pipeline-step-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #4b5563;
+}
+
+.pipeline-step-subtitle {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
+
+/* States */
+.pipeline-step-active .pipeline-step-icon {
+    background-color: #eff6ff;
+    color: #3b82f6;
+}
+.pipeline-step-active .pipeline-step-title {
+    color: #1f2937;
+    font-weight: 600;
+}
+.pipeline-step-active::before {
+    background-color: #bfdbfe;
+}
+
+.pipeline-step-completed .pipeline-step-icon {
+    background-color: #ecfdf5;
+    color: #10b981;
+}
+.pipeline-step-completed .pipeline-step-title {
+    color: #111827;
+}
+.pipeline-step-completed::before {
+    background-color: #10b981;
+}
+
+.pipeline-step-failed .pipeline-step-icon {
+    background-color: #fef2f2;
+    color: #ef4444;
+}
+.pipeline-step-failed .pipeline-step-title {
+    color: #b91c1c;
+}
+
+.pipeline-step-progress {
+    height: 6px;
+    border-radius: 4px;
+    background-color: #f3f4f6;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+
+.pipeline-step-progress-bar {
+    height: 100%;
+    background-color: #3b82f6;
+    transition: width 0.3s ease;
+}
+.pipeline-step-failed .pipeline-step-progress-bar {
+    background-color: #ef4444;
+}
+
+.copy-error-btn {
+    font-size: 0.8rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: transparent;
+    border: 1px solid #f87171;
+    color: #b91c1c;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.copy-error-btn:hover {
+    background: #fef2f2;
 }
