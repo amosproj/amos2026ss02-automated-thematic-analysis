@@ -50,6 +50,7 @@ async def consolidate_code_candidates(
     classifier: PairClassifier,
     batch_classifier: PairBatchClassifier | None = None,
     embedding_client: RemoteEmbeddingClient | None = None,
+    provider: str | None = None,
     settings: Settings | None = None,
     on_pair_progress: ProgressCallback | None = None,
 ) -> tuple[list[ConsolidatedCode], list[dict[str, object]]]:
@@ -80,7 +81,10 @@ async def consolidate_code_candidates(
     # Embeddings are used only as a prefilter. The LLM sees a much smaller set
     # of likely-related pairs instead of the full O(n^2) code-pair space.
     owns_embedding_client = embedding_client is None
-    selected_embedding_client = embedding_client or RemoteEmbeddingClient()
+    selected_embedding_client = embedding_client or RemoteEmbeddingClient(
+        settings=cfg,
+        provider=provider,
+    )
     try:
         embeddings = await selected_embedding_client.embed(
             [_embedding_text(candidate) for candidate in grouped_candidates]

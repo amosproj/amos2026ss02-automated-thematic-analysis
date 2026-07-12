@@ -117,11 +117,63 @@ The full list of variables is documented in [`Backend/.env.example`](../Backend/
 | `SELECTED_API` | no | `FAU` | **Default** provider (`FAU` or `ACADEMIC`). Used only when no provider has been selected in the UI — the active provider can be switched live from the Home page (**LLM Provider** card) and is stored server-side in the `app_settings` table. Any AI task (codebook generation / analysis) reads the active provider at run start. |
 | `LLM_MODEL_FAU` | no | `gpt-oss-120b` | Override to use a different FAU-hosted model |
 | `LLM_MODEL` | no | `gemma-3-27b-it` | Override for Academic Cloud |
+| `EMBEDDING_MODEL_FAU` | no | `intfloat/multilingual-e5-large` | Embedding model used when the selected provider is `FAU` |
+| `EMBEDDING_MODEL` | no | `multilingual-e5-large-instruct` | Embedding model used when the selected provider is `ACADEMIC` |
 | `LLM_REQUEST_TIMEOUT_S` | no | `120.0` | Raise if you hit timeouts on large corpora |
 | `DATABASE_URL` | no inside Docker | `postgresql+asyncpg://postgres:postgres@localhost:5433/appdb` | Compose overrides this with `db:5432` automatically |
 | `CORS_ALLOWED_ORIGINS` | no | `["http://localhost:3000"]` | JSON array of allowed origins |
 | `APP_PORT` | no | `8000` | Host port for the API; Compose maps `${APP_PORT}:8000` |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
+
+### LLM and embedding model selection
+
+The Home page **LLM Provider** setting controls the provider for both chat-model
+calls and embedding calls. The backend intentionally keeps them together so one
+analysis run uses one consistent external AI provider. The selected provider is
+read when a job starts; changing the Home page setting affects later jobs, not a
+job that is already running.
+
+Embeddings are not another text-generating LLM. An embedding model converts a
+text snippet into a numeric vector that preserves semantic similarity. In this
+project, embeddings are used during automated codebook generation and
+consolidation to compare generated code labels/descriptions, shortlist likely
+duplicates or related codes, and reduce the number of expensive LLM relationship
+checks. Users usually do not see embedding output directly.
+
+For each selected provider, the same API key and base URL are used for chat and
+embeddings:
+
+| Selected provider | Chat model | Embedding model | Endpoint used for embeddings |
+|---|---|---|---|
+| `FAU` | `LLM_MODEL_FAU` | `EMBEDDING_MODEL_FAU` | `${LLM_BASE_URL_FAU}/embeddings` |
+| `ACADEMIC` | `LLM_MODEL` | `EMBEDDING_MODEL` | `${LLM_BASE_URL}/embeddings` |
+
+The embedding endpoint must be OpenAI-compatible: it must accept a `POST` to
+`/embeddings` with `model` and `input`, and return embedding vectors in the
+standard `data[].embedding` response shape.
+
+#### Using OpenAI or another commercial OpenAI-compatible provider
+
+The current UI exposes two provider ids, `FAU` and `ACADEMIC`. There is no
+separate "OpenAI" label yet. To route both chat and embeddings through OpenAI,
+configure the `ACADEMIC` slot as an OpenAI-compatible endpoint:
+
+```env
+SELECTED_API=ACADEMIC
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=<your_openai_api_key>
+LLM_MODEL=gpt-4.1-mini
+EMBEDDING_MODEL=text-embedding-3-large
+```
+
+Then restart the backend and select **Academic Cloud** on the Home page. The UI
+label will still say "Academic Cloud" because provider labels are defined in the
+backend provider registry; the actual endpoint and model come from the
+environment variables above.
+
+To use OpenAI only for embeddings while keeping FAU for chat, the application
+would need a code change: embeddings currently follow the selected provider and
+do not have an independent runtime selector.
 
 ### Frontend (set in Compose, not in a `.env`)
 

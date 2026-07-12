@@ -73,7 +73,7 @@ class ThemeFrequencyServiceTests(unittest.IsolatedAsyncioTestCase):
             with (
                 patch.object(
                     ThemeFrequencyService,
-                    "_load_document_ids_by_theme_id",
+                    "_load_document_ids_by_node_id",
                     new=AsyncMock(return_value=document_ids_by_theme_id),
                 ),
                 patch.object(

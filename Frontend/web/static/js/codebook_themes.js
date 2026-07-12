@@ -344,25 +344,17 @@
                     nameWrap.appendChild(chip);
                 }
 
-                // Occurrences — codes have no frequency data, so show a dash
-                // rather than a misleading 0.
+                // Occurrences
                 const countCell = document.createElement("td");
                 countCell.className = "text-end";
-                if (code) {
-                    countCell.textContent = "—";
-                    countCell.classList.add("theme-zero");
-                } else {
-                    countCell.textContent = String(info.occurrence_count);
-                    if (info.occurrence_count === 0) countCell.classList.add("theme-zero");
-                }
+                countCell.textContent = String(info.occurrence_count);
+                if (info.occurrence_count === 0) countCell.classList.add("theme-zero");
 
                 // Coverage with mini progress bar (values are numeric, so the
                 // interpolated markup below contains no user-supplied strings).
                 const coverageCell = document.createElement("td");
                 coverageCell.style.paddingLeft = "3rem";
-                if (code) {
-                    coverageCell.innerHTML = '<span class="coverage-label theme-zero">—</span>';
-                } else {
+                {
                     const pct      = info.interview_coverage_percentage || 0;
                     const barWidth = Math.min(Math.max(pct, 0), 100);
                     coverageCell.innerHTML = `

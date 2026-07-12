@@ -22,6 +22,7 @@ async def alter_db():
         "ALTER TABLE codebooks ADD COLUMN IF NOT EXISTS llm_tokens_output INTEGER;",
         "ALTER TABLE codebook_application_runs ADD COLUMN IF NOT EXISTS llm_tokens_input INTEGER;",
         "ALTER TABLE codebook_application_runs ADD COLUMN IF NOT EXISTS llm_tokens_output INTEGER;",
+        "ALTER TABLE codebook_generation_jobs ADD COLUMN IF NOT EXISTS phase VARCHAR;",
     ]
 
     async with engine.connect() as conn:

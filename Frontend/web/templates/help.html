@@ -78,6 +78,34 @@
               </div>
             </div>
           </div>
+
+          <!-- Embedding Models -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingEmbeddingModel">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEmbeddingModel" aria-expanded="false" aria-controls="collapseEmbeddingModel">
+                What is an embedding model and why is it used?
+              </button>
+            </h3>
+            <div id="collapseEmbeddingModel" class="accordion-collapse collapse" aria-labelledby="headingEmbeddingModel" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                An embedding model converts short pieces of text, such as code labels and descriptions, into numeric vectors so the system can compare their meaning. We use this to find similar or duplicate codes during automated codebook generation and consolidation before asking the LLM for deeper reasoning.
+              </div>
+            </div>
+          </div>
+
+          <!-- Commercial Embedding Providers -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingCommercialEmbedding">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCommercialEmbedding" aria-expanded="false" aria-controls="collapseCommercialEmbedding">
+                Can I use a commercial embedding provider such as OpenAI?
+              </button>
+            </h3>
+            <div id="collapseCommercialEmbedding" class="accordion-collapse collapse" aria-labelledby="headingCommercialEmbedding" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                Yes, if the server administrator configures an OpenAI-compatible embeddings endpoint in the backend environment. The embedding model follows the same provider selected on the <a href="{{ url_for('main.index') }}">Home page</a>, so transcripts and generated code text are sent to that selected provider for AI processing.
+              </div>
+            </div>
+          </div>
           
           <!-- Item 2 -->
           <div class="accordion-item">

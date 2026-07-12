@@ -55,7 +55,9 @@ class RunExportService:
             raise NotFoundError(f"Codebook application run '{run_id}' not found")
 
         # LEFT JOIN to DemographicRow keeps quotes from unlinked transcripts.
-        rows = (
+        from app.models import Code, CodeAssignment
+
+        theme_rows = (
             await self._session.execute(
                 select(
                     Theme.id,
@@ -77,9 +79,35 @@ class RunExportService:
                     ThemeAssignment.is_present.is_(True),
                     ThemeAssignment.quote.is_not(None),
                 )
-                .order_by(Theme.label, ThemeAssignment.created_at)
             )
         ).all()
+
+        code_rows = (
+            await self._session.execute(
+                select(
+                    Code.id,
+                    Code.label,
+                    Code.description,
+                    CodeAssignment.quote,
+                    CodeAssignment.created_at,
+                    DemographicRow.interviewee_id,
+                    DemographicRow.data,
+                    CorpusDocument.title,
+                )
+                .select_from(CodeAssignment)
+                .join(DocumentCoding, CodeAssignment.document_coding_id == DocumentCoding.id)
+                .join(Code, CodeAssignment.code_id == Code.id)
+                .join(CorpusDocument, DocumentCoding.document_id == CorpusDocument.id)
+                .outerjoin(DemographicRow, CorpusDocument.demographic_row_id == DemographicRow.id)
+                .where(
+                    DocumentCoding.application_run_id == run_id,
+                    CodeAssignment.quote.is_not(None),
+                )
+            )
+        ).all()
+
+        rows = list(theme_rows) + list(code_rows)
+        rows.sort(key=lambda r: (r.label, r.created_at))
 
         parent_label_by_child = {
             row.child_theme_id: row.parent_label
@@ -97,6 +125,22 @@ class RunExportService:
                 )
             ).all()
         }
+
+        from app.models.code import ThemeCodeRelationship
+        for row in (
+            await self._session.execute(
+                select(
+                    ThemeCodeRelationship.code_id,
+                    Theme.label.label("parent_label"),
+                )
+                .join(Theme, ThemeCodeRelationship.theme_id == Theme.id)
+                .where(
+                    ThemeCodeRelationship.codebook_id == run.codebook_id,
+                    ThemeCodeRelationship.is_active.is_(True),
+                )
+            )
+        ).all():
+            parent_label_by_child[row.code_id] = row.parent_label
 
 
         original_columns = (
