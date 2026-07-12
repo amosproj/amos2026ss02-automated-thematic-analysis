@@ -276,6 +276,48 @@ Or via the bootstrap script:
 
 **Frontend** uses a `FakeBackend` fixture so no live backend is required for the test container.
 
+## SBOM and legal notices
+
+The final release includes a CycloneDX SBOM and generated legal notices for the
+application-level third-party components:
+
+- backend Python dependencies resolved from `Backend/pyproject.toml` with `uv`
+- frontend Python dependencies resolved from `Frontend/pyproject.toml` with `uv`
+- the Python 3.11 runtime declared by the backend and frontend Dockerfiles
+- frontend CDN libraries referenced by `Frontend/web/templates/base.html`
+  (`bootstrap` and `bootstrap-icons`)
+
+Regenerate the artifacts from the repository root:
+
+```powershell
+python scripts\generate_compliance_artifacts.py
+```
+
+```bash
+python3 scripts/generate_compliance_artifacts.py
+```
+
+This writes:
+
+| File | Purpose |
+|---|---|
+| `sbom.cdx.json` | CycloneDX 1.5 SBOM for the released application |
+| `LEGAL_NOTICES.md` | Markdown legal notice table for repository review |
+| `Frontend/web/static/legal_notices.json` | Data rendered by the `/legal-notices` UI page |
+
+The generator reads package metadata from the `uv` environments. If a dependency
+is part of the Linux/Python 3.11 runtime graph but not installed on the local
+host, the script installs that package into a temporary target directory only to
+read its metadata. This keeps platform-conditional packages such as `uvloop`
+covered without changing the project environment.
+
+Local project source files, templates, custom JavaScript/CSS, and GitHub Actions
+workflows are intentionally not listed as third-party legal notice entries. They
+are project code or CI infrastructure, not external components distributed to
+users as application dependencies. Operating-system packages from the Docker base
+images are also out of scope for this homework-level release SBOM; include them
+only if a container-image SBOM is explicitly required.
+
 ## Stack lifecycle
 
 ```bash
