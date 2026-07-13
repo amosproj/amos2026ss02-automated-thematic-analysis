@@ -150,6 +150,9 @@
     if (status.phase === "applying_codebook" && status.analysis_units_total > 0) {
       return `${label} — ${formatCount(status.analysis_units_done)} / ${formatCount(status.analysis_units_total)}`;
     }
+    if (status.phase === "evaluating_iterations" && status.analysis_units_total > 0) {
+      return `${label} — iteration ${formatCount(status.analysis_units_done)} of ${formatCount(status.analysis_units_total)}`;
+    }
     if (status.documents_total > 0) {
       return `${label} — ${formatCount(status.documents_done)} / ${formatCount(status.documents_total)}`;
     }
