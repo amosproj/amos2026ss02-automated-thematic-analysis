@@ -38,10 +38,17 @@ class ThemeQuoteItem(BaseSchema):
     theme_ids: list[UUID]
 
 
+class DemographicDimensionInfo(BaseSchema):
+    """One demographic variable available for breakdowns, with its inferred type."""
+
+    name: str
+    is_numeric: bool = False
+
+
 class DemographicDimensionsResponse(BaseSchema):
     """Demographic variables available for breaking down a theme in one corpus."""
 
-    dimensions: list[str]
+    dimensions: list[DemographicDimensionInfo]
 
 
 class DemographicGroupStat(BaseSchema):

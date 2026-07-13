@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from loguru import logger
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database import get_session_factory
@@ -68,7 +69,43 @@ class CodebookGenerationJobRunner:
             self._phase_updated_at.pop(evict_job_id, None)
 
     async def start(self) -> None:
+        # Kept as a no-op: routers also call start() defensively before every
+        # enqueue() (in case app lifespan startup was skipped), so it must
+        # stay safe to call repeatedly mid-request. Orphaned-job reconciliation
+        # lives in reconcile_orphaned_jobs() instead, called exactly once from
+        # app lifespan — never from a request handler.
         return
+
+    async def reconcile_orphaned_jobs(self) -> None:
+        # Jobs left "queued"/"running" belong to a worker task that no longer
+        # exists in this process (a prior process was restarted mid-job).
+        # Without this, their DB status never leaves queued/running, so the
+        # UI shows a progress bar that can never finish.
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            orphaned_jobs = list(
+                (
+                    await session.scalars(
+                        select(CodebookGenerationJob).where(
+                            CodebookGenerationJob.status.in_(("queued", "running"))
+                        )
+                    )
+                ).all()
+            )
+            if not orphaned_jobs:
+                return
+            now = _utc_now_naive()
+            for job in orphaned_jobs:
+                job.status = "failed"
+                job.phase = "failed"
+                job.error_message = "Codebook generation was interrupted by a server restart."
+                job.finished_at = now
+                self.set_phase(job.id, "failed")
+            await session.commit()
+            logger.warning(
+                "Reconciled {} orphaned codebook generation job(s) on startup",
+                len(orphaned_jobs),
+            )
 
     async def stop(self) -> None:
         tasks = list(self._tasks.values())

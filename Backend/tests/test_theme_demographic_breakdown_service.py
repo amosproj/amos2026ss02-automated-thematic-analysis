@@ -525,5 +525,173 @@ class ThemeDemographicBreakdownServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(groups["South"].percentage, 0.0)
 
 
+    # --- numeric dimension detection -----------------------------------------
+
+    async def test_get_dimension_infos_flags_numeric_and_categorical_columns(self) -> None:
+        async with self.session_factory() as session:
+            seed = await _seed_breakdown(
+                session,
+                columns=["username", "age", "gender"],
+                people={
+                    "p1": {"age": "25", "gender": "male"},
+                    "p2": {"age": "30", "gender": "female"},
+                    "p3": {"age": "45", "gender": "male"},
+                },
+                theme_labels=["Theme A"],
+                present_by_theme={"Theme A": {"p1"}},
+            )
+            infos = await ThemeDemographicBreakdownService(session).get_dimension_infos(
+                corpus_id=seed.corpus_id
+            )
+            by_name = {info.name: info.is_numeric for info in infos}
+            self.assertEqual(by_name, {"age": True, "gender": False})
+
+    async def test_get_dimension_infos_treats_mixed_column_as_categorical(self) -> None:
+        async with self.session_factory() as session:
+            seed = await _seed_breakdown(
+                session,
+                columns=["username", "age"],
+                people={
+                    "p1": {"age": "25"},
+                    "p2": {"age": "thirty"},  # one non-numeric value taints the whole column
+                },
+                theme_labels=["Theme A"],
+                present_by_theme={"Theme A": {"p1"}},
+            )
+            infos = await ThemeDemographicBreakdownService(session).get_dimension_infos(
+                corpus_id=seed.corpus_id
+            )
+            by_name = {info.name: info.is_numeric for info in infos}
+            self.assertFalse(by_name["age"])
+
+    async def test_get_dimension_infos_empty_column_is_categorical(self) -> None:
+        async with self.session_factory() as session:
+            seed = await _seed_breakdown(
+                session,
+                columns=["username", "age"],
+                people={"p1": {}, "p2": None},
+                theme_labels=["Theme A"],
+                present_by_theme={"Theme A": {"p1"}},
+            )
+            infos = await ThemeDemographicBreakdownService(session).get_dimension_infos(
+                corpus_id=seed.corpus_id
+            )
+            by_name = {info.name: info.is_numeric for info in infos}
+            self.assertFalse(by_name["age"])
+
+    # --- numeric binning -------------------------------------------------------
+
+    async def test_binned_breakdown_creates_integer_intervals(self) -> None:
+        async with self.session_factory() as session:
+            ages = {
+                "p20": "20", "p21": "21", "p29": "29",
+                "p30": "30", "p31": "31",
+                "p39": "39", "p40": "40", "p41": "41", "p49": "49",
+            }
+            seed = await _seed_breakdown(
+                session,
+                columns=["username", "age"],
+                people={name: {"age": age} for name, age in ages.items()},
+                theme_labels=["Theme A"],
+                present_by_theme={"Theme A": {"p20", "p30", "p39"}},
+            )
+            result = await ThemeDemographicBreakdownService(session).get_theme_breakdown(
+                codebook_id=seed.codebook_id,
+                theme_id=seed.theme_ids["Theme A"],
+                dimensions=["age"],
+                bins={"age": 3},
+            )
+            groups = {g.group_value: g for g in result.dimensions[0].groups}
+            self.assertEqual(set(groups), {"20-29", "30-38", "39-49"})
+            self.assertEqual(groups["20-29"].group_total, 3)
+            self.assertEqual(groups["20-29"].present_count, 1)
+            self.assertEqual(groups["30-38"].group_total, 2)
+            self.assertEqual(groups["30-38"].present_count, 1)
+            self.assertEqual(groups["39-49"].group_total, 4)
+            self.assertEqual(groups["39-49"].present_count, 1)
+
+    async def test_binned_breakdown_buckets_non_numeric_and_missing_into_not_specified(self) -> None:
+        async with self.session_factory() as session:
+            seed = await _seed_breakdown(
+                session,
+                columns=["username", "age"],
+                people={
+                    "numeric_a": {"age": "20"},
+                    "numeric_b": {"age": "40"},
+                    "blank": {"age": "  "},
+                    "unlinked": None,
+                },
+                theme_labels=["Theme A"],
+                present_by_theme={"Theme A": {"numeric_a", "unlinked"}},
+            )
+            result = await ThemeDemographicBreakdownService(session).get_theme_breakdown(
+                codebook_id=seed.codebook_id,
+                theme_id=seed.theme_ids["Theme A"],
+                dimensions=["age"],
+                bins={"age": 2},
+            )
+            groups = {g.group_value: g for g in result.dimensions[0].groups}
+            self.assertEqual(groups[NOT_SPECIFIED_LABEL].group_total, 2)
+            self.assertEqual(groups[NOT_SPECIFIED_LABEL].present_count, 1)
+            # The two numeric people land in separate bins on either side of the midpoint.
+            numeric_groups = [g for label, g in groups.items() if label != NOT_SPECIFIED_LABEL]
+            self.assertEqual(sum(g.group_total for g in numeric_groups), 2)
+
+    async def test_binned_breakdown_single_value_collapses_to_one_bin(self) -> None:
+        async with self.session_factory() as session:
+            seed = await _seed_breakdown(
+                session,
+                columns=["username", "age"],
+                people={"p1": {"age": "30"}, "p2": {"age": "30"}, "p3": {"age": "30"}},
+                theme_labels=["Theme A"],
+                present_by_theme={"Theme A": {"p1"}},
+            )
+            result = await ThemeDemographicBreakdownService(session).get_theme_breakdown(
+                codebook_id=seed.codebook_id,
+                theme_id=seed.theme_ids["Theme A"],
+                dimensions=["age"],
+                bins={"age": 5},
+            )
+            groups = result.dimensions[0].groups
+            self.assertEqual(len(groups), 1)
+            self.assertEqual(groups[0].group_value, "30")
+            self.assertEqual(groups[0].group_total, 3)
+
+    async def test_binned_breakdown_clamps_bin_count_below_minimum(self) -> None:
+        async with self.session_factory() as session:
+            seed = await _seed_breakdown(
+                session,
+                columns=["username", "age"],
+                people={"p1": {"age": "20"}, "p2": {"age": "25"}, "p3": {"age": "30"}},
+                theme_labels=["Theme A"],
+                present_by_theme={"Theme A": {"p1"}},
+            )
+            result = await ThemeDemographicBreakdownService(session).get_theme_breakdown(
+                codebook_id=seed.codebook_id,
+                theme_id=seed.theme_ids["Theme A"],
+                dimensions=["age"],
+                bins={"age": 1},  # below MIN_BIN_COUNT; must clamp up to 2
+            )
+            self.assertEqual(len(result.dimensions[0].groups), 2)
+
+    async def test_binned_breakdown_falls_back_to_categorical_for_non_numeric_dimension(self) -> None:
+        async with self.session_factory() as session:
+            seed = await _seed_breakdown(
+                session,
+                columns=["username", "gender"],
+                people={"m1": {"gender": "male"}, "f1": {"gender": "female"}},
+                theme_labels=["Theme A"],
+                present_by_theme={"Theme A": {"m1"}},
+            )
+            result = await ThemeDemographicBreakdownService(session).get_theme_breakdown(
+                codebook_id=seed.codebook_id,
+                theme_id=seed.theme_ids["Theme A"],
+                dimensions=["gender"],
+                bins={"gender": 5},  # nonsensical for a categorical column
+            )
+            groups = {g.group_value: g for g in result.dimensions[0].groups}
+            self.assertEqual(set(groups), {"male", "female"})
+
+
 if __name__ == "__main__":
     unittest.main()

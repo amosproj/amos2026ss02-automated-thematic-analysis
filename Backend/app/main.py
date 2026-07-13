@@ -38,6 +38,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     await codebook_generation_job_runner.start()
     await codebook_application_job_runner.start()
+    await codebook_generation_job_runner.reconcile_orphaned_jobs()
+    await codebook_application_job_runner.reconcile_orphaned_jobs()
 
     try:
         yield

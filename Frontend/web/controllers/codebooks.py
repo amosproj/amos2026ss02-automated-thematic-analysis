@@ -385,18 +385,35 @@ def codebook_themes_for_corpus(corpus_id: str, codebook_id: str) -> str:
 def theme_demographic_breakdown_json(corpus_id: str, codebook_id: str, theme_id: str):
     dimensions = [d for d in request.args.get("dimensions", "").split(",") if d]
     application_run_id = request.args.get("application_run_id") or None
+    bins = _parse_bins_param(request.args.get("bins", ""))
     try:
         result = _backend().get_theme_demographic_breakdown(
             codebook_id,
             theme_id,
             dimensions,
             application_run_id=application_run_id,
+            bins=bins or None,
         )
         return jsonify(result)
     except BackendError as exc:
         return jsonify({"error": exc.user_message}), 502
     except Exception:
         return jsonify({"error": "An unexpected error occurred."}), 500
+
+
+def _parse_bins_param(raw: str) -> dict[str, int]:
+    bins: dict[str, int] = {}
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        name, _, count_text = part.partition(":")
+        name = name.strip()
+        count_text = count_text.strip()
+        if not name or not count_text.isdigit():
+            continue
+        bins[name] = int(count_text)
+    return bins
 
 
 @bp.get("/<corpus_id>/<codebook_id>/themes/<theme_id>/quotes.json")

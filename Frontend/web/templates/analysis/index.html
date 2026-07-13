@@ -64,7 +64,7 @@
           <label for="codebook_id" class="form-label fw-semibold">Select Codebook</label>
           <select class="form-select" id="codebook_id" name="codebook_id" required>
             {% for cb in codebooks %}
-              <option value="{{ cb.id }}">{{ cb.name }} (v{{ cb.version }})</option>
+              <option value="{{ cb.id }}" {% if codebook and cb.id == codebook.id %}selected{% endif %}>{{ cb.name }} (v{{ cb.version }})</option>
             {% endfor %}
           </select>
         </div>

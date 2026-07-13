@@ -14,7 +14,11 @@ from app.schemas.theme_views import (
     ThemeFrequencyItem,
     ThemeQuoteItem,
 )
-from app.services.theme_demographic_breakdown import ThemeDemographicBreakdownService
+from app.services.theme_demographic_breakdown import (
+    MAX_BIN_COUNT,
+    MIN_BIN_COUNT,
+    ThemeDemographicBreakdownService,
+)
 from app.services.theme_frequency import ThemeFrequencyService
 from app.services.theme_graph import ThemeGraphService, ThemeNotFoundError, ThemeValidationError
 from app.services.theme_quotes import ThemeQuotesService
@@ -94,8 +98,18 @@ async def get_theme_demographic_breakdown(
         description="Comma-separated demographic dimension names to break down by.",
     ),
     application_run_id: UUID | None = Query(default=None),
+    bins: str = Query(
+        default="",
+        description=(
+            "Comma-separated dimension:bin_count pairs (e.g. 'age:5'), for "
+            "grouping a numeric dimension into equal-width intervals instead "
+            "of one group per raw value. Only meaningful for numeric "
+            "dimensions; ignored for dimensions not also passed in `dimensions`."
+        ),
+    ),
 ) -> JSONResponse:
     requested = [part.strip() for part in dimensions.split(",") if part.strip()]
+    requested_bins = _parse_bins_param(bins)
     service = ThemeDemographicBreakdownService(
         session,
         small_sample_threshold=settings.DEMOGRAPHIC_SMALL_SAMPLE_THRESHOLD,
@@ -106,11 +120,38 @@ async def get_theme_demographic_breakdown(
             theme_id=theme_id,
             dimensions=requested,
             application_run_id=application_run_id,
+            bins=requested_bins,
         )
     except ThemeNotFoundError as exc:
         raise NotFoundError(str(exc)) from exc
 
     return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))
+
+
+def _parse_bins_param(raw: str) -> dict[str, int]:
+    bins: dict[str, int] = {}
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        name, _, count_text = part.partition(":")
+        name = name.strip()
+        count_text = count_text.strip()
+        if not name or not count_text:
+            continue
+        try:
+            count = int(count_text)
+        except ValueError as exc:
+            raise UnprocessableError(
+                f"Invalid bin count for dimension '{name}': '{count_text}'"
+            ) from exc
+        if not (MIN_BIN_COUNT <= count <= MAX_BIN_COUNT):
+            raise UnprocessableError(
+                f"Bin count for dimension '{name}' must be between "
+                f"{MIN_BIN_COUNT} and {MAX_BIN_COUNT}; got {count}."
+            )
+        bins[name] = count
+    return bins
 
 
 @router.get("/{theme_id}/quotes", response_model=ResponseEnvelope[Page[ThemeQuoteItem]])

@@ -18,6 +18,7 @@ from app.models import (
     ThemeAssignment,
 )
 from app.schemas.theme_views import (
+    DemographicDimensionInfo,
     DemographicGroupStat,
     ThemeDemographicBreakdownResponse,
     ThemeDimensionBreakdown,
@@ -35,6 +36,11 @@ USERNAME_COLUMN = "username"
 NOT_SPECIFIED_LABEL = "Not specified"
 
 DEFAULT_SMALL_SAMPLE_THRESHOLD = 5
+
+# Bounds for the researcher-chosen bin count on a numeric dimension. Below 2
+# there is nothing to bin; above 20 the chart stops being readable.
+MIN_BIN_COUNT = 2
+MAX_BIN_COUNT = 20
 
 
 class ThemeDemographicBreakdownService:
@@ -79,6 +85,47 @@ class ThemeDemographicBreakdownService:
                     dimensions.append(column)
         return dimensions
 
+    async def get_dimension_infos(self, *, corpus_id: UUID) -> list[DemographicDimensionInfo]:
+        """Demographic variables for one corpus, each flagged numeric or not.
+
+        A dimension is numeric only when every non-empty value observed for it
+        across the corpus parses as a number. Any non-numeric value (or no
+        values at all) makes it categorical — a dimension can't be partially
+        binnable.
+        """
+        names = await self.list_available_dimensions(corpus_id=corpus_id)
+        if not names:
+            return []
+
+        rows = (
+            await self._session.execute(
+                select(DemographicRow.data)
+                .join(DemographicFiles, DemographicRow.demographic_file_id == DemographicFiles.id)
+                .where(DemographicFiles.corpus_id == corpus_id)
+            )
+        ).scalars().all()
+
+        has_value = dict.fromkeys(names, False)
+        all_numeric = dict.fromkeys(names, True)
+        for data in rows:
+            if not data:
+                continue
+            for name in names:
+                raw = data.get(name)
+                if raw is None:
+                    continue
+                text = str(raw).strip()
+                if not text:
+                    continue
+                has_value[name] = True
+                if not self._is_numeric_text(text):
+                    all_numeric[name] = False
+
+        return [
+            DemographicDimensionInfo(name=name, is_numeric=has_value[name] and all_numeric[name])
+            for name in names
+        ]
+
     async def get_theme_breakdown(
         self,
         *,
@@ -86,6 +133,7 @@ class ThemeDemographicBreakdownService:
         theme_id: UUID,
         dimensions: list[str],
         application_run_id: UUID | None = None,
+        bins: dict[str, int] | None = None,
     ) -> ThemeDemographicBreakdownResponse:
         corpus_id = await self._resolve_codebook_corpus(codebook_id=codebook_id)
         await self._ensure_node_in_codebook(codebook_id=codebook_id, node_id=theme_id)
@@ -119,6 +167,7 @@ class ThemeDemographicBreakdownService:
             run_id=run_id, node_ids=theme_ids
         )
 
+        effective_bins = bins or {}
         return ThemeDemographicBreakdownResponse(
             theme_id=theme_id,
             application_run_id=run_id,
@@ -127,6 +176,7 @@ class ThemeDemographicBreakdownService:
                     dimension=dimension,
                     population=population,
                     present_document_ids=present_document_ids,
+                    bin_count=effective_bins.get(dimension),
                 )
                 for dimension in selected
             ],
@@ -256,7 +306,16 @@ class ThemeDemographicBreakdownService:
         dimension: str,
         population: list[tuple[UUID, dict[str, Any] | None]],
         present_document_ids: set[UUID],
+        bin_count: int | None = None,
     ) -> ThemeDimensionBreakdown:
+        if bin_count is not None:
+            return self._build_binned_dimension_breakdown(
+                dimension=dimension,
+                population=population,
+                present_document_ids=present_document_ids,
+                bin_count=bin_count,
+            )
+
         group_total: dict[str, int] = defaultdict(int)
         group_present: dict[str, int] = defaultdict(int)
 
@@ -280,6 +339,139 @@ class ThemeDemographicBreakdownService:
             for value in sorted(group_total, key=self._group_sort_key)
         ]
         return ThemeDimensionBreakdown(dimension=dimension, groups=groups)
+
+    def _build_binned_dimension_breakdown(
+        self,
+        *,
+        dimension: str,
+        population: list[tuple[UUID, dict[str, Any] | None]],
+        present_document_ids: set[UUID],
+        bin_count: int,
+    ) -> ThemeDimensionBreakdown:
+        """Group a numeric dimension into equal-width intervals instead of raw values.
+
+        Participants whose value doesn't parse as a number (or is missing)
+        still land in the usual NOT_SPECIFIED_LABEL bucket rather than being
+        dropped.
+        """
+        bin_count = max(MIN_BIN_COUNT, min(MAX_BIN_COUNT, bin_count))
+
+        numeric_by_document: dict[UUID, float] = {}
+        for document_id, data in population:
+            raw = (data or {}).get(dimension)
+            if raw is None:
+                continue
+            text = str(raw).strip()
+            if not text or not self._is_numeric_text(text):
+                continue
+            numeric_by_document[document_id] = float(text)
+
+        if not numeric_by_document:
+            # Nothing in this population parses as a number for this
+            # dimension (e.g. it's numeric corpus-wide but empty in this
+            # run); fall back to categorical grouping so the panel still
+            # shows the "Not specified" bucket instead of an empty chart.
+            return self._build_dimension_breakdown(
+                dimension=dimension,
+                population=population,
+                present_document_ids=present_document_ids,
+            )
+
+        values = list(numeric_by_document.values())
+        minimum, maximum = min(values), max(values)
+        all_integers = all(value.is_integer() for value in values)
+        labels, edges = self._bin_edges_and_labels(
+            minimum=minimum, maximum=maximum, bin_count=bin_count, all_integers=all_integers
+        )
+
+        group_total: dict[str, int] = defaultdict(int)
+        group_present: dict[str, int] = defaultdict(int)
+        for document_id, _data in population:
+            value = numeric_by_document.get(document_id)
+            label = NOT_SPECIFIED_LABEL if value is None else labels[self._bin_index(value, edges)]
+            group_total[label] += 1
+            if document_id in present_document_ids:
+                group_present[label] += 1
+
+        # Show every interval (even empty ones) so the chart always reflects
+        # the requested bin count; the catch-all bucket only appears when
+        # something actually landed in it.
+        ordered_labels = [*labels, *([NOT_SPECIFIED_LABEL] if group_total.get(NOT_SPECIFIED_LABEL) else [])]
+        groups = [
+            DemographicGroupStat(
+                group_value=label,
+                present_count=group_present.get(label, 0),
+                group_total=group_total.get(label, 0),
+                percentage=self._to_percentage(
+                    present=group_present.get(label, 0),
+                    total=group_total.get(label, 0),
+                ),
+                small_sample=0 < group_total.get(label, 0) < self._small_sample_threshold,
+            )
+            for label in ordered_labels
+        ]
+        return ThemeDimensionBreakdown(dimension=dimension, groups=groups)
+
+    @staticmethod
+    def _bin_edges_and_labels(
+        *,
+        minimum: float,
+        maximum: float,
+        bin_count: int,
+        all_integers: bool,
+    ) -> tuple[list[str], list[float]]:
+        """Equal-width bin edges over [minimum, maximum], plus display labels.
+
+        Integer-valued dimensions (the common case: age, years, counts) get
+        integer, non-overlapping labels like "19-29"; the bin count is capped
+        to the number of distinct integers available so labels never collide.
+        Everything else uses one-decimal float labels.
+        """
+        if minimum == maximum:
+            bound = str(int(minimum)) if all_integers else f"{minimum:.1f}"
+            return [bound], [minimum, maximum]
+
+        effective_bin_count = bin_count
+        if all_integers:
+            effective_bin_count = max(1, min(bin_count, int(maximum - minimum)))
+
+        width = (maximum - minimum) / effective_bin_count
+        edges = [minimum + (index * width) for index in range(effective_bin_count + 1)]
+        edges[-1] = maximum
+
+        if all_integers:
+            edges = [round(edge) for edge in edges]
+            edges[0] = int(minimum)
+            edges[-1] = int(maximum)
+            for index in range(1, len(edges)):
+                if edges[index] <= edges[index - 1]:
+                    edges[index] = edges[index - 1] + 1
+            labels = [
+                f"{edges[index]}-{edges[index + 1]}"
+                if index == effective_bin_count - 1
+                else f"{edges[index]}-{edges[index + 1] - 1}"
+                for index in range(effective_bin_count)
+            ]
+            return labels, [float(edge) for edge in edges]
+
+        labels = [f"{edges[index]:.1f}-{edges[index + 1]:.1f}" for index in range(effective_bin_count)]
+        return labels, edges
+
+    @staticmethod
+    def _bin_index(value: float, edges: list[float]) -> int:
+        bin_count = len(edges) - 1
+        for index in range(bin_count - 1):
+            if value < edges[index + 1]:
+                return index
+        return bin_count - 1
+
+    @staticmethod
+    def _is_numeric_text(text: str) -> bool:
+        try:
+            float(text)
+        except ValueError:
+            return False
+        return True
 
     @staticmethod
     def _group_value(data: dict[str, Any] | None, dimension: str) -> str:

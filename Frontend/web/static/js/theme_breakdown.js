@@ -20,6 +20,8 @@
     // and there is nothing to wire up here.
     if (!Array.isArray(dimensions) || dimensions.length === 0) return;
 
+    const dimensionNames = dimensions.map((d) => (typeof d === "string" ? d : d.name));
+
     const breakdownUrlTemplate = appRoot.dataset.breakdownUrlTemplate || "";
     const applicationRunId = appRoot.dataset.applicationRunId || "";
     const codebookId = appRoot.dataset.codebookId || "";
@@ -31,6 +33,7 @@
     const resultsEl = document.getElementById("breakdown-results");
     const themeNameEl = document.getElementById("breakdown-theme-name");
     const checkboxes = Array.from(document.querySelectorAll("[data-breakdown-dimension]"));
+    const binInputs = Array.from(document.querySelectorAll("[data-breakdown-bin-count]"));
 
     if (!picker || !resultsEl || checkboxes.length === 0) return;
 
@@ -46,21 +49,37 @@
         return `ata-breakdown:${codebookId}:${applicationRunId}:${themeId}`;
     }
 
+    // Selections are stored as {dimensions: [...], bins: {name: count}}. Older
+    // entries were a plain array of dimension names (no bins); that shape is
+    // still accepted so existing selections aren't dropped.
     function loadSelection(themeId) {
-        if (!themeId) return [];
+        if (!themeId) return { dimensions: [], bins: {} };
         try {
             const raw = window.localStorage.getItem(storageKey(themeId));
-            const parsed = raw ? JSON.parse(raw) : [];
-            return Array.isArray(parsed) ? parsed.filter((d) => dimensions.includes(d)) : [];
+            const parsed = raw ? JSON.parse(raw) : null;
+            if (Array.isArray(parsed)) {
+                return { dimensions: parsed.filter((d) => dimensionNames.includes(d)), bins: {} };
+            }
+            if (parsed && typeof parsed === "object") {
+                const selectedDims = Array.isArray(parsed.dimensions)
+                    ? parsed.dimensions.filter((d) => dimensionNames.includes(d))
+                    : [];
+                const bins = parsed.bins && typeof parsed.bins === "object" ? parsed.bins : {};
+                return { dimensions: selectedDims, bins };
+            }
+            return { dimensions: [], bins: {} };
         } catch (_) {
-            return [];
+            return { dimensions: [], bins: {} };
         }
     }
 
-    function saveSelection(themeId, selected) {
+    function saveSelection(themeId, selectedDims, bins) {
         if (!themeId) return;
         try {
-            window.localStorage.setItem(storageKey(themeId), JSON.stringify(selected));
+            window.localStorage.setItem(
+                storageKey(themeId),
+                JSON.stringify({ dimensions: selectedDims, bins })
+            );
         } catch (_) {
             // Storage may be unavailable (private mode); selection stays in-memory.
         }
@@ -70,9 +89,32 @@
         return checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
     }
 
+    // Only bin counts for currently-checked numeric dimensions are sent —
+    // an unchecked dimension's bin input is irrelevant to the request.
+    function selectedBins() {
+        const checkedNames = new Set(selectedDimensions());
+        const bins = {};
+        binInputs.forEach((input) => {
+            const name = input.dataset.breakdownBinCount;
+            if (!checkedNames.has(name)) return;
+            const count = parseInt(input.value, 10);
+            if (Number.isFinite(count) && count >= 2) bins[name] = count;
+        });
+        return bins;
+    }
+
     function applySelectionToCheckboxes(selected) {
         const set = new Set(selected);
         checkboxes.forEach((cb) => { cb.checked = set.has(cb.value); });
+    }
+
+    function applyBinsToInputs(bins) {
+        binInputs.forEach((input) => {
+            const name = input.dataset.breakdownBinCount;
+            if (bins && Object.prototype.hasOwnProperty.call(bins, name)) {
+                input.value = bins[name];
+            }
+        });
     }
 
     // ------------------------------------------------------------------
@@ -92,13 +134,17 @@
         if (empty || loading || error) resultsEl.replaceChildren();
     }
 
-    function breakdownUrl(themeId, dims) {
+    function breakdownUrl(themeId, dims, bins) {
         const url = new URL(
             breakdownUrlTemplate.replace("__THEME__", themeId),
             window.location.origin
         );
         url.searchParams.set("dimensions", dims.join(","));
         if (applicationRunId) url.searchParams.set("application_run_id", applicationRunId);
+        const binPairs = Object.entries(bins || {});
+        if (binPairs.length > 0) {
+            url.searchParams.set("bins", binPairs.map(([name, count]) => `${name}:${count}`).join(","));
+        }
         return url.toString();
     }
 
@@ -223,7 +269,8 @@
 
     async function refresh() {
         const dims = selectedDimensions();
-        if (currentThemeId) saveSelection(currentThemeId, dims);
+        const bins = selectedBins();
+        if (currentThemeId) saveSelection(currentThemeId, dims, bins);
 
         if (!currentThemeId || dims.length === 0) {
             setState({ empty: true });
@@ -234,7 +281,7 @@
         setState({ loading: true });
 
         try {
-            const response = await fetch(breakdownUrl(currentThemeId, dims));
+            const response = await fetch(breakdownUrl(currentThemeId, dims, bins));
             const data = await response.json();
             if (token !== requestToken) return; // a newer request superseded this one
             if (!response.ok || data.error) {
@@ -257,11 +304,14 @@
         if (themeNameEl) {
             themeNameEl.textContent = currentThemeName || "the selected theme";
         }
-        applySelectionToCheckboxes(loadSelection(currentThemeId));
+        const selection = loadSelection(currentThemeId);
+        applySelectionToCheckboxes(selection.dimensions);
+        applyBinsToInputs(selection.bins);
         refresh();
     }
 
     checkboxes.forEach((cb) => cb.addEventListener("change", refresh));
+    binInputs.forEach((input) => input.addEventListener("change", refresh));
 
     document.addEventListener("theme:selected", (event) => {
         const detail = event.detail || {};

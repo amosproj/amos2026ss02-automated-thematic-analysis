@@ -164,19 +164,20 @@
     untrackJob(job.id);
     const cbId = status.codebook_id;
     if (status.status === "succeeded" && cbId) {
-      const runQuery = status.application_run_id
-        ? `?application_run_id=${encodeURIComponent(status.application_run_id)}`
-        : "";
+      // Generation no longer auto-applies the codebook (that's a separate,
+      // user-named step), so auto mode sends the researcher to the Analysis
+      // page with the new codebook preselected instead of a themes page that
+      // would otherwise show no results yet.
       const link = job.mode === "semi"
         ? `/codebooks/${cbId}/review`
         : (status.corpus_id
-            ? `/codebooks/${status.corpus_id}/${cbId}/themes${runQuery}`
-            : `/codebooks/${cbId}/themes${runQuery}`);
+            ? `/analysis/?corpus_id=${encodeURIComponent(status.corpus_id)}&codebook_id=${encodeURIComponent(cbId)}`
+            : `/analysis/?codebook_id=${encodeURIComponent(cbId)}`);
       const verb = job.mode === "semi" ? "ready for review" : "ready";
       showToast({
         title: "Codebook ready",
         body: `"${job.name || "Codebook"}" is ${verb}.` +
-              (job.mode === "semi" ? " Opening the review editor…" : " Click to open."),
+              (job.mode === "semi" ? " Opening the review editor…" : " Click to run an analysis."),
         link,
         kind: "success",
       });

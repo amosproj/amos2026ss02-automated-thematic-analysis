@@ -64,7 +64,7 @@ class FakeBackend:
         # Demographic data
         self.demographic_files: list[dict] = []
         self.demographic_rows: list[dict] = []
-        self.demographic_dimensions: list[str] = []
+        self.demographic_dimensions: list[dict] = []
         self.theme_demographic_breakdown: dict = {"theme_id": None, "dimensions": []}
         self.last_breakdown_request: dict | None = None
         self.demographic_link_summary: dict = {
@@ -214,7 +214,7 @@ class FakeBackend:
         self._maybe_raise("get_theme_tree")
         return self.theme_tree
 
-    def get_demographic_dimensions(self, corpus_id: str) -> list[str]:
+    def get_demographic_dimensions(self, corpus_id: str) -> list[dict]:
         self._maybe_raise("get_demographic_dimensions")
         return self.demographic_dimensions
 
@@ -224,6 +224,7 @@ class FakeBackend:
         theme_id: str,
         dimensions: list[str],
         application_run_id: str | None = None,
+        bins: dict[str, int] | None = None,
     ) -> dict:
         self._maybe_raise("get_theme_demographic_breakdown")
         self.last_breakdown_request = {
@@ -231,6 +232,7 @@ class FakeBackend:
             "theme_id": theme_id,
             "dimensions": dimensions,
             "application_run_id": application_run_id,
+            "bins": bins,
         }
         return self.theme_demographic_breakdown
 

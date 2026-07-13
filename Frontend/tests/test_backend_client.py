@@ -188,6 +188,25 @@ def test_create_generation_job_sends_payload_and_unwraps_envelope():
     assert job == {"id": "job-1", "status": "queued"}
 
 
+def test_create_generation_job_defaults_apply_after_generation_to_false():
+    # Regression test: codebook generation must not auto-apply to the corpus
+    # unless a caller explicitly opts back in — applying is now a separate,
+    # user-named step (see analysis.trigger_analysis).
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = request.read()
+        return httpx.Response(
+            202,
+            json={"success": True, "data": {"id": "job-3"}, "error": None, "meta": None},
+        )
+
+    client = _client_with_handler(handler)
+    client.create_generation_job(codebook_name="cb", corpus_id="cid")
+    body = captured["body"].decode()
+    assert '"apply_after_generation": false' in body or '"apply_after_generation":false' in body
+
+
 def test_create_generation_job_includes_transcript_ids_when_provided():
     captured: dict = {}
 
