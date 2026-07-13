@@ -133,3 +133,26 @@ def test_dedup_drops_unlocated_duplicate_of_kept_located_quote() -> None:
 
     assert kept == [0]
 
+
+def test_dedup_drops_unlocated_duplicate_of_dropped_overlapping_quote() -> None:
+    kept = select_deduplicated_quote_spans([
+        _candidate(quote="the manual handoffs slow everyone", start_char=10, end_char=43),
+        _candidate(quote="manual handoffs slow", start_char=14, end_char=34, confidence=0.5),
+        _candidate(quote="manual handoffs slow", start_char=None, end_char=None),
+    ])
+
+    assert kept == [0]
+
+
+def test_dedup_treats_degenerate_spans_as_unlocated() -> None:
+    kept = select_deduplicated_quote_spans([
+        _candidate(start_char=10, end_char=30),
+        # Zero-length span, same text as the kept row -> deduped by text.
+        _candidate(quote="manual  handoffs\nslow", start_char=17, end_char=17),
+        # Inverted span, unique text -> kept, but must not block anything.
+        _candidate(quote="an unrelated remark", start_char=40, end_char=35),
+        _candidate(quote="everyone down", start_char=36, end_char=49),
+    ])
+
+    assert kept == [0, 2, 3]
+

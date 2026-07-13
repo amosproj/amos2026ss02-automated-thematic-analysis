@@ -36,40 +36,47 @@ _STATUS_RANK = {"exact": 3, "normalized": 2, "fuzzy": 1}
 
 
 def select_deduplicated_quote_spans(candidates: Sequence[QuoteSpanCandidate]) -> list[int]:
-    # Located candidates first, then better match status, then higher
-    # confidence; span length only breaks remaining ties.
+    def _span(candidate: QuoteSpanCandidate) -> tuple[int, int] | None:
+        if candidate.start_char is None or candidate.end_char is None:
+            return None
+        if candidate.end_char <= candidate.start_char:
+            return None
+        return (candidate.start_char, candidate.end_char)
+
+    # Located candidates first, then verbatim over approximate matches, then
+    # higher confidence; span length only breaks remaining ties.
     def _sort_key(index: int) -> tuple[bool, int, float, int, int]:
         candidate = candidates[index]
-        located = candidate.start_char is not None and candidate.end_char is not None
-        length = (candidate.end_char - candidate.start_char) if located else -1
+        span = _span(candidate)
         return (
-            not located,
+            span is None,
             -_STATUS_RANK.get(candidate.quote_match_status, 0),
             -candidate.confidence,
-            -length,
+            span[0] - span[1] if span else 1,
             index,
         )
 
-    processing_order = sorted(range(len(candidates)), key=_sort_key)
-
     kept: list[int] = []
     kept_spans: dict[Hashable, list[tuple[int, int]]] = defaultdict(list)
-    kept_texts: dict[Hashable, set[str]] = defaultdict(set)
-    for index in processing_order:
+    seen_texts: dict[Hashable, set[str]] = defaultdict(set)
+    for index in sorted(range(len(candidates)), key=_sort_key):
         candidate = candidates[index]
         normalized_text = " ".join(candidate.quote.split()).casefold()
-        if candidate.start_char is None or candidate.end_char is None:
-            if normalized_text in kept_texts[candidate.group_key]:
+        span = _span(candidate)
+        if span is None:
+            if normalized_text in seen_texts[candidate.group_key]:
                 continue
         else:
-            span = (candidate.start_char, candidate.end_char)
+            # Record the text even when dropping, so an unlocated copy of a
+            # dropped overlapping span cannot sneak through later.
+            seen_texts[candidate.group_key].add(normalized_text)
             if any(
                 kept_start < span[1] and kept_end > span[0]
                 for kept_start, kept_end in kept_spans[candidate.group_key]
             ):
                 continue
             kept_spans[candidate.group_key].append(span)
-        kept_texts[candidate.group_key].add(normalized_text)
+        seen_texts[candidate.group_key].add(normalized_text)
         kept.append(index)
     return sorted(kept)
 
