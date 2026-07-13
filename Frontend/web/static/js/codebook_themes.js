@@ -118,12 +118,6 @@
         return typeof value === "number" ? `${value.toFixed(2)}%` : "0.00%";
     }
 
-    function coverageBarClass(pct) {
-        if (pct <= 33) return "theme-progress-bar--low";
-        if (pct <= 66) return "theme-progress-bar--mid";
-        return "theme-progress-bar--high";
-    }
-
     // Shared ordering: most frequent first, ties alphabetical. Used for the
     // frequency list (boot auto-select) and for every sibling level of the
     // merged theme table.
@@ -360,7 +354,7 @@
                     coverageCell.innerHTML = `
                         <div class="d-flex align-items-center gap-2">
                             <div class="theme-progress">
-                                <div class="theme-progress-bar ${coverageBarClass(pct)}" style="width:${barWidth}%"></div>
+                                <div class="theme-progress-bar" style="width:${barWidth}%"></div>
                             </div>
                             <span class="coverage-label${pct === 0 ? " theme-zero" : ""}">${formatCoverage(pct)}</span>
                         </div>`;
