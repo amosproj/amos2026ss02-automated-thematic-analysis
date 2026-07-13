@@ -125,7 +125,7 @@
 
     <div class="d-flex gap-2">
       <a class="btn btn-outline-secondary"
-         href="{{ url_for('codebooks.list_codebooks') }}">Cancel</a>
+         href="{{ cancel_url or url_for('codebooks.list_codebooks') }}">Cancel</a>
       <button type="submit" class="btn btn-primary">{% if codebook_id %}Save as new version{% else %}Save codebook{% endif %}</button>
     </div>
 
