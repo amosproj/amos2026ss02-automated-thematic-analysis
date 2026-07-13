@@ -9,8 +9,10 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.config import get_settings
 from app.dependencies import DbSession
 from app.exceptions import NotFoundError, UnprocessableError
+from app.llm import providers
 from app.models import Codebook, CodebookGenerationJob
 from app.schemas.codebook import (
     CodebookCreateRequest,
@@ -44,6 +46,29 @@ def _serialize_document_ids(document_ids: list[UUID] | None) -> str:
 def _deserialize_document_ids(document_ids_json: str) -> list[UUID]:
     raw_ids = json.loads(document_ids_json)
     return [UUID(raw_id) for raw_id in raw_ids]
+
+
+def _validate_provider_config(provider_id: str) -> None:
+    settings = get_settings()
+    spec = providers.get_provider(provider_id)
+    if not spec:
+        raise UnprocessableError(f"Selected AI provider '{provider_id}' is unknown.")
+    if not getattr(settings, spec.api_key_attr, None):
+        raise UnprocessableError(f"API key is missing for selected provider '{spec.label}'.")
+    if not getattr(settings, spec.model_attr, None):
+        raise UnprocessableError(f"Chat model is missing for selected provider '{spec.label}'.")
+
+    embed_spec = spec
+    if not spec.supports_embeddings:
+        fallback_spec = providers.get_provider(providers.DEFAULT_PROVIDER_ID)
+        if fallback_spec is None:
+            raise UnprocessableError("Default embedding provider is unknown.")
+        embed_spec = fallback_spec
+
+    if not getattr(settings, embed_spec.api_key_attr, None):
+        raise UnprocessableError(f"API key is missing for embedding provider '{embed_spec.label}'.")
+    if not getattr(settings, embed_spec.embedding_model_attr, None):
+        raise UnprocessableError(f"Embedding model is missing for embedding provider '{embed_spec.label}'.")
 
 
 def _to_job_schema(job: CodebookGenerationJob) -> CodebookGenerationJobSchema:
@@ -86,6 +111,8 @@ def _to_job_schema(job: CodebookGenerationJob) -> CodebookGenerationJobSchema:
         updated_at=job.updated_at,
         started_at=job.started_at,
         finished_at=job.finished_at,
+        llm_tokens_input=job.llm_tokens_input,
+        llm_tokens_output=job.llm_tokens_output,
     )
 
 
@@ -148,9 +175,10 @@ async def generate_codebook(
     session: DbSession,
 ) -> JSONResponse:
     # Use the globally selected LLM provider, matching the async generate-jobs
-    # path, so this endpoint never silently runs on a different provider than
-    # the one chosen in the UI.
+    # path. Embeddings use the same provider, so this endpoint never silently
+    # runs on different AI providers than the one chosen in the UI.
     active_provider = await get_active_provider(session)
+    _validate_provider_config(active_provider)
     resolved_document_ids = await resolve_transcript_document_ids(
         session,
         corpus_id=payload.corpus_id,
@@ -193,6 +221,8 @@ async def create_generate_codebook_job(
     payload: CodebookGenerationJobCreateRequest,
     session: DbSession,
 ) -> JSONResponse:
+    active_provider = await get_active_provider(session)
+    _validate_provider_config(active_provider)
     resolved_document_ids = await resolve_transcript_document_ids(
         session,
         corpus_id=payload.corpus_id,

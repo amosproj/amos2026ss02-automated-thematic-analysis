@@ -135,6 +135,8 @@ class CodebookApplicationJob(Base, TimestampMixin):
     documents_done: Mapped[int] = mapped_column(Integer, default=0)
     documents_coded: Mapped[int | None] = mapped_column(Integer, nullable=True)
     documents_failed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    llm_tokens_input: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    llm_tokens_output: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text(), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)

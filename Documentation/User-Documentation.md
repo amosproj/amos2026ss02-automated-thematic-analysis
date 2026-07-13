@@ -32,6 +32,19 @@ The system builds a queryable thematic knowledge graph based on your analysis.
 - **Theme Frequency Tracking:** Easily see which themes appear most frequently across your corpus.
 - **Traceability:** Click on a mapped theme to view the exact text snippets (chunks) and source documents that generated the match.
 
+### 4. LLM and Embedding Models
+The platform uses two kinds of AI models:
+- **Large Language Models (LLMs):** Generate codebooks, interpret transcripts, and assign quotes to themes.
+- **Embedding models:** Convert short texts into numeric vectors so the system can compare meaning. They are used behind the scenes to detect similar or duplicate codes before the LLM performs more detailed checks.
+
+The Home page **LLM Provider** setting controls both model types. If the active provider is changed, new codebook generation and analysis jobs use the newly selected provider. Jobs that are already running keep the provider they started with.
+
+Administrators can configure the concrete embedding model in `Backend/.env`:
+- `EMBEDDING_MODEL_FAU` is used with the `FAU` provider.
+- `EMBEDDING_MODEL` is used with the `ACADEMIC` provider.
+
+Commercial OpenAI-compatible providers can be used by setting the selected provider's base URL, API key, chat model, and embedding model in `Backend/.env`. For example, OpenAI can be configured through the `ACADEMIC` slot with `LLM_BASE_URL=https://api.openai.com/v1`, `LLM_API_KEY=<your_openai_api_key>`, `LLM_MODEL=<chat_model>`, and `EMBEDDING_MODEL=text-embedding-3-large`. This sends both LLM and embedding requests for new jobs to that configured provider.
+
 ---
 
 ## Example Workflow

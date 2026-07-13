@@ -119,6 +119,7 @@ class CodebookGenerationService:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+        self.traceable_service = TraceableAnalysisService(self._session)
 
     async def generate_codebook(
         self,
@@ -141,7 +142,7 @@ class CodebookGenerationService:
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> GeneratedCodebookResponse:
         try:
-            result = await TraceableAnalysisService(self._session).run_analysis(
+            result = await self.traceable_service.run_analysis(
                 codebook_name=codebook_name,
                 analysis_name=analysis_name or codebook_name,
                 custom_id=custom_id,

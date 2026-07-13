@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy import select
@@ -122,6 +123,51 @@ async def test_consolidation_falls_back_when_batch_relationship_classification_f
     assert len(consolidated) == 1
     assert set(consolidated[0].quote_ids) == {"q-a", "q-b"}
     assert any(action["action"] == "classify_code_pair" for action in action_log)
+
+
+async def test_consolidation_passes_selected_provider_to_embedding_client() -> None:
+    candidates = [
+        CodeCandidate(
+            candidate_id="a",
+            label="AI privacy concern",
+            description="Concern that AI systems expose private information.",
+            quote_ids=["q-a"],
+        ),
+        CodeCandidate(
+            candidate_id="b",
+            label="Fear of AI data leaks",
+            description="Fear that AI tools leak personal data.",
+            quote_ids=["q-b"],
+        ),
+    ]
+
+    async def _classifier(_left: CodeCandidate, _right: CodeCandidate) -> CodeRelationshipResult:
+        return CodeRelationshipResult(
+            relationship="equivalent",
+            confidence=0.9,
+            reason="Both codes describe privacy/data-leak concern.",
+        )
+
+    settings = Settings(DATABASE_URL="sqlite+aiosqlite:///:memory:")
+    embedding_client = MagicMock()
+    embedding_client.embed = AsyncMock(return_value=[[1.0, 0.0], [1.0, 0.0]])
+    embedding_client.aclose = AsyncMock()
+
+    with patch(
+        "app.services.traceable_code_consolidation.RemoteEmbeddingClient",
+        return_value=embedding_client,
+    ) as mock_client_cls:
+        await consolidate_code_candidates(
+            candidates,
+            classifier=_classifier,
+            provider="ACADEMIC",
+            settings=settings,
+        )
+
+    mock_client_cls.assert_called_once_with(
+        settings=settings,
+        provider="ACADEMIC",
+    )
 
 
 async def test_traceable_persist_rejects_multi_parent_theme_dag(db_session) -> None:

@@ -6,6 +6,7 @@ def test_app_factory_returns_flask_app(app):
     assert app is not None
     expected_routes = {
         "/", "/health",
+        "/legal-notices",
         "/transcripts/", "/transcripts/upload",
         "/transcripts/<corpus_id>/", "/transcripts/<corpus_id>/upload",
         "/codebooks/", "/codebooks/<codebook_id>/themes",
@@ -25,6 +26,14 @@ def test_index_renders(client):
     resp = client.get("/")
     assert resp.status_code == 200
     assert b"Automated Thematic Analysis" in resp.data
+
+
+def test_legal_notices_render(client):
+    resp = client.get("/legal-notices")
+    assert resp.status_code == 200
+    assert b"Legal Notices" in resp.data
+    assert b"bootstrap" in resp.data
+    assert b"sbom.cdx.json" in resp.data
 
 
 def test_upload_form_renders_with_config(client, fake_backend):
