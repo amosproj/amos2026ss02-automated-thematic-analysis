@@ -57,6 +57,9 @@ venv/
 .pytest_cache/
 htmlcov/
 
+# mypy
+.mypy_cache/
+
 # Package Files
 *.jar
 *.war
