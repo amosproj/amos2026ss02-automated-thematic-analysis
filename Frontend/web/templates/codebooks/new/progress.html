@@ -94,29 +94,35 @@
     </div>
 
 
-    <div class="row g-2 mb-3" aria-label="Job metrics">
-      <div class="col-12 col-sm-3">
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-5 g-2 mb-3" aria-label="Job metrics">
+      <div class="col">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Transcripts</div>
           <div id="metric-documents" class="fw-semibold">Waiting</div>
         </div>
       </div>
-      <div class="col-12 col-sm-3">
+      <div class="col">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Evidence</div>
           <div id="metric-evidence" class="fw-semibold">Pending</div>
         </div>
       </div>
-      <div class="col-12 col-sm-3">
+      <div class="col">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Codebook</div>
           <div id="metric-codebook" class="fw-semibold">Pending</div>
         </div>
       </div>
-      <div class="col-12 col-sm-3">
+      <div class="col">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Tokens (In/Out)</div>
           <div id="metric-tokens" class="fw-semibold">0 / 0</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="border rounded-2 px-3 py-2 h-100">
+          <div class="small text-secondary">Generation Time</div>
+          <div id="metric-time" class="fw-semibold">0s</div>
         </div>
       </div>
     </div>
@@ -160,6 +166,7 @@
       const metricEvidence = document.getElementById("metric-evidence");
       const metricCodebook = document.getElementById("metric-codebook");
       const metricTokens = document.getElementById("metric-tokens");
+      const metricTime = document.getElementById("metric-time");
       const errorContainer = document.getElementById("progress-error-container");
       const errorEl = document.getElementById("progress-error");
       const cancelBtn = document.getElementById("cancel-btn");
@@ -239,6 +246,22 @@
         metricCodebook.textContent = pieces.length ? pieces.join(" / ") : "Pending";
         
         metricTokens.textContent = `${job.llm_tokens_input ? formatCount(job.llm_tokens_input) : "0"} / ${job.llm_tokens_output ? formatCount(job.llm_tokens_output) : "0"}`;
+        
+        if (job.started_at) {
+          const start = new Date(job.started_at + 'Z');
+          const end = job.finished_at ? new Date(job.finished_at + 'Z') : new Date();
+          const diffSeconds = Math.max(0, Math.floor((end - start) / 1000));
+          
+          if (diffSeconds < 60) {
+            metricTime.textContent = `${diffSeconds}s`;
+          } else {
+            const minutes = Math.floor(diffSeconds / 60);
+            const seconds = diffSeconds % 60;
+            metricTime.textContent = `${minutes}m ${seconds}s`;
+          }
+        } else {
+          metricTime.textContent = "0s";
+        }
       }
 
       function paint(job) {
