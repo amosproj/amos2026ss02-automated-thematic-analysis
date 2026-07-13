@@ -8,7 +8,7 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, TypeVar, cast
+from typing import Any, Protocol, TypeVar, cast
 from uuid import UUID
 
 from langchain_core.output_parsers import JsonOutputParser
@@ -136,6 +136,31 @@ class _ApplicationPassResult:
     evidence: list[_AppliedEvidence]
     failed_document_ids: list[UUID]
     action_log: list[dict[str, object]] | None = None
+
+
+class _HasUUIDId(Protocol):
+    @property
+    def id(self) -> UUID: ...
+
+
+_CodeT = TypeVar("_CodeT", bound=_HasUUIDId)
+
+
+def _deduplicate_resolved_assignments(
+    resolved: list[tuple[_AppliedEvidence, _CodeT, UUID | None]],
+) -> list[tuple[_AppliedEvidence, _CodeT, UUID | None]]:
+
+    candidates = [
+        QuoteSpanCandidate(
+            group_key=theme_id if theme_id is not None else ("code", code.id),
+            quote=evidence.quote,
+            start_char=evidence.start_char,
+            end_char=evidence.end_char,
+            confidence=evidence.confidence,
+        )
+        for evidence, code, theme_id in resolved
+    ]
+    return [resolved[index] for index in select_deduplicated_quote_spans(candidates)]
 
 
 @dataclass(frozen=True)
@@ -3782,22 +3807,8 @@ class TraceableAnalysisService:
                         theme_id = theme.id
                 resolved_assignments.append((evidence, code, theme_id))
 
-            kept_indices = select_deduplicated_quote_spans(
-                [
-                    QuoteSpanCandidate(
-                        group_key=theme_id if theme_id is not None else ("code", code.id),
-                        quote=evidence.quote,
-                        start_char=evidence.start_char,
-                        end_char=evidence.end_char,
-                        confidence=self._clamp_confidence(evidence.confidence),
-                    )
-                    for evidence, code, theme_id in resolved_assignments
-                ]
-            )
-
             seen_theme_ids: set[UUID] = set()
-            for index in kept_indices:
-                evidence, code, theme_id = resolved_assignments[index]
+            for evidence, code, theme_id in _deduplicate_resolved_assignments(resolved_assignments):
                 self._session.add(
                     CodeAssignment(
                         id=uuid.uuid4(),

@@ -31,14 +31,11 @@ from app.schemas.traceable_llm import (
     SynthesizedThemeNode,
     SynthesizedThemePath,
 )
-from app.services.quote_matching import (
-    QuoteSpanCandidate,
-    select_deduplicated_quote_spans,
-)
 from app.services.traceable_analysis import (
     TraceableAnalysisCancelledError,
     TraceableAnalysisService,
     _AppliedEvidence,
+    _deduplicate_resolved_assignments,
 )
 from app.services.traceable_analysis import (
     _DocumentText as _TraceableDocumentText,
@@ -530,26 +527,8 @@ class CodebookApplicationService:
                         theme_id = theme.id
                 resolved_assignments.append((evidence, code, theme_id))
 
-            # The application pass can return the same passage several times
-            # for one theme — verbatim under two codes or as overlapping
-            # spans. Persist each passage once per theme so read views (e.g.
-            # transcript highlights) do not stack duplicate quotes.
-            kept_indices = select_deduplicated_quote_spans(
-                [
-                    QuoteSpanCandidate(
-                        group_key=theme_id if theme_id is not None else ("code", code.id),
-                        quote=evidence.quote,
-                        start_char=evidence.start_char,
-                        end_char=evidence.end_char,
-                        confidence=self._clamp_confidence(evidence.confidence),
-                    )
-                    for evidence, code, theme_id in resolved_assignments
-                ]
-            )
-
             seen_theme_ids: set[UUID] = set()
-            for index in kept_indices:
-                evidence, code, theme_id = resolved_assignments[index]
+            for evidence, code, theme_id in _deduplicate_resolved_assignments(resolved_assignments):
                 self._session.add(
                     CodeAssignment(
                         id=uuid.uuid4(),

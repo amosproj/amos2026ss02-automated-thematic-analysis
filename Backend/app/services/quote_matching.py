@@ -17,7 +17,12 @@ class QuoteMatch:
 
 @dataclass(frozen=True)
 class QuoteSpanCandidate:
-    """One located (or unlocatable) quote competing for persistence within a dedup group."""
+    """One located (or unlocatable) quote competing for persistence within a dedup group.
+
+    ``group_key`` is the dedup scope: callers pass the theme id so overlapping or
+    duplicate spans of one theme collapse into a single highlight, falling back
+    to the code (e.g. ``("code", code_id)``) when the assignment has no theme.
+    """
 
     group_key: Hashable
     quote: str
