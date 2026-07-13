@@ -585,7 +585,9 @@ def test_auto_submit_creates_job_and_redirects_to_codebook_list(client, fake_bac
         "researcher_topics": None,
         "analysis_name": None,
         "custom_id": None,
-        "max_refinement_rounds": 5,
+        # Dropdown default is 5 max iterations; the backend field counts
+        # refinement rounds after the first evaluation, so 5 -> 4.
+        "max_refinement_rounds": 4,
         "apply_after_generation": None,
     }
 
@@ -638,7 +640,9 @@ def test_auto_submit_forwards_research_query_and_topics(client, fake_backend):
         "researcher_topics": "isolation, productivity",
         "analysis_name": None,
         "custom_id": None,
-        "max_refinement_rounds": 5,
+        # Dropdown default is 5 max iterations; the backend field counts
+        # refinement rounds after the first evaluation, so 5 -> 4.
+        "max_refinement_rounds": 4,
         "apply_after_generation": None,
     }
 
@@ -708,7 +712,10 @@ def test_auto_submit_forwards_max_refinement_rounds_and_sample_size(client, fake
         "researcher_topics": None,
         "analysis_name": None,
         "custom_id": None,
-        "max_refinement_rounds": 7,
+        # The form posts "7" (desired max iterations, matching the live
+        # progress display); the controller translates that to the backend's
+        # "rounds after the first" field, so 7 -> 6.
+        "max_refinement_rounds": 6,
         "apply_after_generation": None,
     }
 

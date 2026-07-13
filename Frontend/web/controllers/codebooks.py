@@ -744,9 +744,15 @@ def new_codebook_auto_submit(corpus_id: str):
     if len(researcher_topics) > _QUERY_MAX:
         return _render_form(rt_error=f"Topics must be at most {_QUERY_MAX} characters.")
 
-    # max_refinement_rounds always comes from a fixed <select>, so it's always
-    # a valid integer in range — no need to defend against malformed input here.
-    max_refinement_rounds = int(max_refinement_rounds_raw)
+    # The dropdown's value is the max number of iterations shown to the user
+    # (matches the live "Iteration N of M" progress display). The backend's
+    # max_refinement_rounds field means "rounds after the first" — the
+    # generation loop runs max_refinement_rounds + 1 iterations — so translate
+    # here rather than exposing that off-by-one to the UI. Always comes from a
+    # fixed <select>, so it's always a valid integer in range — no need to
+    # defend against malformed input here.
+    max_iterations = int(max_refinement_rounds_raw)
+    max_refinement_rounds = max(0, max_iterations - 1)
 
     # transcript_sample_size is free-text, so it does need format validation.
     # Whether it exceeds the corpus size is checked by the backend (the

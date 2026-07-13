@@ -423,3 +423,41 @@ async def test_generate_codebook_job_rejects_sample_size_larger_than_corpus(clie
     assert response.status_code == 422
     assert response.json()["success"] is False
     assert "exceeds the number of transcripts available" in response.json()["error"]
+
+
+def test_compute_job_progress_percent_evaluating_iterations_scales_with_progress() -> None:
+    from app.models import CodebookGenerationJob
+    from app.routers.codebooks import _compute_job_progress_percent
+
+    job = CodebookGenerationJob(
+        status="running",
+        codebook_name="Progress Test",
+        corpus_id=uuid4(),
+        transcript_document_ids_json="[]",
+        analysis_units_total=5,
+        analysis_units_done=0,
+    )
+    assert _compute_job_progress_percent(job, phase="evaluating_iterations") == 65
+
+    job.analysis_units_done = 2
+    assert _compute_job_progress_percent(job, phase="evaluating_iterations") == 73
+
+    job.analysis_units_done = 5
+    assert _compute_job_progress_percent(job, phase="evaluating_iterations") == 85
+
+
+def test_compute_job_progress_percent_evaluating_iterations_falls_back_without_total() -> None:
+    from app.models import CodebookGenerationJob
+    from app.routers.codebooks import _compute_job_progress_percent
+
+    job = CodebookGenerationJob(
+        status="running",
+        codebook_name="Progress Test",
+        corpus_id=uuid4(),
+        transcript_document_ids_json="[]",
+        analysis_units_total=0,
+        analysis_units_done=0,
+    )
+    # Before the first per-iteration progress update arrives (analysis_units_total
+    # still 0, reset at phase entry), the fixed mid-phase estimate is used.
+    assert _compute_job_progress_percent(job, phase="evaluating_iterations") == 75
