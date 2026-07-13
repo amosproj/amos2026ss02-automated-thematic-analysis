@@ -40,6 +40,7 @@ def _candidate(
     start_char: int | None = 10,
     end_char: int | None = 30,
     confidence: float = 0.9,
+    quote_match_status: str = "exact",
 ) -> QuoteSpanCandidate:
     return QuoteSpanCandidate(
         group_key=group_key,
@@ -47,6 +48,7 @@ def _candidate(
         start_char=start_char,
         end_char=end_char,
         confidence=confidence,
+        quote_match_status=quote_match_status,
     )
 
 
@@ -59,22 +61,40 @@ def test_dedup_keeps_one_copy_of_identical_span_preferring_confidence() -> None:
     assert kept == [1]
 
 
-def test_dedup_prefers_longer_span_over_contained_one() -> None:
+def test_dedup_prefers_higher_confidence_over_longer_contained_span() -> None:
     kept = select_deduplicated_quote_spans([
         _candidate(start_char=12, end_char=25, confidence=0.99),
         _candidate(start_char=10, end_char=30, confidence=0.5),
     ])
 
-    assert kept == [1]
+    assert kept == [0]
 
 
-def test_dedup_drops_partially_overlapping_shorter_span_of_same_group() -> None:
+def test_dedup_keeps_higher_confidence_of_partially_overlapping_spans() -> None:
     kept = select_deduplicated_quote_spans([
         _candidate(start_char=10, end_char=30, confidence=0.5),
         _candidate(start_char=25, end_char=40, confidence=0.99),
     ])
 
+    assert kept == [1]
+
+
+def test_dedup_prefers_exact_match_over_higher_confidence_fuzzy() -> None:
+    kept = select_deduplicated_quote_spans([
+        _candidate(start_char=10, end_char=30, confidence=0.6, quote_match_status="exact"),
+        _candidate(start_char=5, end_char=45, confidence=0.99, quote_match_status="fuzzy"),
+    ])
+
     assert kept == [0]
+
+
+def test_dedup_breaks_status_and_confidence_ties_by_longer_span() -> None:
+    kept = select_deduplicated_quote_spans([
+        _candidate(start_char=12, end_char=25),
+        _candidate(start_char=10, end_char=30),
+    ])
+
+    assert kept == [1]
 
 
 def test_dedup_keeps_identical_span_across_different_groups() -> None:

@@ -259,7 +259,7 @@ async def test_traceable_persist_application_deduplicates_per_code_only(db_sessi
         applied_evidence=[
             _evidence("Manual Handoffs", "manual handoffs slow", 0.95),
             # Overlapping longer span of the same passage under the SAME code
-            # -> collapses with the row above (longest span wins).
+            # -> collapses with the row above (higher confidence wins).
             _evidence("Manual Handoffs", "The manual handoffs slow everyone down", 0.5),
             # Same passage under a DIFFERENT code -> kept, keeping its coverage.
             _evidence("Handoff Delays", "manual handoffs slow", 0.6),
@@ -277,8 +277,8 @@ async def test_traceable_persist_application_deduplicates_per_code_only(db_sessi
     assert run.status == "succeeded"
     quotes_by_code = {assignment.code_id: assignment.quote for assignment in assignments}
     assert len(assignments) == 2
-    # Manual Handoffs collapsed to its longest span; Handoff Delays kept.
-    assert quotes_by_code[code_a.id] == "The manual handoffs slow everyone down"
+    # Manual Handoffs collapsed to its highest-confidence span; Handoff Delays kept.
+    assert quotes_by_code[code_a.id] == "manual handoffs slow"
     assert quotes_by_code[code_b.id] == "manual handoffs slow"
     assert assignments[0].theme_id == theme.id
 

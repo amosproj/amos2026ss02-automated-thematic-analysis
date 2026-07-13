@@ -259,7 +259,7 @@ async def test_apply_codebook_job_deduplicates_per_code_only(client, db_engine, 
                     rationale="Direct mention of slow manual handoffs.",
                 ),
                 # Overlapping longer span of the same passage under the SAME code
-                # -> collapses with the row above (longest span wins).
+                # -> collapses with the row above (higher confidence wins).
                 AppliedCodeAssignment(
                     code_label="Manual Handoffs",
                     theme_label="Workflow Friction",
@@ -300,13 +300,12 @@ async def test_apply_codebook_job_deduplicates_per_code_only(client, db_engine, 
     assert document_coding["status"] == "coded"
 
     assignments = document_coding["code_assignments"]
-    # One row per code: the two Manual Handoffs spans collapsed to the longest,
-    # Handoff Delays survives with its own span.
+    # One row per code: the two Manual Handoffs spans collapsed to the
+    # highest-confidence one; Handoff Delays survives with its own span.
     quotes_by_code = {ca["code_id"]: ca["quote"] for ca in assignments}
     assert len(assignments) == 2
     assert len(quotes_by_code) == 2
-    assert "The manual handoffs slow everyone down" in quotes_by_code.values()
-    assert "manual handoffs slow" in quotes_by_code.values()
+    assert set(quotes_by_code.values()) == {"manual handoffs slow"}
 
 
 async def test_apply_codebook_job_retries_llm_and_fails_only_one_transcript(client, db_engine, monkeypatch) -> None:

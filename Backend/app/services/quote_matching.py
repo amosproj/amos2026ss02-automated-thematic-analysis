@@ -29,19 +29,28 @@ class QuoteSpanCandidate:
     start_char: int | None
     end_char: int | None
     confidence: float
+    quote_match_status: str = "not_found"
+
+
+_STATUS_RANK = {"exact": 3, "normalized": 2, "fuzzy": 1}
 
 
 def select_deduplicated_quote_spans(candidates: Sequence[QuoteSpanCandidate]) -> list[int]:
+    # Located candidates first, then better match status, then higher
+    # confidence; span length only breaks remaining ties.
+    def _sort_key(index: int) -> tuple[bool, int, float, int, int]:
+        candidate = candidates[index]
+        located = candidate.start_char is not None and candidate.end_char is not None
+        length = (candidate.end_char - candidate.start_char) if located else -1
+        return (
+            not located,
+            -_STATUS_RANK.get(candidate.quote_match_status, 0),
+            -candidate.confidence,
+            -length,
+            index,
+        )
 
-    def _span_length(candidate: QuoteSpanCandidate) -> int:
-        if candidate.start_char is None or candidate.end_char is None:
-            return -1
-        return candidate.end_char - candidate.start_char
-
-    processing_order = sorted(
-        range(len(candidates)),
-        key=lambda index: (-_span_length(candidates[index]), -candidates[index].confidence, index),
-    )
+    processing_order = sorted(range(len(candidates)), key=_sort_key)
 
     kept: list[int] = []
     kept_spans: dict[Hashable, list[tuple[int, int]]] = defaultdict(list)

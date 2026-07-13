@@ -14,8 +14,6 @@ cleaned, delete this module and tests/test_quote_span_backfill.py
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -39,30 +37,24 @@ async def backfill_deduplicate_code_assignments(session: AsyncSession) -> int:
         ).all()
     )
 
-    rows_by_coding: dict[UUID, list[CodeAssignment]] = defaultdict(list)
-    for row in rows:
-        if row.quote and row.quote.strip():
-            rows_by_coding[row.document_coding_id].append(row)
-
+    quoted_rows = [row for row in rows if row.quote and row.quote.strip()]
+    candidates = [
+        QuoteSpanCandidate(
+            group_key=(row.document_coding_id, row.code_id),
+            quote=row.quote,
+            start_char=row.start_char,
+            end_char=row.end_char,
+            confidence=row.confidence,
+            quote_match_status=row.quote_match_status,
+        )
+        for row in quoted_rows
+    ]
+    kept = set(select_deduplicated_quote_spans(candidates))
     removed = 0
-    for coding_rows in rows_by_coding.values():
-        candidates = [
-            QuoteSpanCandidate(
-                # Group strictly per code: distinct codes on the same passage
-                # are both kept, so no code loses coverage to a sibling.
-                group_key=row.code_id,
-                quote=row.quote,
-                start_char=row.start_char,
-                end_char=row.end_char,
-                confidence=row.confidence,
-            )
-            for row in coding_rows
-        ]
-        kept = set(select_deduplicated_quote_spans(candidates))
-        for index, row in enumerate(coding_rows):
-            if index not in kept:
-                await session.delete(row)
-                removed += 1
+    for index, row in enumerate(quoted_rows):
+        if index not in kept:
+            await session.delete(row)
+            removed += 1
 
     if removed:
         await session.commit()

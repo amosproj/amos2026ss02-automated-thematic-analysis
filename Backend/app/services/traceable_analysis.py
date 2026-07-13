@@ -149,21 +149,15 @@ _CodeT = TypeVar("_CodeT", bound=_HasUUIDId)
 def _deduplicate_resolved_assignments(
     resolved: list[tuple[_AppliedEvidence, _CodeT, UUID | None]],
 ) -> list[tuple[_AppliedEvidence, _CodeT, UUID | None]]:
-    """Keep one assignment per passage per code, in original order.
-
-    The application pass can return the same passage several times for one code
-    — a verbatim duplicate or an overlapping span — so collapse those to a
-    single row (longest located span wins). Grouping is strictly per code:
-    two distinct codes that tag the same passage are both kept, even when they
-    share a parent theme, so no code loses coverage to another.
-    """
+    """Keep one assignment per document per passage per code, in original order."""
     candidates = [
         QuoteSpanCandidate(
-            group_key=code.id,
+            group_key=(evidence.document_id, code.id),
             quote=evidence.quote,
             start_char=evidence.start_char,
             end_char=evidence.end_char,
             confidence=evidence.confidence,
+            quote_match_status=evidence.quote_match_status,
         )
         for evidence, code, _theme_id in resolved
     ]
@@ -4044,10 +4038,26 @@ class TraceableAnalysisService:
             action_log.extend(doc_result.action_log)
 
         return _ApplicationPassResult(
-            evidence=applied,
+            # Deduplicate here so metrics, action logs, provenance, and
+            # persistence all see the same assignments.
+            evidence=self._deduplicate_applied_evidence(applied),
             failed_document_ids=failed_document_ids,
             action_log=action_log,
         )
+
+    def _deduplicate_applied_evidence(self, evidence: list[_AppliedEvidence]) -> list[_AppliedEvidence]:
+        candidates = [
+            QuoteSpanCandidate(
+                group_key=(item.document_id, self._label_key(item.code_label)),
+                quote=item.quote,
+                start_char=item.start_char,
+                end_char=item.end_char,
+                confidence=item.confidence,
+                quote_match_status=item.quote_match_status,
+            )
+            for item in evidence
+        ]
+        return [evidence[index] for index in select_deduplicated_quote_spans(candidates)]
 
     @staticmethod
     def _build_application_codebook_context(
