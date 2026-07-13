@@ -400,6 +400,7 @@ class TraceableAnalysisService:
             researcher_topics=researcher_topics,
             max_refinement_rounds=max_refinement_rounds,
             should_cancel=should_cancel,
+            on_phase_progress=on_phase_progress,
         )
         synthesis = selected_iteration.synthesis
         consolidated_codes = selected_iteration.consolidated_codes
@@ -1121,6 +1122,7 @@ class TraceableAnalysisService:
         researcher_topics: str | None,
         max_refinement_rounds: int,
         should_cancel: Callable[[], Awaitable[bool]] | None,
+        on_phase_progress: Callable[[str, int, int], Awaitable[None]] | None = None,
     ) -> tuple[_IterationArtifact, list[_IterationArtifact], list[dict[str, object]]]:
         cfg = get_settings()
         configured_max = max(1, min(cfg.TRACEABLE_MAX_ITERATIONS, max_refinement_rounds + 1))
@@ -1143,6 +1145,8 @@ class TraceableAnalysisService:
 
         for iteration in range(1, max_iterations + 1):
             await self._raise_if_cancelled(should_cancel)
+            if on_phase_progress is not None:
+                await on_phase_progress("evaluating_iterations", iteration, max_iterations)
             parsimony_preview = self._parsimony_score(
                 code_count=len(current.codes),
                 quote_count=len(current_quote_evidence),
