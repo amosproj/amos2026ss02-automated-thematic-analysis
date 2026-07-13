@@ -2,15 +2,23 @@ from __future__ import annotations
 
 import asyncio
 import time
+from uuid import UUID
 
 from app.schemas.traceable_llm import (
     CodebookQualityEvaluationResult,
+    CodebookReviewAction,
+    CodebookReviewResult,
     CodebookSynthesisResult,
     SynthesizedCode,
     SynthesizedThemeNode,
     SynthesizedThemePath,
 )
-from app.services.traceable_analysis import _ApplicationPassResult, _AppliedEvidence, _QuoteEvidence
+from app.services.traceable_analysis import (
+    TraceableAnalysisService,
+    _ApplicationPassResult,
+    _AppliedEvidence,
+    _QuoteEvidence,
+)
 from app.services.traceable_code_consolidation import ConsolidatedCode
 
 API_INGESTION = "/api/v1/ingestion"
@@ -220,3 +228,170 @@ async def test_generation_job_uses_traceable_pipeline_and_creates_application_ru
     assert run["llm_tokens_output"] == 34
     assert run["document_codings"][0]["code_assignments"][0]["quote"] == "manual handoffs slow"
     assert run["document_codings"][0]["code_assignments"][0]["quote_match_status"] == "exact"
+
+
+async def test_evaluating_iterations_reports_current_iteration_via_phase_progress(
+    client, db_session, monkeypatch
+) -> None:
+    # Regression test for the "which iteration are we on" progress UI: the
+    # refinement loop in _select_best_iteration must report its own
+    # iteration/max_iterations via on_phase_progress, not just the phases
+    # before/after it.
+    corpus_id, document_ids = await _create_corpus_with_docs(
+        client,
+        texts=[
+            "The project has manual handoffs slow every review and creates rework.",
+            "The project has manual handoffs slow every review and creates rework too.",
+        ],
+    )
+
+    async def _fake_extract_quote_codes(self, *, documents, **_kwargs):
+        document = documents[0]
+        quote = "manual handoffs slow"
+        start = document.content.index(quote)
+        return [
+            _QuoteEvidence(
+                quote_id="quote-1",
+                document_id=document.id,
+                quote=quote,
+                start_char=start,
+                end_char=start + len(quote),
+                quote_match_status="exact",
+                candidate_id="candidate-1",
+                code_label="Manual handoffs slow work",
+                code_description="Manual handoffs slow the review workflow.",
+                confidence=0.93,
+                rationale="The quote directly names slow manual handoffs.",
+            )
+        ]
+
+    async def _fake_consolidate(candidates, **_kwargs):
+        return [
+            ConsolidatedCode(
+                label="Manual handoffs slow work",
+                description="Manual handoffs slow the review workflow.",
+                candidate_ids=[candidate.candidate_id for candidate in candidates],
+                quote_ids=[quote_id for candidate in candidates for quote_id in candidate.quote_ids],
+            )
+        ], []
+
+    async def _fake_synthesize(self, *, consolidated_codes, **_kwargs):
+        code = consolidated_codes[0]
+        return CodebookSynthesisResult(
+            themes=[
+                SynthesizedThemePath(
+                    path=[SynthesizedThemeNode(label="Workflow Friction")]
+                )
+            ],
+            codes=[
+                SynthesizedCode(
+                    code_label=code.label,
+                    code_description=code.description,
+                    theme_path=["Workflow Friction"],
+                )
+            ],
+        )
+
+    async def _fake_apply_codebook_to_documents(self, *, documents, **_kwargs):
+        document = documents[0]
+        quote = "manual handoffs slow"
+        start = document.content.index(quote)
+        return _ApplicationPassResult(
+            evidence=[
+                _AppliedEvidence(
+                    document_id=document.id,
+                    code_label="Manual handoffs slow work",
+                    theme_label="Workflow Friction",
+                    quote=quote,
+                    start_char=start,
+                    end_char=start + len(quote),
+                    quote_match_status="exact",
+                    confidence=0.91,
+                    rationale="The generated codebook code is directly supported.",
+                )
+            ],
+            failed_document_ids=[],
+        )
+
+    async def _fake_evaluate_codebook_quality(self, **_kwargs):
+        return CodebookQualityEvaluationResult(
+            fitness_score=0.5,
+            coverage_score=0.5,
+            notes="Offline test evaluator.",
+        )
+
+    async def _fake_polish_final_codebook(self, *, synthesis, consolidated_codes, quote_evidence):
+        return synthesis, consolidated_codes, quote_evidence, []
+
+    async def _fake_review_codebook(self, **_kwargs):
+        # A real (non-empty, label-changing) revision, not a no-op: an empty
+        # action list or a no-op action would let the loop's early-exit
+        # ("no edits" / label-stability) paths break after iteration 1,
+        # which is exactly the ambiguity this test must not depend on.
+        return CodebookReviewResult(
+            actions=[
+                CodebookReviewAction(
+                    action="revise",
+                    target="Workflow Friction",
+                    replacement="Workflow Friction Revisited",
+                    artifact_type="theme",
+                    reason="Force a second refinement round for this test.",
+                )
+            ]
+        )
+
+    monkeypatch.setattr(
+        "app.services.traceable_analysis.TraceableAnalysisService._extract_quote_codes",
+        _fake_extract_quote_codes,
+    )
+    monkeypatch.setattr(
+        "app.services.traceable_analysis.consolidate_code_candidates",
+        _fake_consolidate,
+    )
+    monkeypatch.setattr(
+        "app.services.traceable_analysis.TraceableAnalysisService._synthesize_codebook",
+        _fake_synthesize,
+    )
+    monkeypatch.setattr(
+        "app.services.traceable_analysis.TraceableAnalysisService._apply_codebook_to_documents",
+        _fake_apply_codebook_to_documents,
+    )
+    monkeypatch.setattr(
+        "app.services.traceable_analysis.TraceableAnalysisService._evaluate_codebook_quality",
+        _fake_evaluate_codebook_quality,
+    )
+    monkeypatch.setattr(
+        "app.services.traceable_analysis.TraceableAnalysisService._polish_final_codebook",
+        _fake_polish_final_codebook,
+    )
+    monkeypatch.setattr(
+        "app.services.traceable_analysis.TraceableAnalysisService._review_codebook",
+        _fake_review_codebook,
+    )
+
+    progress_calls: list[tuple[str, int, int]] = []
+
+    async def _capture_phase_progress(phase: str, done: int, total: int) -> None:
+        progress_calls.append((phase, done, total))
+
+    service = TraceableAnalysisService(db_session)
+    await service.run_analysis(
+        codebook_name="Iteration Progress",
+        analysis_name="Iteration Progress",
+        custom_id=None,
+        corpus_id=UUID(corpus_id),
+        transcript_document_ids=[UUID(document_id) for document_id in document_ids],
+        research_query="How do participants describe workflow friction?",
+        researcher_topics=None,
+        # configured_max = min(TRACEABLE_MAX_ITERATIONS, 1 + 1) = 2, which is
+        # the binding constraint here regardless of the small-corpus clamp.
+        max_refinement_rounds=1,
+        apply_after_generation=False,
+        on_phase_progress=_capture_phase_progress,
+    )
+
+    iteration_calls = [call for call in progress_calls if call[0] == "evaluating_iterations"]
+    assert iteration_calls == [
+        ("evaluating_iterations", 1, 2),
+        ("evaluating_iterations", 2, 2),
+    ]

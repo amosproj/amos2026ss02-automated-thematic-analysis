@@ -176,6 +176,14 @@ class BackendClient:
             sub_key="items",
         )
 
+    def count_documents(self, corpus_id: str) -> int:
+        """Return the total number of transcripts in a corpus without fetching them all."""
+        page = self._get(
+            f"/ingestion/corpora/{corpus_id}/documents",
+            params={"page_size": 1},
+        )
+        return page.get("meta", {}).get("total", 0)
+
     def copy_documents(self, source_corpus_id: str, target_corpus_id: str, document_ids: list[str]) -> dict:
         """Copy documents from source to target corpus."""
         return self._post(
@@ -462,6 +470,7 @@ class BackendClient:
         research_query: str | None = None,
         researcher_topics: str | None = None,
         transcript_document_ids: list[str] | None = None,
+        transcript_sample_size: int | None = None,
         analysis_name: str | None = None,
         custom_id: str | None = None,
         max_refinement_rounds: int | None = None,
@@ -478,6 +487,8 @@ class BackendClient:
             payload["researcher_topics"] = researcher_topics
         if transcript_document_ids:
             payload["transcript_document_ids"] = transcript_document_ids
+        if transcript_sample_size is not None:
+            payload["transcript_sample_size"] = transcript_sample_size
         if max_refinement_rounds is not None:
             payload["max_refinement_rounds"] = max_refinement_rounds
         if apply_after_generation is not None:

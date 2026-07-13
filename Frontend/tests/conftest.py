@@ -149,6 +149,10 @@ class FakeBackend:
         self._maybe_raise("list_documents")
         return self.documents
 
+    def count_documents(self, corpus_id) -> int:
+        self._maybe_raise("count_documents")
+        return len(self.documents)
+
     def get_document_content(self, corpus_id, document_id) -> dict:
         self._maybe_raise("get_document_content")
         return self.document_content
@@ -293,6 +297,7 @@ class FakeBackend:
         codebook_name: str,
         corpus_id: str,
         transcript_document_ids: list[str] | None = None,
+        transcript_sample_size: int | None = None,
         research_query: str | None = None,
         researcher_topics: str | None = None,
         analysis_name: str | None = None,
@@ -305,6 +310,7 @@ class FakeBackend:
             "codebook_name": codebook_name,
             "corpus_id": corpus_id,
             "transcript_document_ids": transcript_document_ids,
+            "transcript_sample_size": transcript_sample_size,
             "research_query": research_query,
             "researcher_topics": researcher_topics,
             "analysis_name": analysis_name,

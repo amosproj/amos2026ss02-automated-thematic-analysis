@@ -366,3 +366,98 @@ async def test_list_generation_jobs_filters_by_corpus_and_status(client, db_sess
     assert response.status_code == 200
     active = {job["codebook_name"] for job in response.json()["data"]}
     assert active == {"Running One", "Queued One"}
+
+
+async def test_generate_codebook_job_samples_requested_number_of_transcripts(
+    client, monkeypatch
+) -> None:
+    corpus_id, document_ids = await _create_corpus_with_docs(
+        client,
+        texts=[
+            "Alpha transcript about collaboration and adaptation.",
+            "Beta transcript about onboarding friction.",
+            "Gamma transcript about release delays.",
+        ],
+    )
+
+    def _fake(_: str, **_kwargs) -> PassageCodebookGeneration:
+        return PassageCodebookGeneration(
+            themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Operations")])],
+            codes=[GeneratedCodeSuggestion(label="Delay", description=None, theme_path=["Operations"])],
+        )
+
+    _patch_batched_generation(monkeypatch, _fake)
+
+    create_response = await client.post(
+        f"{API_CODEBOOKS}/generate-jobs",
+        json={
+            "codebook_name": "Sampled Async",
+            "corpus_id": corpus_id,
+            "transcript_sample_size": 2,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
+        },
+    )
+    assert create_response.status_code == 202
+    created_job = create_response.json()["data"]
+    # The job persists the concrete ids the sample resolved to, not the
+    # requested count, so the run is reproducible/inspectable afterwards.
+    assert len(created_job["transcript_document_ids"]) == 2
+    assert set(created_job["transcript_document_ids"]).issubset(set(document_ids))
+
+
+async def test_generate_codebook_job_rejects_sample_size_larger_than_corpus(client) -> None:
+    corpus_id, _ = await _create_corpus_with_docs(
+        client,
+        texts=["Only one transcript here."],
+    )
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate-jobs",
+        json={
+            "codebook_name": "Oversized Async Sample",
+            "corpus_id": corpus_id,
+            "transcript_sample_size": 5,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+    assert "exceeds the number of transcripts available" in response.json()["error"]
+
+
+def test_compute_job_progress_percent_evaluating_iterations_scales_with_progress() -> None:
+    from app.models import CodebookGenerationJob
+    from app.routers.codebooks import _compute_job_progress_percent
+
+    job = CodebookGenerationJob(
+        status="running",
+        codebook_name="Progress Test",
+        corpus_id=uuid4(),
+        transcript_document_ids_json="[]",
+        analysis_units_total=5,
+        analysis_units_done=0,
+    )
+    assert _compute_job_progress_percent(job, phase="evaluating_iterations") == 65
+
+    job.analysis_units_done = 2
+    assert _compute_job_progress_percent(job, phase="evaluating_iterations") == 73
+
+    job.analysis_units_done = 5
+    assert _compute_job_progress_percent(job, phase="evaluating_iterations") == 85
+
+
+def test_compute_job_progress_percent_evaluating_iterations_falls_back_without_total() -> None:
+    from app.models import CodebookGenerationJob
+    from app.routers.codebooks import _compute_job_progress_percent
+
+    job = CodebookGenerationJob(
+        status="running",
+        codebook_name="Progress Test",
+        corpus_id=uuid4(),
+        transcript_document_ids_json="[]",
+        analysis_units_total=0,
+        analysis_units_done=0,
+    )
+    # Before the first per-iteration progress update arrives (analysis_units_total
+    # still 0, reset at phase entry), the fixed mid-phase estimate is used.
+    assert _compute_job_progress_percent(job, phase="evaluating_iterations") == 75

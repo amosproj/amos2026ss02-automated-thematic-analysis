@@ -924,3 +924,89 @@ async def test_generate_codebook_persists_researcher_topics_on_codebook(
         codebook = (await session.execute(select(Codebook).where(Codebook.id == codebook_id))).scalar_one()
         assert codebook.researcher_topics == topics
         assert codebook.research_query is None
+
+
+async def test_generate_codebook_samples_requested_number_of_transcripts(
+    client,
+    monkeypatch,
+) -> None:
+    corpus_id, document_ids = await _create_corpus_and_docs(client)
+
+    def _fake(passage: str, **_kwargs) -> PassageCodebookGeneration:
+        return PassageCodebookGeneration(
+            themes=[GeneratedThemePath(path=[GeneratedThemeNode(label="Workflow Friction")])],
+            codes=[GeneratedCodeSuggestion(label="Delay", description=None, theme_path=["Workflow Friction"])],
+        )
+
+    _patch_batched_generation(monkeypatch, _fake)
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate",
+        json={
+            "codebook_name": "Sampled Docs",
+            "corpus_id": corpus_id,
+            "transcript_sample_size": 1,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["data"]["transcripts_processed"] == 1
+
+
+async def test_generate_codebook_rejects_sample_size_larger_than_corpus(
+    client,
+    monkeypatch,
+) -> None:
+    corpus_id, _ = await _create_corpus_and_docs(client)
+
+    def _never_called(_: str, **_kwargs) -> PassageCodebookGeneration:
+        raise AssertionError("LLM generation should not be called when sample size is invalid")
+
+    _patch_batched_generation(monkeypatch, _never_called)
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate",
+        json={
+            "codebook_name": "Oversized Sample",
+            "corpus_id": corpus_id,
+            # _create_corpus_and_docs only seeds 2 documents.
+            "transcript_sample_size": 5,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+    assert "exceeds the number of transcripts available" in response.json()["error"]
+
+
+async def test_generate_codebook_rejects_sample_size_with_explicit_document_ids(
+    client,
+) -> None:
+    corpus_id, document_ids = await _create_corpus_and_docs(client)
+
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate",
+        json={
+            "codebook_name": "Conflicting Selection",
+            "corpus_id": corpus_id,
+            "transcript_sample_size": 1,
+            "transcript_document_ids": document_ids,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
+async def test_generate_codebook_sample_size_returns_404_for_unknown_corpus(client) -> None:
+    response = await client.post(
+        f"{API_CODEBOOKS}/generate",
+        json={
+            "codebook_name": "Unknown Corpus Sample",
+            "corpus_id": str(uuid4()),
+            "transcript_sample_size": 1,
+            "research_query": "How do participants describe workflow friction and manual bottlenecks?",
+        },
+    )
+    assert response.status_code == 404
+    assert response.json()["success"] is False
