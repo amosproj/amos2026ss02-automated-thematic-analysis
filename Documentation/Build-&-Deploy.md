@@ -315,8 +315,8 @@ Local project source files, templates, custom JavaScript/CSS, and GitHub Actions
 workflows are intentionally not listed as third-party legal notice entries. They
 are project code or CI infrastructure, not external components distributed to
 users as application dependencies. Operating-system packages from the Docker base
-images are also out of scope for this homework-level release SBOM; include them
-only if a container-image SBOM is explicitly required.
+images are also out of scope for this application-level release SBOM; include
+them only if a container-image SBOM is explicitly required.
 
 ## Stack lifecycle
 
