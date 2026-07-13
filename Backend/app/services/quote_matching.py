@@ -20,8 +20,8 @@ class QuoteSpanCandidate:
     """One located (or unlocatable) quote competing for persistence within a dedup group.
 
     ``group_key`` is the dedup scope: callers pass the code id so overlapping or
-    duplicate spans of one code collapse into a single highlight, while distinct
-    codes on the same passage stay in separate groups and are all kept.
+    duplicate spans of one code collapse together, while distinct codes on the
+    same passage stay in separate groups and are all kept.
     """
 
     group_key: Hashable
@@ -31,38 +31,101 @@ class QuoteSpanCandidate:
     confidence: float
 
 
-def select_deduplicated_quote_spans(candidates: Sequence[QuoteSpanCandidate]) -> list[int]:
+@dataclass(frozen=True)
+class MergedQuoteSpan:
 
-    def _span_length(candidate: QuoteSpanCandidate) -> int:
-        if candidate.start_char is None or candidate.end_char is None:
-            return -1
-        return candidate.end_char - candidate.start_char
+    primary_index: int
+    source_indices: tuple[int, ...]
+    quote: str
+    start_char: int | None
+    end_char: int | None
+    merged: bool
 
-    processing_order = sorted(
-        range(len(candidates)),
-        key=lambda index: (-_span_length(candidates[index]), -candidates[index].confidence, index),
+
+def merge_quote_spans(
+    candidates: Sequence[QuoteSpanCandidate], *, transcript: str
+) -> list[MergedQuoteSpan]:
+
+    grouped: dict[Hashable, list[int]] = defaultdict(list)
+    for index, candidate in enumerate(candidates):
+        grouped[candidate.group_key].append(index)
+
+    results: list[MergedQuoteSpan] = []
+    for indices in grouped.values():
+        located_spans: list[tuple[int, int, int]] = []
+        for index in indices:
+            start = candidates[index].start_char
+            end = candidates[index].end_char
+            if start is None or end is None:
+                continue
+            located_spans.append((start, end, index))
+        located_spans.sort()
+
+        run: list[int] = []
+        run_start = 0
+        run_end = 0
+        for start, end, index in located_spans:
+            if run and start < run_end:
+                run.append(index)
+                run_end = max(run_end, end)
+            else:
+                if run:
+                    results.append(_merge_run(candidates, run, run_start, run_end, transcript))
+                run = [index]
+                run_start, run_end = start, end
+        if run:
+            results.append(_merge_run(candidates, run, run_start, run_end, transcript))
+
+        seen_texts: set[str] = set()
+        for index in indices:
+            if candidates[index].start_char is not None and candidates[index].end_char is not None:
+                continue
+            normalized = " ".join(candidates[index].quote.split()).casefold()
+            if normalized in seen_texts:
+                continue
+            seen_texts.add(normalized)
+            results.append(
+                MergedQuoteSpan(
+                    primary_index=index,
+                    source_indices=(index,),
+                    quote=candidates[index].quote,
+                    start_char=None,
+                    end_char=None,
+                    merged=False,
+                )
+            )
+
+    results.sort(key=lambda result: result.primary_index)
+    return results
+
+
+def _merge_run(
+    candidates: Sequence[QuoteSpanCandidate],
+    indices: list[int],
+    start: int,
+    end: int,
+    transcript: str,
+) -> MergedQuoteSpan:
+    if len(indices) == 1:
+        only = candidates[indices[0]]
+        return MergedQuoteSpan(
+            primary_index=indices[0],
+            source_indices=(indices[0],),
+            quote=only.quote,
+            start_char=only.start_char,
+            end_char=only.end_char,
+            merged=False,
+        )
+    # Highest-confidence source represents the merged row; ties keep the earliest.
+    primary_index = max(indices, key=lambda index: (candidates[index].confidence, -index))
+    return MergedQuoteSpan(
+        primary_index=primary_index,
+        source_indices=tuple(sorted(indices)),
+        quote=transcript[start:end],
+        start_char=start,
+        end_char=end,
+        merged=True,
     )
-
-    kept: list[int] = []
-    kept_spans: dict[Hashable, list[tuple[int, int]]] = defaultdict(list)
-    kept_texts: dict[Hashable, set[str]] = defaultdict(set)
-    for index in processing_order:
-        candidate = candidates[index]
-        normalized_text = " ".join(candidate.quote.split()).casefold()
-        if candidate.start_char is None or candidate.end_char is None:
-            if normalized_text in kept_texts[candidate.group_key]:
-                continue
-        else:
-            span = (candidate.start_char, candidate.end_char)
-            if any(
-                kept_start < span[1] and kept_end > span[0]
-                for kept_start, kept_end in kept_spans[candidate.group_key]
-            ):
-                continue
-            kept_spans[candidate.group_key].append(span)
-        kept_texts[candidate.group_key].add(normalized_text)
-        kept.append(index)
-    return sorted(kept)
 
 
 def locate_quote_span(transcript: str, quote: str | None) -> QuoteMatch:

@@ -6,7 +6,7 @@ import math
 import uuid
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, Protocol, TypeVar, cast
 from uuid import UUID
@@ -75,7 +75,7 @@ from app.schemas.traceable_llm import (
 from app.services.quote_matching import (
     QuoteSpanCandidate,
     locate_quote_span,
-    select_deduplicated_quote_spans,
+    merge_quote_spans,
 )
 from app.services.theme_graph import ThemeGraphService
 from app.services.traceable_code_consolidation import (
@@ -146,16 +146,20 @@ class _HasUUIDId(Protocol):
 _CodeT = TypeVar("_CodeT", bound=_HasUUIDId)
 
 
-def _deduplicate_resolved_assignments(
+def _merge_resolved_assignments(
     resolved: list[tuple[_AppliedEvidence, _CodeT, UUID | None]],
+    *,
+    transcript: str,
 ) -> list[tuple[_AppliedEvidence, _CodeT, UUID | None]]:
-    """Keep one assignment per passage per code, in original order.
+    """Collapse overlapping quotes of one code into a single unioned assignment.
 
     The application pass can return the same passage several times for one code
-    — a verbatim duplicate or an overlapping span — so collapse those to a
-    single row (longest located span wins). Grouping is strictly per code:
-    two distinct codes that tag the same passage are both kept, even when they
-    share a parent theme, so no code loses coverage to another.
+    — a verbatim duplicate or an overlapping span. Overlapping spans of a code
+    are unioned into one assignment whose quote is re-sliced from ``transcript``
+    (so no covered section is lost and no duplicate span remains); non-overlapping
+    quotes of the code are all kept. Grouping is strictly per code: two distinct
+    codes that tag the same passage are both kept, even under a shared theme, so
+    no code loses coverage to another.
     """
     candidates = [
         QuoteSpanCandidate(
@@ -167,7 +171,19 @@ def _deduplicate_resolved_assignments(
         )
         for evidence, code, _theme_id in resolved
     ]
-    return [resolved[index] for index in select_deduplicated_quote_spans(candidates)]
+    merged_assignments: list[tuple[_AppliedEvidence, _CodeT, UUID | None]] = []
+    for merged in merge_quote_spans(candidates, transcript=transcript):
+        evidence, code, theme_id = resolved[merged.primary_index]
+        if merged.merged:
+            evidence = replace(
+                evidence,
+                quote=merged.quote,
+                start_char=merged.start_char,
+                end_char=merged.end_char,
+                quote_match_status="exact",
+            )
+        merged_assignments.append((evidence, code, theme_id))
+    return merged_assignments
 
 
 @dataclass(frozen=True)
@@ -3815,7 +3831,9 @@ class TraceableAnalysisService:
                 resolved_assignments.append((evidence, code, theme_id))
 
             seen_theme_ids: set[UUID] = set()
-            for evidence, code, theme_id in _deduplicate_resolved_assignments(resolved_assignments):
+            for evidence, code, theme_id in _merge_resolved_assignments(
+                resolved_assignments, transcript=document.content
+            ):
                 self._session.add(
                     CodeAssignment(
                         id=uuid.uuid4(),

@@ -76,14 +76,14 @@ async def _seed(session: AsyncSession) -> tuple[UUID, UUID, UUID, UUID]:
 
     c1, c2 = codings[0].id, codings[1].id
     session.add_all([
-        # code_a, same passage twice plus a longer overlapping span -> collapse
-        # to the single longest span.
-        _assignment(c1, code_a.id, "manual handoffs slow", 17, 37),
-        _assignment(c1, code_a.id, "manual handoffs slow", 17, 37),
-        _assignment(c1, code_a.id, "The manual handoffs slow everyone down", 13, 51),
-        # code_a, a distinct passage -> kept.
+        # code_a: two partially-overlapping spans plus an exact duplicate ->
+        # union into a single span covering the whole passage.
+        _assignment(c1, code_a.id, "The manual handoffs", 13, 32),
+        _assignment(c1, code_a.id, "handoffs slow everyone", 24, 46),
+        _assignment(c1, code_a.id, "The manual handoffs", 13, 32),
+        # code_a: a disjoint passage -> kept.
         _assignment(c1, code_a.id, "honestly", 53, 61),
-        # code_b, the SAME passage under a different code of the SAME theme ->
+        # code_b: the SAME passage under a different code of the SAME theme ->
         # kept: distinct codes never dedup against each other.
         _assignment(c1, code_b.id, "manual handoffs slow", 17, 37),
         # Empty/whitespace quote -> ignored by the backfill, left untouched.
@@ -107,19 +107,19 @@ async def _quotes_for(session: AsyncSession, coding_id: UUID, code_id: UUID) -> 
     return sorted(rows)
 
 
-async def test_backfill_collapses_same_code_overlaps_but_keeps_distinct_codes(db_session) -> None:
+async def test_backfill_unions_same_code_overlaps_but_keeps_distinct_codes(db_session) -> None:
     c1, c2, code_a_id, code_b_id = await _seed(db_session)
 
     removed = await backfill_deduplicate_code_assignments(db_session)
 
-    # Only the two duplicate code_a spans of the passage are deleted.
+    # The exact-duplicate and the two overlapping code_a spans collapse into one.
     assert removed == 2
 
-    # code_a keeps its longest span, the distinct quote, and the untouched
-    # whitespace row.
+    # code_a's overlapping spans union into the whole passage (re-sliced from the
+    # transcript), alongside its disjoint quote and the untouched whitespace row.
     assert await _quotes_for(db_session, c1, code_a_id) == [
         "   ",
-        "The manual handoffs slow everyone down",
+        "The manual handoffs slow everyone",
         "honestly",
     ]
 
