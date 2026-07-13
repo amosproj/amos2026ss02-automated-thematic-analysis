@@ -206,16 +206,11 @@
     border-radius: 10px;
     transition: width 0.4s ease;
     min-width: 3px;
+    /* One neutral indigo for every coverage level (issue #261) — low coverage
+       isn't "bad", so no traffic-light colors. Same gradient as .breakdown-bar
+       and the page headers, on the indigo-100 track above. */
+    background: linear-gradient(90deg, #4338ca, #6366f1);
 }
-
-/* 0–33 %: sparse — rose/red */
-.theme-progress-bar--low  { background: linear-gradient(90deg, #f43f5e, #fb7185); }
-
-/* 34–66 %: moderate — amber */
-.theme-progress-bar--mid  { background: linear-gradient(90deg, #d97706, #fbbf24); }
-
-/* 67–100 %: prevalent — emerald */
-.theme-progress-bar--high { background: linear-gradient(90deg, #059669, #34d399); }
 
 /* ── Demographic breakdown (UC 3.6) ─────────────────────────────────────────── */
 .breakdown-dimension { margin-bottom: 1.5rem; }
