@@ -161,7 +161,7 @@ async def list_demographic_dimensions(
 ) -> ResponseEnvelope[DemographicDimensionsResponse]:
     """Return the demographic variables that can be used to break down a theme."""
     service = ThemeDemographicBreakdownService(session)
-    dimensions = await service.list_available_dimensions(corpus_id=corpus_id)
+    dimensions = await service.get_dimension_infos(corpus_id=corpus_id)
     return ResponseEnvelope[DemographicDimensionsResponse].ok(
         data=DemographicDimensionsResponse(dimensions=dimensions)
     )

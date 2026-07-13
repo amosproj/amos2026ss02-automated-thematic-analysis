@@ -25,7 +25,8 @@ def index() -> str:
     codebook = None
     transcripts_count = 0
     active_corpus_id = None
-    
+    requested_codebook_id = request.args.get("codebook_id") or ""
+
     requested_corpus_id = request.args.get("corpus_id")
     try:
         active_corpus_id, corpus_options, active_corpus = resolve_active_corpus(
@@ -63,8 +64,11 @@ def index() -> str:
             if not codebooks:
                 disabled_reason = "Please configure a codebook for this corpus."
             else:
-                codebook = codebooks[0] # Default selection
-                
+                codebook = next(
+                    (cb for cb in codebooks if str(cb.get("id")) == requested_codebook_id),
+                    codebooks[0],
+                )
+
                 if transcripts_count == 0:
                     disabled_reason = "Corpus has no transcripts."
                 else:

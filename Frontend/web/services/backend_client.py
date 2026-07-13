@@ -245,11 +245,18 @@ class BackendClient:
         theme_id: str,
         dimensions: list[str],
         application_run_id: str | None = None,
+        bins: dict[str, int] | None = None,
     ) -> dict:
-        """Break a theme's frequency down by the given demographic dimensions."""
+        """Break a theme's frequency down by the given demographic dimensions.
+
+        ``bins`` maps a numeric dimension name to a bin count, grouping that
+        dimension into equal-width intervals instead of one group per value.
+        """
         params: dict = {"dimensions": ",".join(dimensions)}
         if application_run_id:
             params["application_run_id"] = application_run_id
+        if bins:
+            params["bins"] = ",".join(f"{name}:{count}" for name, count in bins.items())
         return self._get(
             f"/codebooks/{codebook_id}/themes/{theme_id}/demographic-breakdown",
             params=params,
@@ -257,8 +264,11 @@ class BackendClient:
 
     # ---- Demographic --------------------------------------------------------
 
-    def get_demographic_dimensions(self, corpus_id: str) -> list[str]:
-        """List demographic variables available for breaking down a theme."""
+    def get_demographic_dimensions(self, corpus_id: str) -> list[dict]:
+        """List demographic variables available for breaking down a theme.
+
+        Each item is ``{"name": str, "is_numeric": bool}``.
+        """
         return self._get(
             f"/demographic/{corpus_id}/dimensions",
             sub_key="dimensions",
@@ -465,7 +475,7 @@ class BackendClient:
         analysis_name: str | None = None,
         custom_id: str | None = None,
         max_refinement_rounds: int | None = None,
-        apply_after_generation: bool | None = None,
+        apply_after_generation: bool | None = False,
     ) -> dict:
         payload: dict = {"codebook_name": codebook_name, "corpus_id": corpus_id}
         if analysis_name:

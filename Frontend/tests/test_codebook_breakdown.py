@@ -34,7 +34,10 @@ def _seed_themes_page(fake_backend):
 
 def test_themes_page_shows_dimension_picker_when_data_present(client, fake_backend):
     _seed_themes_page(fake_backend)
-    fake_backend.demographic_dimensions = ["gender", "age_group"]
+    fake_backend.demographic_dimensions = [
+        {"name": "gender", "is_numeric": False},
+        {"name": "age_group", "is_numeric": True},
+    ]
 
     resp = client.get(THEMES_PATH)
     assert resp.status_code == 200
@@ -45,6 +48,9 @@ def test_themes_page_shows_dimension_picker_when_data_present(client, fake_backe
     assert b"No demographic data available" not in resp.data
     # The dimensions are also embedded for the JS to read.
     assert b"data-demographic-dimensions" in resp.data
+    # Only the numeric dimension gets a bin-count input.
+    assert b'data-breakdown-bin-count="age_group"' in resp.data
+    assert b'data-breakdown-bin-count="gender"' not in resp.data
 
 
 def test_themes_page_shows_disabled_state_when_no_data(client, fake_backend):
@@ -109,6 +115,20 @@ def test_breakdown_json_parses_multiple_dimensions(client, fake_backend):
     resp = client.get(BREAKDOWN_JSON_PATH + "?dimensions=gender,age_group,party")
     assert resp.status_code == 200
     assert fake_backend.last_breakdown_request["dimensions"] == ["gender", "age_group", "party"]
+
+
+def test_breakdown_json_parses_bins_param(client, fake_backend):
+    fake_backend.theme_demographic_breakdown = {"theme_id": "theme-1", "dimensions": []}
+    resp = client.get(BREAKDOWN_JSON_PATH + "?dimensions=age_group&bins=age_group:5")
+    assert resp.status_code == 200
+    assert fake_backend.last_breakdown_request["bins"] == {"age_group": 5}
+
+
+def test_breakdown_json_ignores_malformed_bins_entries(client, fake_backend):
+    fake_backend.theme_demographic_breakdown = {"theme_id": "theme-1", "dimensions": []}
+    resp = client.get(BREAKDOWN_JSON_PATH + "?dimensions=age_group&bins=age_group:five,,gender:")
+    assert resp.status_code == 200
+    assert fake_backend.last_breakdown_request["bins"] is None
 
 
 def test_breakdown_json_handles_empty_dimensions(client, fake_backend):

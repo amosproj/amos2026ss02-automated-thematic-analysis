@@ -129,7 +129,7 @@ async def test_dimensions_endpoint_lists_variables(client, db_engine):
     assert response.status_code == 200
     payload = response.json()
     assert payload["success"] is True
-    assert payload["data"]["dimensions"] == ["gender"]
+    assert payload["data"]["dimensions"] == [{"name": "gender", "is_numeric": False}]
 
 
 async def test_dimensions_endpoint_empty_when_no_data(client):
