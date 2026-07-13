@@ -212,8 +212,8 @@ async def test_traceable_persist_rejects_multi_parent_theme_dag(db_session) -> N
     assert persisted is None
 
 
-async def test_traceable_persist_application_deduplicates_same_theme_quotes(db_session) -> None:
-    """Duplicate/overlapping evidence for one theme persists as a single code assignment."""
+async def test_traceable_persist_application_deduplicates_per_code_only(db_session) -> None:
+    """Same-code overlaps collapse; a distinct code on the same passage is kept."""
     corpus = Corpus(id=uuid.uuid4(), project_id=uuid.uuid4(), name="Corpus")
     document = CorpusDocument(
         id=uuid.uuid4(),
@@ -258,10 +258,11 @@ async def test_traceable_persist_application_deduplicates_same_theme_quotes(db_s
         documents=[_DocumentText(id=document.id, title=document.title, content=document.content)],
         applied_evidence=[
             _evidence("Manual Handoffs", "manual handoffs slow", 0.95),
-            # Verbatim duplicate of the same passage under a sibling code.
-            _evidence("Handoff Delays", "manual handoffs slow", 0.6),
-            # Overlapping longer span of the same passage.
+            # Overlapping longer span of the same passage under the SAME code
+            # -> collapses with the row above (longest span wins).
             _evidence("Manual Handoffs", "The manual handoffs slow everyone down", 0.5),
+            # Same passage under a DIFFERENT code -> kept, keeping its coverage.
+            _evidence("Handoff Delays", "manual handoffs slow", 0.6),
         ],
         failed_document_ids=[],
         persisted=_PersistedCodebookRefs(
@@ -274,9 +275,11 @@ async def test_traceable_persist_application_deduplicates_same_theme_quotes(db_s
 
     assignments = (await db_session.execute(select(CodeAssignment))).scalars().all()
     assert run.status == "succeeded"
-    assert len(assignments) == 1
-    # The longest located span of the passage wins.
-    assert assignments[0].quote == "The manual handoffs slow everyone down"
+    quotes_by_code = {assignment.code_id: assignment.quote for assignment in assignments}
+    assert len(assignments) == 2
+    # Manual Handoffs collapsed to its longest span; Handoff Delays kept.
+    assert quotes_by_code[code_a.id] == "The manual handoffs slow everyone down"
+    assert quotes_by_code[code_b.id] == "manual handoffs slow"
     assert assignments[0].theme_id == theme.id
 
 

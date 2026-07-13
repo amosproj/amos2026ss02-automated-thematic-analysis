@@ -230,8 +230,8 @@ async def test_apply_codebook_job_persists_coding_and_quote_spans(client, db_eng
     assert code_assignment["end_char"] is not None
 
 
-async def test_apply_codebook_job_deduplicates_same_theme_quotes(client, db_engine, monkeypatch) -> None:
-    """Duplicate/overlapping quotes of one theme collapse to a single persisted assignment."""
+async def test_apply_codebook_job_deduplicates_per_code_only(client, db_engine, monkeypatch) -> None:
+    """Same-code overlaps collapse; a distinct code on the same passage is kept."""
     corpus_id, codebook_id, document_ids = await _seed_corpus_codebook(
         db_engine,
         texts=["Participant: The manual handoffs slow everyone down."],
@@ -258,21 +258,23 @@ async def test_apply_codebook_job_deduplicates_same_theme_quotes(client, db_engi
                     confidence=0.95,
                     rationale="Direct mention of slow manual handoffs.",
                 ),
-                # Verbatim duplicate of the same passage under a sibling code.
-                AppliedCodeAssignment(
-                    code_label="Handoff Delays",
-                    theme_label="Workflow Friction",
-                    quote="manual handoffs slow",
-                    confidence=0.6,
-                    rationale="Same passage, second code.",
-                ),
-                # Overlapping longer span of the same passage.
+                # Overlapping longer span of the same passage under the SAME code
+                # -> collapses with the row above (longest span wins).
                 AppliedCodeAssignment(
                     code_label="Manual Handoffs",
                     theme_label="Workflow Friction",
                     quote="The manual handoffs slow everyone down",
                     confidence=0.5,
                     rationale="Same passage with more context.",
+                ),
+                # Same passage under a DIFFERENT code of the same theme -> kept,
+                # so this code keeps its coverage.
+                AppliedCodeAssignment(
+                    code_label="Handoff Delays",
+                    theme_label="Workflow Friction",
+                    quote="manual handoffs slow",
+                    confidence=0.6,
+                    rationale="Same passage, distinct code.",
                 ),
             ],
         )
@@ -296,11 +298,15 @@ async def test_apply_codebook_job_deduplicates_same_theme_quotes(client, db_engi
     assert documents_response.status_code == 200
     document_coding = documents_response.json()["data"][0]
     assert document_coding["status"] == "coded"
-    assert len(document_coding["code_assignments"]) == 1
-    # The longest located span of the passage wins.
-    assert document_coding["code_assignments"][0]["quote"] == (
-        "The manual handoffs slow everyone down"
-    )
+
+    assignments = document_coding["code_assignments"]
+    # One row per code: the two Manual Handoffs spans collapsed to the longest,
+    # Handoff Delays survives with its own span.
+    quotes_by_code = {ca["code_id"]: ca["quote"] for ca in assignments}
+    assert len(assignments) == 2
+    assert len(quotes_by_code) == 2
+    assert "The manual handoffs slow everyone down" in quotes_by_code.values()
+    assert "manual handoffs slow" in quotes_by_code.values()
 
 
 async def test_apply_codebook_job_retries_llm_and_fails_only_one_transcript(client, db_engine, monkeypatch) -> None:

@@ -48,7 +48,9 @@ async def backfill_deduplicate_code_assignments(session: AsyncSession) -> int:
     for coding_rows in rows_by_coding.values():
         candidates = [
             QuoteSpanCandidate(
-                group_key=row.theme_id if row.theme_id is not None else ("code", row.code_id),
+                # Group strictly per code: distinct codes on the same passage
+                # are both kept, so no code loses coverage to a sibling.
+                group_key=row.code_id,
                 quote=row.quote,
                 start_char=row.start_char,
                 end_char=row.end_char,

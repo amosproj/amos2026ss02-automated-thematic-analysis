@@ -149,16 +149,23 @@ _CodeT = TypeVar("_CodeT", bound=_HasUUIDId)
 def _deduplicate_resolved_assignments(
     resolved: list[tuple[_AppliedEvidence, _CodeT, UUID | None]],
 ) -> list[tuple[_AppliedEvidence, _CodeT, UUID | None]]:
+    """Keep one assignment per passage per code, in original order.
 
+    The application pass can return the same passage several times for one code
+    — a verbatim duplicate or an overlapping span — so collapse those to a
+    single row (longest located span wins). Grouping is strictly per code:
+    two distinct codes that tag the same passage are both kept, even when they
+    share a parent theme, so no code loses coverage to another.
+    """
     candidates = [
         QuoteSpanCandidate(
-            group_key=theme_id if theme_id is not None else ("code", code.id),
+            group_key=code.id,
             quote=evidence.quote,
             start_char=evidence.start_char,
             end_char=evidence.end_char,
             confidence=evidence.confidence,
         )
-        for evidence, code, theme_id in resolved
+        for evidence, code, _theme_id in resolved
     ]
     return [resolved[index] for index in select_deduplicated_quote_spans(candidates)]
 

@@ -19,9 +19,9 @@ class QuoteMatch:
 class QuoteSpanCandidate:
     """One located (or unlocatable) quote competing for persistence within a dedup group.
 
-    ``group_key`` is the dedup scope: callers pass the theme id so overlapping or
-    duplicate spans of one theme collapse into a single highlight, falling back
-    to the code (e.g. ``("code", code_id)``) when the assignment has no theme.
+    ``group_key`` is the dedup scope: callers pass the code id so overlapping or
+    duplicate spans of one code collapse into a single highlight, while distinct
+    codes on the same passage stay in separate groups and are all kept.
     """
 
     group_key: Hashable
