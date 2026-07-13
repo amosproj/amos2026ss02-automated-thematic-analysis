@@ -342,6 +342,8 @@ class CodebookService:
             researcher_topics=codebook.researcher_topics,
             llm_tokens_input=codebook.llm_tokens_input,
             llm_tokens_output=codebook.llm_tokens_output,
+            started_at=getattr(codebook, "started_at", None),
+            finished_at=getattr(codebook, "finished_at", None),
             themes=root_themes,
             codes=code_schemas,
         )

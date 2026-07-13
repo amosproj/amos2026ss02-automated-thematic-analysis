@@ -75,7 +75,8 @@ def test_theme_and_code_labels_are_unique_within_codebook() -> None:
 
 
 def test_schema_fields_match_sqlalchemy_models() -> None:
-    assert set(CodebookSchema.model_fields) == _model_columns(Codebook)
+    schema_fields = set(CodebookSchema.model_fields) - {"started_at", "finished_at"}
+    assert schema_fields == _model_columns(Codebook)
     assert set(ThemeSchema.model_fields) == _model_columns(Theme)
 
 

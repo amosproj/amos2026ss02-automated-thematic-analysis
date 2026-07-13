@@ -156,6 +156,7 @@
               <th>Status</th>
               <th>Date</th>
               <th>Tokens (In/Out)</th>
+              <th>Generation Time</th>
               <th>Transcripts</th>
               <th>Actions</th>
             </tr>
@@ -193,6 +194,14 @@
                         onclick="navigator.clipboard.writeText('{{ run.llm_tokens_input or 0 }} / {{ run.llm_tokens_output or 0 }}');">
                     {{ run.llm_tokens_input | compact_number }} / {{ run.llm_tokens_output | compact_number }}
                   </span>
+                {% else %}
+                  &mdash;
+                {% endif %}
+              </td>
+              <td class="text-secondary">
+                {% set gen_time = run | generation_time %}
+                {% if gen_time %}
+                  {{ gen_time }}
                 {% else %}
                   &mdash;
                 {% endif %}

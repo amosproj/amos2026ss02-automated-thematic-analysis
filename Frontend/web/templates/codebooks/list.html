@@ -82,6 +82,7 @@
               <th>Version</th>
               <th>Created by</th>
               <th>Tokens (In/Out)</th>
+              <th>Generation Time</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -106,6 +107,14 @@
                           onclick="navigator.clipboard.writeText('{{ cb.llm_tokens_input or 0 }} / {{ cb.llm_tokens_output or 0 }}');">
                       {{ cb.llm_tokens_input | compact_number }} / {{ cb.llm_tokens_output | compact_number }}
                     </span>
+                  {% else %}
+                    &mdash;
+                  {% endif %}
+                </td>
+                <td class="text-secondary">
+                  {% set gen_time = cb | generation_time %}
+                  {% if gen_time %}
+                    {{ gen_time }}
                   {% else %}
                     &mdash;
                   {% endif %}
