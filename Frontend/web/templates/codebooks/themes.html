@@ -13,7 +13,7 @@
      data-demographic-dimensions='{{ (demographic_dimensions or []) | tojson }}'
      data-quotes-url-template="{{ url_for('codebooks.theme_quotes_json', corpus_id=corpus_id, codebook_id=codebook_id, theme_id='__THEME__') }}"
      data-breakdown-url-template="{{ url_for('codebooks.theme_demographic_breakdown_json', corpus_id=corpus_id, codebook_id=codebook_id, theme_id='__THEME__') }}"
-     data-read-url-template="{{ url_for('ingestion.read_transcript', corpus_id=corpus_id, document_id='__DOC__') }}">
+     data-read-url-template="{{ url_for('ingestion.read_transcript', corpus_id=corpus_id, document_id='__DOC__', run_id='__RUN__') }}">
 
   {% if corpus_id and corpus_options %}
     {% set active_corpus_id = corpus_id %}

@@ -820,6 +820,8 @@ def new_codebook_job_status(job_id: str):
         return jsonify(_demo_job_state(job_id))
     try:
         job = _backend().get_generation_job(job_id)
+    except BackendNotFoundError as exc:
+        return jsonify({"error": exc.user_message, "not_found": True}), 200
     except BackendError as exc:
         return jsonify({"error": exc.user_message}), 200
     return jsonify(job)

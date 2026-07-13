@@ -356,6 +356,46 @@ def delete_selected_transcripts(corpus_id: str):
     return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
 
 
+@bp.post("/<corpus_id>/create_corpus_from_transcripts")
+def create_corpus_from_transcripts(corpus_id: str):
+    """Create a new corpus from selected transcripts."""
+    set_active_corpus_id(corpus_id)
+    name = (request.form.get("name") or "").strip()
+    document_ids = [item_id for item_id in request.form.getlist("item_ids") if item_id]
+
+    if not name:
+        flash("Please enter a corpus name.", "danger")
+        return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+
+    if not document_ids:
+        flash("Select at least one transcript to add to the new corpus.", "warning")
+        return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+
+    try:
+        client = _backend()
+        result = client.create_corpus_from_documents(
+            source_corpus_id=corpus_id,
+            name=name,
+            document_ids=document_ids,
+        )
+        corpus_data = result.get("corpus", {})
+        new_corpus_id = corpus_data.get("id", "")
+        copied = result.get("documents_created", 0)
+        missing = result.get("missing_document_ids", [])
+        flash(f"Created corpus '{corpus_data.get('name', name)}' with {copied} transcript{'s' if copied != 1 else ''}.", "success")
+        if missing:
+            flash(
+                f"{len(missing)} of {len(document_ids)} selected transcript{'s were' if len(missing) != 1 else ' was'}"
+                f" not found and could not be copied.",
+                "warning",
+            )
+        set_active_corpus_id(new_corpus_id)
+        return redirect(url_for("ingestion.list_transcripts", corpus_id=new_corpus_id))
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+        return redirect(url_for("ingestion.list_transcripts", corpus_id=corpus_id))
+
+
 def _flatten_theme_tree(tree: list[dict]) -> dict:
     """Recursively flatten a theme tree into {theme_id_str: {label, description}}."""
     result: dict[str, dict] = {}

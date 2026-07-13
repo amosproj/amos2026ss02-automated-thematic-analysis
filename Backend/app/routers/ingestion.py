@@ -8,10 +8,13 @@ from app.exceptions import UnprocessableError
 from app.schemas.common import Page, PageMeta, ResponseEnvelope
 from app.schemas.ingestion import (
     BulkDocumentIngestRequest,
+    CopyDocumentsRequest,
     CorpusCreate,
     CorpusDocumentContentSchema,
     CorpusDocumentSchema,
     CorpusSchema,
+    CreateCorpusFromDocumentsRequest,
+    CreateCorpusFromDocumentsResultSchema,
     IngestResultSchema,
     MultiUploadResultSchema,
     UploadFileResult,
@@ -38,6 +41,7 @@ def _to_result_schema(result: IngestResult) -> IngestResultSchema:
     """Convert the internal IngestResult dataclass to the API response schema."""
     return IngestResultSchema(
         documents_created=len(result.documents),
+        missing_document_ids=result.missing_document_ids,
     )
 
 
@@ -121,6 +125,58 @@ async def bulk_ingest_documents(
         documents=payload.documents,
     )
     return ResponseEnvelope.ok(_to_result_schema(result))
+
+
+@router.post(
+    "/corpora/{corpus_id}/documents/copy",
+    response_model=ResponseEnvelope[IngestResultSchema],
+    status_code=201,
+)
+async def copy_documents(
+    corpus_id: uuid.UUID,
+    payload: CopyDocumentsRequest,
+    session: DbSession,
+    settings: AppSettings,
+) -> ResponseEnvelope[IngestResultSchema]:
+    """Copy documents from one corpus to another."""
+    service = IngestionService(session)
+    result = await service.copy_documents(
+        source_corpus_id=corpus_id,
+        target_corpus_id=payload.target_corpus_id,
+        document_ids=payload.document_ids,
+    )
+    return ResponseEnvelope.ok(_to_result_schema(result))
+
+
+@router.post(
+    "/corpora/{corpus_id}/create-corpus-from-documents",
+    response_model=ResponseEnvelope[CreateCorpusFromDocumentsResultSchema],
+    status_code=201,
+)
+async def create_corpus_from_documents(
+    corpus_id: uuid.UUID,
+    payload: CreateCorpusFromDocumentsRequest,
+    session: DbSession,
+    settings: AppSettings,
+) -> ResponseEnvelope[CreateCorpusFromDocumentsResultSchema]:
+    """Atomically create a new corpus and copy documents from the source corpus.
+
+    Both operations are committed in a single transaction: if the copy
+    fails, the corpus creation is rolled back as well.
+    """
+    service = IngestionService(session)
+    corpus, result = await service.create_corpus_with_documents(
+        source_corpus_id=corpus_id,
+        name=payload.name,
+        document_ids=payload.document_ids,
+    )
+    return ResponseEnvelope.ok(
+        CreateCorpusFromDocumentsResultSchema(
+            corpus=CorpusSchema.model_validate(corpus),
+            documents_created=len(result.documents),
+            missing_document_ids=result.missing_document_ids,
+        )
+    )
 
 
 async def _process_one_upload(

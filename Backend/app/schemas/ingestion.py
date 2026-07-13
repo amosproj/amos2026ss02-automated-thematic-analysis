@@ -35,6 +35,20 @@ class BulkDocumentIngestRequest(BaseSchema):
     documents: list[DocumentInput]
 
 
+class CopyDocumentsRequest(BaseSchema):
+    """Request body for copying documents to another corpus."""
+
+    target_corpus_id: uuid.UUID
+    document_ids: list[uuid.UUID]
+
+
+class CreateCorpusFromDocumentsRequest(BaseSchema):
+    """Request body for atomically creating a new corpus and copying documents into it."""
+
+    name: str
+    document_ids: list[uuid.UUID]
+
+
 class CorpusDocumentSchema(BaseSchema):
     """API response shape for a stored document (no content — fetch via document endpoint)."""
 
@@ -57,6 +71,15 @@ class IngestResultSchema(BaseSchema):
     """Summary returned after an ingestion call completes."""
 
     documents_created: int
+    missing_document_ids: list[uuid.UUID] = []
+
+
+class CreateCorpusFromDocumentsResultSchema(BaseSchema):
+    """Response for the atomic create-corpus-and-copy-documents endpoint."""
+
+    corpus: CorpusSchema
+    documents_created: int
+    missing_document_ids: list[uuid.UUID] = []
 
 
 class UploadFileResult(BaseSchema):

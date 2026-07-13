@@ -163,6 +163,17 @@ class FakeBackend:
             self.force_deleted_documents.append((corpus_id, document_id))
         self.documents = [d for d in self.documents if d["id"] != document_id]
 
+    def create_corpus_from_documents(
+        self, source_corpus_id: str, name: str, document_ids: list[str]
+    ) -> dict:
+        self._maybe_raise("create_corpus_from_documents")
+        import uuid as _uuid
+        new_id = str(_uuid.uuid4())
+        corpus = {"id": new_id, "name": name}
+        self.corpora.append(corpus)
+        self.last_created_corpus = corpus
+        return {"corpus": corpus, "documents_created": len(document_ids)}
+
     # ---- Codebooks / themes -------------------------------------------------
 
     def delete_codebook(self, codebook_id: str, *, force: bool = False) -> None:

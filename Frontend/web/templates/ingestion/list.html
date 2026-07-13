@@ -37,6 +37,9 @@
       {% set selectable_list_delete_title = 'Delete Transcripts' %}
       {% set selectable_list_delete_message = 'Are you sure you want to permanently delete the selected transcripts?<br><span class="text-muted small">This action cannot be undone. Associated themes and linkings will also be affected.</span>' %}
       {% set selectable_list_delete_confirm_label = 'Yes, Delete Transcripts' %}
+      {% set selectable_list_create_corpus_action = url_for('ingestion.create_corpus_from_transcripts', corpus_id=corpus_id) %}
+      {% set selectable_list_create_corpus_modal_id = 'createCorpusFromSelectedModal' %}
+      {% set selectable_list_create_corpus_label = 'Create New Corpus' %}
       {% include "_selectable_list_toolbar.html" %}
       <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
         <table class="table table-sm table-hover align-middle mb-0">

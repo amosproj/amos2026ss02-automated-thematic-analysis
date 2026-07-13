@@ -231,7 +231,13 @@
     const jobs = loadJobs();
     for (const job of jobs) {
       const status = await fetchStatus(job.id);
-      if (!status || status.error) continue;
+      if (!status) continue;
+      if (status.error) {
+        if (status.not_found) {
+          untrackJob(job.id);
+        }
+        continue;
+      }
       paintProgress(job.id, status);
       if (["succeeded", "failed", "cancelled"].includes(status.status)) {
         onTerminal(job, status);
