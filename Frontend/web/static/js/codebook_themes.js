@@ -508,7 +508,7 @@
     }
 
     function interviewUrl(documentId) {
-        return readUrlTemplate.replace("__DOC__", documentId);
+        return readUrlTemplate.replace("__DOC__", documentId).replace("__RUN__", applicationRunId);
     }
 
     function setQuotesLoading() {
