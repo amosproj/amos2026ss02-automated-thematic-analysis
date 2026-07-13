@@ -3,17 +3,16 @@ from __future__ import annotations
 import asyncio
 import json
 import math
-import re
 import uuid
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 from uuid import UUID
 
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.runnables import RunnableConfig, RunnableLambda
+from langchain_core.runnables import RunnableConfig
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,11 +85,9 @@ class TraceableAnalysisCancelledError(Exception):
     pass
 
 
-_RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS = 3
-_APPLICATION_MAX_ATTEMPTS = 3
-_EVALUATION_MAX_ATTEMPTS = 2
-_REVIEW_MAX_ATTEMPTS = 2
-_POLISH_MAX_ATTEMPTS = 2
+_LLM_CALL_MAX_ATTEMPTS = 3
+
+T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -218,6 +215,38 @@ class TraceableAnalysisService:
         """Return the LangChain config needed for shared token accounting."""
 
         return {"callbacks": [self._token_tracker]}
+
+    @staticmethod
+    async def _invoke_with_retries(*, label: str, attempt: Callable[[], Awaitable[T]]) -> T:
+        """Run one LLM call + parse/validate step, retrying transient and malformed-output failures.
+
+        ``attempt`` must perform the full unit of work for one try - the chain
+        invocation and the Pydantic schema construction - so a parse/validation
+        failure is retried exactly like a network failure instead of raising
+        unguarded. Callers decide what happens once retries are exhausted (raise,
+        or degrade to a safe fallback); this helper only owns the retry loop.
+        """
+
+        for attempt_num in range(1, _LLM_CALL_MAX_ATTEMPTS + 1):
+            try:
+                return await attempt()
+            except Exception as exc:
+                if attempt_num >= _LLM_CALL_MAX_ATTEMPTS:
+                    logger.warning(
+                        "Traceable {} failed after {} attempts: error={}",
+                        label,
+                        attempt_num,
+                        exc,
+                    )
+                    raise
+                logger.warning(
+                    "Traceable {} retry: attempt={}, error={}",
+                    label,
+                    attempt_num,
+                    exc,
+                )
+                await asyncio.sleep(0.5 * attempt_num)
+        raise AssertionError("unreachable")
 
     async def run_analysis(
         self,
@@ -601,8 +630,7 @@ class TraceableAnalysisService:
         should_cancel: Callable[[], Awaitable[bool]] | None,
     ) -> list[_QuoteEvidence]:
         parser = JsonOutputParser(pydantic_object=QuoteCodeExtractionResult)
-        sanitize: RunnableLambda[Any, Any] = RunnableLambda(lambda s: re.sub(r"\*+", "", s) if isinstance(s, str) else s)
-        chain = build_quote_code_extraction_prompt() | build_chat_model(provider=self._provider) | sanitize | parser
+        chain = build_quote_code_extraction_prompt() | build_chat_model(provider=self._provider) | parser
         if on_unit_progress is not None:
             await on_unit_progress(0, len(documents))
 
@@ -611,43 +639,58 @@ class TraceableAnalysisService:
         completed_count = 0
         progress_lock = asyncio.Lock()
 
-        async def _extract_one(document: _DocumentText) -> list[_QuoteEvidence]:
+        async def _extract_one(document: _DocumentText, index: int) -> list[_QuoteEvidence]:
             nonlocal completed_count
             await self._raise_if_cancelled(should_cancel)
-            async with semaphore:
-                raw_result = await chain.ainvoke(
-                    {
-                        "transcript": document.content,
-                        "research_query_block": build_research_query_block(research_query),
-                        "researcher_topics_block": build_researcher_topics_block(researcher_topics),
-                    },
-                    config=self._llm_config(),
-                )
-            doc_evidence: list[_QuoteEvidence] = []
-            if raw_result:
-                result = QuoteCodeExtractionResult(**raw_result)
-                for pair_index, pair in enumerate(result.quote_code_pairs, start=1):
-                    label = self._normalize_label(pair.code_label)
-                    quote = pair.quote.strip()
-                    if not label or not quote:
-                        continue
-                    match = locate_quote_span(document.content, quote)
-                    candidate_id = f"{document.id}:candidate:{pair_index}:{self._label_key(label)}"
-                    doc_evidence.append(
-                        _QuoteEvidence(
-                            quote_id=f"{document.id}:quote:{pair_index}:{uuid.uuid4()}",
-                            document_id=document.id,
-                            quote=match.quote,
-                            start_char=match.start_char,
-                            end_char=match.end_char,
-                            quote_match_status=match.quote_match_status,
-                            candidate_id=candidate_id,
-                            code_label=label,
-                            code_description=self._clean_optional_text(pair.code_description),
-                            confidence=self._clamp_confidence(pair.confidence),
-                            rationale=self._clean_optional_text(pair.rationale),
-                        )
+
+            async def _attempt(document: _DocumentText = document) -> QuoteCodeExtractionResult:
+                async with semaphore:
+                    raw_result = await chain.ainvoke(
+                        {
+                            "transcript": document.content,
+                            "research_query_block": build_research_query_block(research_query),
+                            "researcher_topics_block": build_researcher_topics_block(researcher_topics),
+                        },
+                        config=self._llm_config(),
                     )
+                return QuoteCodeExtractionResult(**raw_result)
+
+            try:
+                result = await self._invoke_with_retries(label="quote/code extraction", attempt=_attempt)
+            except Exception as exc:
+                # Load-bearing: this document's evidence shapes the codebook
+                # itself, so a silently skipped document would shrink the
+                # analyzed corpus without the user ever knowing. Fail the
+                # whole job with a precise, actionable error instead.
+                raise UnprocessableError(
+                    "Quote/code extraction failed for transcript "
+                    f"'{document.title}' ({document.id}), document {index} of {len(documents)}, "
+                    f"after retries: {type(exc).__name__}: {exc}"
+                ) from exc
+
+            doc_evidence: list[_QuoteEvidence] = []
+            for pair_index, pair in enumerate(result.quote_code_pairs, start=1):
+                label = self._normalize_label(pair.code_label)
+                quote = pair.quote.strip()
+                if not label or not quote:
+                    continue
+                match = locate_quote_span(document.content, quote)
+                candidate_id = f"{document.id}:candidate:{pair_index}:{self._label_key(label)}"
+                doc_evidence.append(
+                    _QuoteEvidence(
+                        quote_id=f"{document.id}:quote:{pair_index}:{uuid.uuid4()}",
+                        document_id=document.id,
+                        quote=match.quote,
+                        start_char=match.start_char,
+                        end_char=match.end_char,
+                        quote_match_status=match.quote_match_status,
+                        candidate_id=candidate_id,
+                        code_label=label,
+                        code_description=self._clean_optional_text(pair.code_description),
+                        confidence=self._clamp_confidence(pair.confidence),
+                        rationale=self._clean_optional_text(pair.rationale),
+                    )
+                )
             async with progress_lock:
                 completed_count += 1
                 if on_unit_progress is not None:
@@ -659,7 +702,10 @@ class TraceableAnalysisService:
             )
             return doc_evidence
 
-        tasks = [asyncio.create_task(_extract_one(document)) for document in documents]
+        tasks = [
+            asyncio.create_task(_extract_one(document, index))
+            for index, document in enumerate(documents, start=1)
+        ]
         results = await asyncio.gather(*tasks)
         # Flatten while preserving document order
         evidence: list[_QuoteEvidence] = []
@@ -695,43 +741,35 @@ class TraceableAnalysisService:
             self._code_relationship_chain = (
                 build_code_relationship_prompt() | build_chat_model(provider=self._provider, temperature=0.0) | parser
             )
+        chain = self._code_relationship_chain
         payload = {
             "label_a": left.label,
             "description_a": left.description or "",
             "label_b": right.label,
             "description_b": right.description or "",
         }
-        for attempt in range(1, _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS + 1):
-            try:
-                raw_result = await self._code_relationship_chain.ainvoke(payload, config=self._llm_config())
-                return CodeRelationshipResult(**raw_result)
-            except Exception as exc:
-                if attempt >= _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS:
-                    logger.warning(
-                        "Traceable pair classification failed after retries; using conservative fallback: "
-                        "code_a='{}', code_b='{}', error={}",
-                        left.label,
-                        right.label,
-                        exc,
-                    )
-                    return CodeRelationshipResult(
-                        relationship="orthogonal",
-                        confidence=0.0,
-                        reason=f"Classification failed after retries: {type(exc).__name__}",
-                    )
-                logger.warning(
-                    "Traceable pair classification retry: attempt={}, code_a='{}', code_b='{}', error={}",
-                    attempt,
-                    left.label,
-                    right.label,
-                    exc,
-                )
-                await asyncio.sleep(0.5 * attempt)
-        return CodeRelationshipResult(
-            relationship="orthogonal",
-            confidence=0.0,
-            reason="Classification retry loop exhausted without a result.",
-        )
+
+        async def _attempt() -> CodeRelationshipResult:
+            raw_result = await chain.ainvoke(payload, config=self._llm_config())
+            return CodeRelationshipResult(**raw_result)
+
+        try:
+            return await self._invoke_with_retries(label="pair classification", attempt=_attempt)
+        except Exception as exc:
+            # Optional refinement input: consolidation can tolerate a
+            # conservative default rather than failing the whole job.
+            logger.warning(
+                "Traceable pair classification failed after retries; using conservative fallback: "
+                "code_a='{}', code_b='{}', error={}",
+                left.label,
+                right.label,
+                exc,
+            )
+            return CodeRelationshipResult(
+                relationship="orthogonal",
+                confidence=0.0,
+                reason=f"Classification failed after retries: {type(exc).__name__}",
+            )
 
     async def _classify_code_pairs(
         self,
@@ -744,6 +782,7 @@ class TraceableAnalysisService:
                 | build_chat_model(provider=self._provider, temperature=0.0)
                 | parser
             )
+        chain = self._batch_code_relationship_chain
         pairs_payload = [
             {
                 "pair_id": pair_id,
@@ -759,34 +798,32 @@ class TraceableAnalysisService:
             for pair_id, left, right in pairs
         ]
         payload = {"pairs_json": json.dumps(pairs_payload, ensure_ascii=False)}
-        for attempt in range(1, _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS + 1):
-            try:
-                raw_result = await self._batch_code_relationship_chain.ainvoke(payload, config=self._llm_config())
-                parsed = BatchCodeRelationshipResults(**raw_result)
-                return {
-                    item.pair_id: CodeRelationshipResult(
-                        relationship=item.relationship,
-                        confidence=item.confidence,
-                        reason=item.reason,
-                    )
-                    for item in parsed.pairs
-                }
-            except Exception as exc:
-                if attempt >= _RELATIONSHIP_CLASSIFICATION_MAX_ATTEMPTS:
-                    logger.warning(
-                        "Traceable batch pair classification failed after retries: pairs={}, error={}",
-                        len(pairs),
-                        exc,
-                    )
-                    raise
-                logger.warning(
-                    "Traceable batch pair classification retry: attempt={}, pairs={}, error={}",
-                    attempt,
-                    len(pairs),
-                    exc,
+
+        async def _attempt() -> dict[int, CodeRelationshipResult]:
+            raw_result = await chain.ainvoke(payload, config=self._llm_config())
+            parsed = BatchCodeRelationshipResults(**raw_result)
+            return {
+                item.pair_id: CodeRelationshipResult(
+                    relationship=item.relationship,
+                    confidence=item.confidence,
+                    reason=item.reason,
                 )
-                await asyncio.sleep(0.5 * attempt)
-        return {}
+                for item in parsed.pairs
+            }
+
+        # Unlike _classify_code_pair, this one re-raises on exhaustion by
+        # design: consolidate_code_candidates already catches batch failures
+        # and falls back to the per-pair classifier above, which has its own
+        # conservative fallback - degrading here too would just hide that.
+        try:
+            return await self._invoke_with_retries(label="batch pair classification", attempt=_attempt)
+        except Exception as exc:
+            logger.warning(
+                "Traceable batch pair classification failed after retries: pairs={}, error={}",
+                len(pairs),
+                exc,
+            )
+            raise
 
     async def _synthesize_codebook(
         self,
@@ -817,15 +854,26 @@ class TraceableAnalysisService:
             | build_chat_model(provider=self._provider, temperature=0.0)
             | subtheme_parser
         )
-        raw_subthemes = await subtheme_chain.ainvoke(
-            {
-                "codes": json.dumps(payload, ensure_ascii=True, indent=2),
-                "research_query_block": build_research_query_block(research_query),
-                "researcher_topics_block": build_researcher_topics_block(researcher_topics),
-            },
-            config=self._llm_config(),
-        )
-        subthemes = SubthemeSynthesisResult(**raw_subthemes)
+        async def _attempt_subthemes() -> SubthemeSynthesisResult:
+            raw_subthemes = await subtheme_chain.ainvoke(
+                {
+                    "codes": json.dumps(payload, ensure_ascii=True, indent=2),
+                    "research_query_block": build_research_query_block(research_query),
+                    "researcher_topics_block": build_researcher_topics_block(researcher_topics),
+                },
+                config=self._llm_config(),
+            )
+            return SubthemeSynthesisResult(**raw_subthemes)
+
+        try:
+            subthemes = await self._invoke_with_retries(label="subtheme synthesis", attempt=_attempt_subthemes)
+        except Exception as exc:
+            # Load-bearing: there is no meaningful partial codebook structure
+            # to fall back to, so fail the job clearly instead of continuing
+            # with an undefined synthesis result.
+            raise UnprocessableError(
+                f"Subtheme synthesis failed after retries: {type(exc).__name__}: {exc}"
+            ) from exc
         subthemes = self._ensure_subthemes_cover_codes(subthemes, consolidated_codes)
         logger.info(
             "Traceable subtheme synthesis complete: consolidated_codes={}, subthemes={}",
@@ -839,15 +887,23 @@ class TraceableAnalysisService:
             | build_chat_model(provider=self._provider, temperature=0.0)
             | theme_parser
         )
-        raw_themes = await theme_chain.ainvoke(
-            {
-                "subthemes": json.dumps(subthemes.model_dump(mode="json"), ensure_ascii=True, indent=2),
-                "research_query_block": build_research_query_block(research_query),
-                "researcher_topics_block": build_researcher_topics_block(researcher_topics),
-            },
-            config=self._llm_config(),
-        )
-        themes = ThemeSynthesisResult(**raw_themes)
+        async def _attempt_themes() -> ThemeSynthesisResult:
+            raw_themes = await theme_chain.ainvoke(
+                {
+                    "subthemes": json.dumps(subthemes.model_dump(mode="json"), ensure_ascii=True, indent=2),
+                    "research_query_block": build_research_query_block(research_query),
+                    "researcher_topics_block": build_researcher_topics_block(researcher_topics),
+                },
+                config=self._llm_config(),
+            )
+            return ThemeSynthesisResult(**raw_themes)
+
+        try:
+            themes = await self._invoke_with_retries(label="theme synthesis", attempt=_attempt_themes)
+        except Exception as exc:
+            raise UnprocessableError(
+                f"Theme synthesis failed after retries: {type(exc).__name__}: {exc}"
+            ) from exc
         themes = self._ensure_themes_cover_subthemes(themes, subthemes)
         logger.info(
             "Traceable theme synthesis complete: subthemes={}, themes={}",
@@ -1338,74 +1394,66 @@ class TraceableAnalysisService:
         )
         parser = JsonOutputParser(pydantic_object=CodebookPolishResult)
         chain_payload = {"codebook": json.dumps(payload, ensure_ascii=True, indent=2)}
+        chain = (
+            build_codebook_polish_prompt()
+            | build_chat_model(provider=self._provider, temperature=0.0)
+            | parser
+        )
 
-        for attempt in range(1, _POLISH_MAX_ATTEMPTS + 1):
-            try:
-                chain = (
-                    build_codebook_polish_prompt()
-                    | build_chat_model(provider=self._provider, temperature=0.0)
-                    | parser
-                )
-                raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
-                polish = (
-                    raw_result
-                    if isinstance(raw_result, CodebookPolishResult)
-                    else CodebookPolishResult(**raw_result)
-                )
-                polished, polished_codes, polished_evidence, applied_actions = self._apply_codebook_polish(
-                    synthesis=synthesis,
-                    consolidated_codes=consolidated_codes,
-                    quote_evidence=quote_evidence,
-                    polish=polish,
-                )
-                logger.info(
-                    "Traceable final codebook polish complete: code_renames={}, theme_renames={}",
-                    sum(1 for action in applied_actions if action.get("artifact_type") == "code"),
-                    sum(1 for action in applied_actions if action.get("artifact_type") in {"theme", "subtheme"}),
-                )
-                return (
-                    polished,
-                    polished_codes,
-                    polished_evidence,
-                    [
-                        {
-                            "action": "polish_final_codebook",
-                            "applied": bool(applied_actions),
-                            "code_count": len(polished.codes),
-                            "theme_path_count": len(polished.themes),
-                            "outputs": {
-                                "notes": polish.notes,
-                                "changes": applied_actions,
-                            },
-                        }
-                    ],
-                )
-            except Exception as exc:
-                if attempt >= _POLISH_MAX_ATTEMPTS:
-                    logger.warning(
-                        "Traceable final codebook polish failed after retries; keeping selected codebook: error={}",
-                        exc,
-                    )
-                    return (
-                        synthesis,
-                        consolidated_codes,
-                        quote_evidence,
-                        [
-                            {
-                                "action": "polish_final_codebook",
-                                "applied": False,
-                                "rejected_reason": str(exc),
-                            }
-                        ],
-                    )
-                logger.warning(
-                    "Traceable final codebook polish retry: attempt={}, error={}",
-                    attempt,
-                    exc,
-                )
-                await asyncio.sleep(0.5 * attempt)
+        async def _attempt() -> CodebookPolishResult:
+            raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
+            return raw_result if isinstance(raw_result, CodebookPolishResult) else CodebookPolishResult(**raw_result)
 
-        return synthesis, consolidated_codes, quote_evidence, []
+        try:
+            polish = await self._invoke_with_retries(label="final codebook polish", attempt=_attempt)
+        except Exception as exc:
+            # Optional refinement: polishing only renames/redescribes labels,
+            # so keep the already-selected codebook rather than fail the job.
+            logger.warning(
+                "Traceable final codebook polish failed after retries; keeping selected codebook: error={}",
+                exc,
+            )
+            return (
+                synthesis,
+                consolidated_codes,
+                quote_evidence,
+                [
+                    {
+                        "action": "polish_final_codebook",
+                        "applied": False,
+                        "rejected_reason": str(exc),
+                    }
+                ],
+            )
+
+        polished, polished_codes, polished_evidence, applied_actions = self._apply_codebook_polish(
+            synthesis=synthesis,
+            consolidated_codes=consolidated_codes,
+            quote_evidence=quote_evidence,
+            polish=polish,
+        )
+        logger.info(
+            "Traceable final codebook polish complete: code_renames={}, theme_renames={}",
+            sum(1 for action in applied_actions if action.get("artifact_type") == "code"),
+            sum(1 for action in applied_actions if action.get("artifact_type") in {"theme", "subtheme"}),
+        )
+        return (
+            polished,
+            polished_codes,
+            polished_evidence,
+            [
+                {
+                    "action": "polish_final_codebook",
+                    "applied": bool(applied_actions),
+                    "code_count": len(polished.codes),
+                    "theme_path_count": len(polished.themes),
+                    "outputs": {
+                        "notes": polish.notes,
+                        "changes": applied_actions,
+                    },
+                }
+            ],
+        )
 
     def _build_codebook_polish_payload(
         self,
@@ -1678,41 +1726,31 @@ class TraceableAnalysisService:
             "codebook": json.dumps(synthesis.model_dump(mode="json"), ensure_ascii=True, indent=2),
             "applications": json.dumps(payload, ensure_ascii=True, indent=2),
         }
-        for attempt in range(1, _EVALUATION_MAX_ATTEMPTS + 1):
-            try:
-                raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
-                result = CodebookQualityEvaluationResult(**raw_result)
-                result.fitness_score = self._clamp_confidence(result.fitness_score)
-                result.coverage_score = self._clamp_confidence(result.coverage_score)
-                return result
-            except Exception as exc:
-                if attempt >= _EVALUATION_MAX_ATTEMPTS:
-                    logger.warning(
-                        "Traceable quality evaluation failed after retries; using fallback metrics: "
-                        "documents={}, assignments={}, failed_documents={}, error={}",
-                        len(evaluation_documents),
-                        len(evaluation_evidence),
-                        failed_document_count,
-                        exc,
-                    )
-                    return self._fallback_quality_evaluation(
-                        evaluation_documents=evaluation_documents,
-                        evaluation_evidence=evaluation_evidence,
-                        failed_document_count=failed_document_count,
-                    )
-                logger.warning(
-                    "Traceable quality evaluation retry: attempt={}, documents={}, error={}",
-                    attempt,
-                    len(evaluation_documents),
-                    exc,
-                )
-                await asyncio.sleep(0.5 * attempt)
+        async def _attempt() -> CodebookQualityEvaluationResult:
+            raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
+            result = CodebookQualityEvaluationResult(**raw_result)
+            result.fitness_score = self._clamp_confidence(result.fitness_score)
+            result.coverage_score = self._clamp_confidence(result.coverage_score)
+            return result
 
-        return self._fallback_quality_evaluation(
-            evaluation_documents=evaluation_documents,
-            evaluation_evidence=evaluation_evidence,
-            failed_document_count=failed_document_count,
-        )
+        try:
+            return await self._invoke_with_retries(label="quality evaluation", attempt=_attempt)
+        except Exception as exc:
+            # Optional refinement input: iteration scoring can fall back to a
+            # deterministic heuristic rather than fail the whole job.
+            logger.warning(
+                "Traceable quality evaluation failed after retries; using fallback metrics: "
+                "documents={}, assignments={}, failed_documents={}, error={}",
+                len(evaluation_documents),
+                len(evaluation_evidence),
+                failed_document_count,
+                exc,
+            )
+            return self._fallback_quality_evaluation(
+                evaluation_documents=evaluation_documents,
+                evaluation_evidence=evaluation_evidence,
+                failed_document_count=failed_document_count,
+            )
 
     def _fallback_quality_evaluation(
         self,
@@ -2883,19 +2921,32 @@ class TraceableAnalysisService:
             | build_chat_model(provider=self._provider, temperature=0.0)
             | parser
         )
-        raw_result = await chain.ainvoke(
-            {
-                "codebook": json.dumps(synthesis.model_dump(mode="json"), ensure_ascii=True, indent=2),
-                "coverage_gaps": json.dumps(
-                    [gap.model_dump(mode="json") for gap in coverage_gaps or []],
-                    ensure_ascii=True,
-                    indent=2,
-                ),
-                "quote_evidence": json.dumps(evidence_payload, ensure_ascii=True, indent=2),
-            },
-            config=self._llm_config(),
-        )
-        result = MissingCodeGenerationResult(**raw_result)
+        chain_payload = {
+            "codebook": json.dumps(synthesis.model_dump(mode="json"), ensure_ascii=True, indent=2),
+            "coverage_gaps": json.dumps(
+                [gap.model_dump(mode="json") for gap in coverage_gaps or []],
+                ensure_ascii=True,
+                indent=2,
+            ),
+            "quote_evidence": json.dumps(evidence_payload, ensure_ascii=True, indent=2),
+        }
+
+        async def _attempt() -> MissingCodeGenerationResult:
+            raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
+            return MissingCodeGenerationResult(**raw_result)
+
+        try:
+            result = await self._invoke_with_retries(label="missing-code generation", attempt=_attempt)
+        except Exception as exc:
+            # Optional refinement: this only fills coverage gaps found during
+            # iteration review, the codebook is already valid without it.
+            logger.warning(
+                "Traceable missing-code generation failed after retries; generating no additional codes: "
+                "error={}",
+                exc,
+            )
+            return []
+
         missing: list[ConsolidatedCode] = []
         for item in result.codes:
             label = self._truncate_label(self._normalize_label(item.code_label))
@@ -3018,26 +3069,23 @@ class TraceableAnalysisService:
             | parser
         )
         chain_payload = {"codebook": json.dumps(payload, ensure_ascii=True, indent=2)}
-        for attempt in range(1, _REVIEW_MAX_ATTEMPTS + 1):
-            try:
-                raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
-                return self._coerce_review_result(raw_result)
-            except Exception as exc:
-                if attempt >= _REVIEW_MAX_ATTEMPTS:
-                    logger.warning(
-                        "Traceable codebook review failed after retries; continuing without reviewer edits: "
-                        "round={}, error={}",
-                        round_index,
-                        exc,
-                    )
-                    return CodebookReviewResult(actions=[])
-                logger.warning(
-                    "Traceable codebook review retry: round={}, attempt={}, error={}",
-                    round_index,
-                    attempt,
-                    exc,
-                )
-                await asyncio.sleep(0.5 * attempt)
+
+        async def _attempt() -> CodebookReviewResult:
+            raw_result = await chain.ainvoke(chain_payload, config=self._llm_config())
+            return self._coerce_review_result(raw_result)
+
+        try:
+            return await self._invoke_with_retries(label="codebook review", attempt=_attempt)
+        except Exception as exc:
+            # Optional refinement: no reviewer edits this round just means the
+            # codebook stays as-is, not that the job should fail.
+            logger.warning(
+                "Traceable codebook review failed after retries; continuing without reviewer edits: "
+                "round={}, error={}",
+                round_index,
+                exc,
+            )
+            return CodebookReviewResult(actions=[])
         return CodebookReviewResult(actions=[])
 
     def _coerce_review_result(self, raw_result: object) -> CodebookReviewResult:
@@ -3818,33 +3866,27 @@ class TraceableAnalysisService:
             doc_failed = False
 
             async with semaphore:
-                result: TraceableApplicationResult | None = None
                 payload = {
                     "codebook": codebook_context,
                     "transcript": document.content,
                 }
-                for attempt in range(1, _APPLICATION_MAX_ATTEMPTS + 1):
-                    try:
-                        raw_result = await chain.ainvoke(payload, config=self._llm_config())
-                        result = TraceableApplicationResult(**raw_result)
-                        break
-                    except Exception as exc:
-                        if attempt >= _APPLICATION_MAX_ATTEMPTS:
-                            doc_failed = True
-                            logger.warning(
-                                "Traceable application document failed after retries: document_id={}, attempts={}, error={}",
-                                document.id,
-                                attempt,
-                                exc,
-                            )
-                            break
-                        logger.warning(
-                            "Traceable application document retry: document_id={}, attempt={}, error={}",
-                            document.id,
-                            attempt,
-                            exc,
-                        )
-                        await asyncio.sleep(0.5 * attempt)
+
+                async def _attempt(payload: dict[str, str] = payload) -> TraceableApplicationResult:
+                    raw_result = await chain.ainvoke(payload, config=self._llm_config())
+                    return TraceableApplicationResult(**raw_result)
+
+                try:
+                    result: TraceableApplicationResult | None = await self._invoke_with_retries(
+                        label="codebook application", attempt=_attempt
+                    )
+                except Exception as exc:
+                    result = None
+                    doc_failed = True
+                    logger.warning(
+                        "Traceable application document failed after retries: document_id={}, error={}",
+                        document.id,
+                        exc,
+                    )
 
                 if result is not None:
                     document_assignment_keys: set[tuple[str, int | None, int | None, str]] = set()
@@ -3876,68 +3918,60 @@ class TraceableAnalysisService:
                             ),
                             "transcript": document.content,
                         }
-                        for attempt in range(1, _APPLICATION_MAX_ATTEMPTS + 1):
-                            try:
-                                raw_recall = await chain.ainvoke(recall_payload, config=self._llm_config())
-                                recall_result = TraceableApplicationResult(**raw_recall)
-                                recalled = self._append_application_assignments(
-                                    document=document,
-                                    result=recall_result,
-                                    allowed_codes=allowed_codes,
-                                    allowed_themes=allowed_themes,
-                                    applied=doc_evidence,
-                                    document_assignment_keys=document_assignment_keys,
-                                    exact_only=True,
+
+                        async def _attempt_recall(
+                            recall_payload: dict[str, str] = recall_payload,
+                        ) -> TraceableApplicationResult:
+                            raw_recall = await chain.ainvoke(recall_payload, config=self._llm_config())
+                            return TraceableApplicationResult(**raw_recall)
+
+                        try:
+                            recall_result = await self._invoke_with_retries(
+                                label="application recall repair", attempt=_attempt_recall
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "Traceable application recall repair skipped after retries: "
+                                "document_id={}, candidate_codes={}, error={}",
+                                document.id,
+                                len(recall_candidates),
+                                exc,
+                            )
+                            doc_action_log.append(
+                                {
+                                    "action": "application_recall_repair_skipped",
+                                    "document_id": str(document.id),
+                                    "candidate_codes": [code.code_label for code in recall_candidates],
+                                    "error": str(exc),
+                                }
+                            )
+                        else:
+                            recalled = self._append_application_assignments(
+                                document=document,
+                                result=recall_result,
+                                allowed_codes=allowed_codes,
+                                allowed_themes=allowed_themes,
+                                applied=doc_evidence,
+                                document_assignment_keys=document_assignment_keys,
+                                exact_only=True,
+                            )
+                            if recalled:
+                                doc_action_log.append(
+                                    {
+                                        "action": "application_recall_repair",
+                                        "document_id": str(document.id),
+                                        "assignments": recalled,
+                                        "candidate_codes": [code.code_label for code in recall_candidates],
+                                        "quote_match_policy": "exact_only",
+                                    }
                                 )
-                                if recalled:
-                                    doc_action_log.append(
-                                        {
-                                            "action": "application_recall_repair",
-                                            "document_id": str(document.id),
-                                            "assignments": recalled,
-                                            "candidate_codes": [code.code_label for code in recall_candidates],
-                                            "quote_match_policy": "exact_only",
-                                            "attempts": attempt,
-                                        }
-                                    )
-                                    logger.info(
-                                        "Traceable application recall repair added assignments: "
-                                        "document_id={}, assignments={}, candidate_codes={}, attempts={}",
-                                        document.id,
-                                        recalled,
-                                        len(recall_candidates),
-                                        attempt,
-                                    )
-                                break
-                            except Exception as exc:
-                                if attempt >= _APPLICATION_MAX_ATTEMPTS:
-                                    logger.warning(
-                                        "Traceable application recall repair skipped after retries: "
-                                        "document_id={}, candidate_codes={}, attempts={}, error={}",
-                                        document.id,
-                                        len(recall_candidates),
-                                        attempt,
-                                        exc,
-                                    )
-                                    doc_action_log.append(
-                                        {
-                                            "action": "application_recall_repair_skipped",
-                                            "document_id": str(document.id),
-                                            "candidate_codes": [code.code_label for code in recall_candidates],
-                                            "attempts": attempt,
-                                            "error": str(exc),
-                                        }
-                                    )
-                                    break
-                                logger.warning(
-                                    "Traceable application recall repair retry: "
-                                    "document_id={}, candidate_codes={}, attempt={}, error={}",
+                                logger.info(
+                                    "Traceable application recall repair added assignments: "
+                                    "document_id={}, assignments={}, candidate_codes={}",
                                     document.id,
+                                    recalled,
                                     len(recall_candidates),
-                                    attempt,
-                                    exc,
                                 )
-                                await asyncio.sleep(0.5 * attempt)
 
             logger.info(
                 "Traceable application document complete: document_id={}, assignments={}",
