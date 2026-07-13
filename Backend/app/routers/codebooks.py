@@ -148,9 +148,21 @@ async def get_codebooks(
     corpus_id: UUID,
     session: DbSession,
 ) -> JSONResponse:
-    stmt = select(Codebook).where(Codebook.corpus_id == corpus_id).order_by(desc(Codebook.version))
-    codebooks = list((await session.scalars(stmt)).all())
-    payload = [CodebookSchema.model_validate(codebook) for codebook in codebooks]
+    stmt = (
+        select(Codebook, CodebookGenerationJob)
+        .outerjoin(CodebookGenerationJob, Codebook.id == CodebookGenerationJob.codebook_id)
+        .where(Codebook.corpus_id == corpus_id)
+        .order_by(desc(Codebook.version))
+    )
+    results = (await session.execute(stmt)).all()
+    payload = []
+    for codebook, job in results:
+        # Create a dictionary from the model to include job attributes easily
+        data = CodebookSchema.model_validate(codebook).model_dump()
+        if job:
+            data["started_at"] = job.started_at
+            data["finished_at"] = job.finished_at
+        payload.append(CodebookSchema.model_validate(data))
     return JSONResponse(content=ResponseEnvelope.ok(payload).model_dump(mode="json"))
 
 

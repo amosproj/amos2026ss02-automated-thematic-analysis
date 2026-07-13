@@ -99,6 +99,8 @@ class CodebookSchema(BaseSchema):
     researcher_topics: str | None = None
     llm_tokens_input: int | None = None
     llm_tokens_output: int | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
 
 
 class CodebookGenerateRequest(BaseSchema):

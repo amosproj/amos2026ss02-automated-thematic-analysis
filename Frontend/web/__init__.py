@@ -163,6 +163,45 @@ def create_app(config: Config | None = None) -> Flask:
             formatted = formatted[:-2]
         return formatted
 
+    @app.template_filter('generation_time')
+    def generation_time_filter(run_dict):
+        """Calculate generation time for a run dictionary."""
+        if not run_dict:
+            return ""
+        
+        start = run_dict.get('started_at') or run_dict.get('created_at')
+        end = run_dict.get('finished_at') or run_dict.get('updated_at')
+        
+        if not start or not end:
+            return ""
+            
+        try:
+            from datetime import datetime
+            # Handle ISO format strings which might have Z or +00:00
+            start_str = start.replace("Z", "+00:00")
+            end_str = end.replace("Z", "+00:00")
+            start_dt = datetime.fromisoformat(start_str)
+            end_dt = datetime.fromisoformat(end_str)
+            
+            delta = end_dt - start_dt
+            seconds = int(delta.total_seconds())
+            if seconds < 0:
+                seconds = 0
+                
+            if seconds < 60:
+                return f"{seconds}s"
+            
+            minutes = seconds // 60
+            sec_rem = seconds % 60
+            if minutes < 60:
+                return f"{minutes}m {sec_rem}s"
+                
+            hours = minutes // 60
+            min_rem = minutes % 60
+            return f"{hours}h {min_rem}m"
+        except Exception:
+            return ""
+
     _register_error_handlers(app)
 
     return app

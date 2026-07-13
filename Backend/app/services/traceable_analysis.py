@@ -269,6 +269,7 @@ class TraceableAnalysisService:
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
     ) -> TraceableAnalysisResult:
         self._provider = provider
+        analysis_started_at = _utc_now_naive()
         # A TraceableAnalysisService instance can be reused in tests or by a
         # caller. Reset the accumulator so each run reports only its own calls.
         self._token_tracker = TokenTracker()
@@ -490,6 +491,7 @@ class TraceableAnalysisService:
                 # a phase-specific subtotal.
                 llm_tokens_input=self.llm_tokens_input,
                 llm_tokens_output=self.llm_tokens_output,
+                started_at=analysis_started_at,
             )
             if on_application_run_created is not None:
                 await on_application_run_created(application_run.id)
@@ -3706,6 +3708,7 @@ class TraceableAnalysisService:
         persisted: _PersistedCodebookRefs,
         llm_tokens_input: int | None = None,
         llm_tokens_output: int | None = None,
+        started_at: datetime | None = None,
     ) -> CodebookApplicationRun:
         run = CodebookApplicationRun(
             id=uuid.uuid4(),
@@ -3722,7 +3725,7 @@ class TraceableAnalysisService:
             # standalone application job.
             llm_tokens_input=llm_tokens_input,
             llm_tokens_output=llm_tokens_output,
-            started_at=_utc_now_naive(),
+            started_at=started_at or _utc_now_naive(),
         )
         self._session.add(run)
         await self._session.flush()

@@ -5,7 +5,7 @@
     <h1 class="h3 mb-0">Applying Codebook</h1>
   </div>
 
-  <div class="bg-white border rounded-2 p-4" style="max-width: 640px;"
+  <div class="bg-white border rounded-2 p-4" style="max-width: 900px;"
        data-job-id="{{ job_id }}"
        data-status-url="{{ url_for('analysis.job_status', job_id=job_id) }}"
        data-cancel-url="{{ url_for('analysis.cancel_job', job_id=job_id) }}"
@@ -50,29 +50,35 @@
       </div>
     </div>
 
-    <div class="row g-2 mb-3" aria-label="Application metrics">
-      <div class="col-12 col-sm-3">
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-5 g-2 mb-3" aria-label="Application metrics">
+      <div class="col">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Processed</div>
           <div id="metric-processed" class="fw-semibold">Waiting</div>
         </div>
       </div>
-      <div class="col-12 col-sm-3">
+      <div class="col">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Coded</div>
           <div id="metric-coded" class="fw-semibold">Pending</div>
         </div>
       </div>
-      <div class="col-12 col-sm-3">
+      <div class="col">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Failed</div>
           <div id="metric-failed" class="fw-semibold">0</div>
         </div>
       </div>
-      <div class="col-12 col-sm-3">
+      <div class="col">
         <div class="border rounded-2 px-3 py-2 h-100">
           <div class="small text-secondary">Tokens (In/Out)</div>
           <div id="metric-tokens" class="fw-semibold">0 / 0</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="border rounded-2 px-3 py-2 h-100">
+          <div class="small text-secondary">Generation Time</div>
+          <div id="metric-time" class="fw-semibold">0s</div>
         </div>
       </div>
     </div>
@@ -105,6 +111,7 @@
       const metricCoded = document.getElementById("metric-coded");
       const metricFailed = document.getElementById("metric-failed");
       const metricTokens = document.getElementById("metric-tokens");
+      const metricTime = document.getElementById("metric-time");
       const errorContainer = document.getElementById("progress-error-container");
       const errorEl = document.getElementById("progress-error");
       const cancelBtn = document.getElementById("cancel-btn");
@@ -151,6 +158,22 @@
           : "Pending";
         metricFailed.textContent = formatCount(job.documents_failed || 0);
         metricTokens.textContent = `${job.llm_tokens_input ? formatCount(job.llm_tokens_input) : "0"} / ${job.llm_tokens_output ? formatCount(job.llm_tokens_output) : "0"}`;
+        
+        if (job.started_at) {
+          const start = new Date(job.started_at + 'Z');
+          const end = job.finished_at ? new Date(job.finished_at + 'Z') : new Date();
+          const diffSeconds = Math.max(0, Math.floor((end - start) / 1000));
+          
+          if (diffSeconds < 60) {
+            metricTime.textContent = `${diffSeconds}s`;
+          } else {
+            const minutes = Math.floor(diffSeconds / 60);
+            const seconds = diffSeconds % 60;
+            metricTime.textContent = `${minutes}m ${seconds}s`;
+          }
+        } else {
+          metricTime.textContent = "0s";
+        }
       }
 
       function activeCounter(job) {
