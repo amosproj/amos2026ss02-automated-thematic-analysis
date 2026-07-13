@@ -31,9 +31,7 @@ from app.services.traceable_analysis import (
 API_CODEBOOKS = "/api/v1/codebooks"
 
 
-async def _seed_corpus_codebook(
-    db_engine, texts: list[str], extra_code_labels: list[str] | None = None
-) -> tuple[str, str, list[str]]:
+async def _seed_corpus_codebook(db_engine, texts: list[str]) -> tuple[str, str, list[str]]:
     session_factory = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
     async with session_factory() as session:
         corpus = Corpus(id=uuid4(), project_id=uuid4(), name="Application Corpus")
@@ -66,43 +64,37 @@ async def _seed_corpus_codebook(
             description="Friction caused by workflow design.",
             is_active=True,
         )
-        codes = [
-            Code(
-                id=uuid4(),
-                codebook_id=codebook.id,
-                label=label,
-                description=f"{label} slow work.",
-                is_active=True,
-            )
-            for label in ["Manual Handoffs", *(extra_code_labels or [])]
-        ]
-        session.add_all([codebook, theme, *codes])
+        code = Code(
+            id=uuid4(),
+            codebook_id=codebook.id,
+            label="Manual Handoffs",
+            description="Manual handoffs slow work.",
+            is_active=True,
+        )
+        session.add_all([codebook, theme, code])
         await session.flush()
 
-        session.add(
+        session.add_all([
             CodebookThemeRelationship(
                 id=uuid4(),
                 codebook_id=codebook.id,
                 theme_id=theme.id,
                 is_active=True,
-            )
-        )
-        for code in codes:
-            session.add_all([
-                CodebookCodeRelationship(
-                    id=uuid4(),
-                    codebook_id=codebook.id,
-                    code_id=code.id,
-                    is_active=True,
-                ),
-                ThemeCodeRelationship(
-                    id=uuid4(),
-                    codebook_id=codebook.id,
-                    theme_id=theme.id,
-                    code_id=code.id,
-                    is_active=True,
-                ),
-            ])
+            ),
+            CodebookCodeRelationship(
+                id=uuid4(),
+                codebook_id=codebook.id,
+                code_id=code.id,
+                is_active=True,
+            ),
+            ThemeCodeRelationship(
+                id=uuid4(),
+                codebook_id=codebook.id,
+                theme_id=theme.id,
+                code_id=code.id,
+                is_active=True,
+            ),
+        ])
         await session.commit()
         return str(corpus.id), str(codebook.id), [str(document.id) for document in documents]
 
@@ -228,85 +220,6 @@ async def test_apply_codebook_job_persists_coding_and_quote_spans(client, db_eng
     assert code_assignment["quote_match_status"] == "exact"
     assert code_assignment["start_char"] is not None
     assert code_assignment["end_char"] is not None
-
-
-async def test_apply_codebook_job_deduplicates_per_code_only(client, db_engine, monkeypatch) -> None:
-    """Same-code overlaps collapse; a distinct code on the same passage is kept."""
-    corpus_id, codebook_id, document_ids = await _seed_corpus_codebook(
-        db_engine,
-        texts=["Participant: The manual handoffs slow everyone down."],
-        extra_code_labels=["Handoff Delays"],
-    )
-
-    def _duplicated_result(_content: str) -> CodebookApplicationResult:
-        return CodebookApplicationResult(
-            summary="The participant describes workflow friction.",
-            researcher_notes=None,
-            themes=[
-                AppliedThemeAssignment(
-                    theme_label="Workflow Friction",
-                    present=True,
-                    confidence=0.9,
-                    quote="manual handoffs slow",
-                )
-            ],
-            codes=[
-                AppliedCodeAssignment(
-                    code_label="Manual Handoffs",
-                    theme_label="Workflow Friction",
-                    quote="manual handoffs slow",
-                    confidence=0.95,
-                    rationale="Direct mention of slow manual handoffs.",
-                ),
-                # Overlapping longer span of the same passage under the SAME code
-                # -> collapses with the row above (longest span wins).
-                AppliedCodeAssignment(
-                    code_label="Manual Handoffs",
-                    theme_label="Workflow Friction",
-                    quote="The manual handoffs slow everyone down",
-                    confidence=0.5,
-                    rationale="Same passage with more context.",
-                ),
-                # Same passage under a DIFFERENT code of the same theme -> kept,
-                # so this code keeps its coverage.
-                AppliedCodeAssignment(
-                    code_label="Handoff Delays",
-                    theme_label="Workflow Friction",
-                    quote="manual handoffs slow",
-                    confidence=0.6,
-                    rationale="Same passage, distinct code.",
-                ),
-            ],
-        )
-
-    _patch_application(monkeypatch, _duplicated_result)
-
-    create_response = await client.post(
-        f"{API_CODEBOOKS}/{codebook_id}/apply-jobs",
-        json={"transcript_document_ids": document_ids},
-    )
-
-    assert create_response.status_code == 202
-    created_job = create_response.json()["data"]
-    assert created_job["corpus_id"] == corpus_id
-    terminal_job = await _wait_for_terminal_job_status(client, created_job["id"])
-    assert terminal_job["status"] == "succeeded", terminal_job.get("error_message")
-
-    documents_response = await client.get(
-        f"/api/v1/codebook-application-runs/{terminal_job['application_run_id']}/documents"
-    )
-    assert documents_response.status_code == 200
-    document_coding = documents_response.json()["data"][0]
-    assert document_coding["status"] == "coded"
-
-    assignments = document_coding["code_assignments"]
-    # One row per code: the two Manual Handoffs spans collapsed to the longest,
-    # Handoff Delays survives with its own span.
-    quotes_by_code = {ca["code_id"]: ca["quote"] for ca in assignments}
-    assert len(assignments) == 2
-    assert len(quotes_by_code) == 2
-    assert "The manual handoffs slow everyone down" in quotes_by_code.values()
-    assert "manual handoffs slow" in quotes_by_code.values()
 
 
 async def test_apply_codebook_job_retries_llm_and_fails_only_one_transcript(client, db_engine, monkeypatch) -> None:

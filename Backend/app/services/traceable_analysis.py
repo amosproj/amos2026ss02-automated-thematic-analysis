@@ -6,9 +6,9 @@ import math
 import uuid
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol, TypeVar, cast
+from typing import Any, TypeVar, cast
 from uuid import UUID
 
 from langchain_core.output_parsers import JsonOutputParser
@@ -72,11 +72,7 @@ from app.schemas.traceable_llm import (
     ThemeSynthesisResult,
     TraceableApplicationResult,
 )
-from app.services.quote_matching import (
-    QuoteSpanCandidate,
-    locate_quote_span,
-    merge_quote_spans,
-)
+from app.services.quote_matching import locate_quote_span
 from app.services.theme_graph import ThemeGraphService
 from app.services.traceable_code_consolidation import (
     CodeCandidate,
@@ -136,54 +132,6 @@ class _ApplicationPassResult:
     evidence: list[_AppliedEvidence]
     failed_document_ids: list[UUID]
     action_log: list[dict[str, object]] | None = None
-
-
-class _HasUUIDId(Protocol):
-    @property
-    def id(self) -> UUID: ...
-
-
-_CodeT = TypeVar("_CodeT", bound=_HasUUIDId)
-
-
-def _merge_resolved_assignments(
-    resolved: list[tuple[_AppliedEvidence, _CodeT, UUID | None]],
-    *,
-    transcript: str,
-) -> list[tuple[_AppliedEvidence, _CodeT, UUID | None]]:
-    """Collapse overlapping quotes of one code into a single unioned assignment.
-
-    The application pass can return the same passage several times for one code
-    — a verbatim duplicate or an overlapping span. Overlapping spans of a code
-    are unioned into one assignment whose quote is re-sliced from ``transcript``
-    (so no covered section is lost and no duplicate span remains); non-overlapping
-    quotes of the code are all kept. Grouping is strictly per code: two distinct
-    codes that tag the same passage are both kept, even under a shared theme, so
-    no code loses coverage to another.
-    """
-    candidates = [
-        QuoteSpanCandidate(
-            group_key=code.id,
-            quote=evidence.quote,
-            start_char=evidence.start_char,
-            end_char=evidence.end_char,
-            confidence=evidence.confidence,
-        )
-        for evidence, code, _theme_id in resolved
-    ]
-    merged_assignments: list[tuple[_AppliedEvidence, _CodeT, UUID | None]] = []
-    for merged in merge_quote_spans(candidates, transcript=transcript):
-        evidence, code, theme_id = resolved[merged.primary_index]
-        if merged.merged:
-            evidence = replace(
-                evidence,
-                quote=merged.quote,
-                start_char=merged.start_char,
-                end_char=merged.end_char,
-                quote_match_status="exact",
-            )
-        merged_assignments.append((evidence, code, theme_id))
-    return merged_assignments
 
 
 @dataclass(frozen=True)
@@ -3822,7 +3770,7 @@ class TraceableAnalysisService:
                 failed_documents += 1
                 continue
 
-            resolved_assignments: list[tuple[_AppliedEvidence, Code, UUID | None]] = []
+            seen_theme_ids: set[UUID] = set()
             for evidence in document_evidence:
                 code = persisted.code_by_label.get(self._label_key(evidence.code_label))
                 if code is None:
@@ -3832,12 +3780,6 @@ class TraceableAnalysisService:
                     theme = persisted.theme_by_label.get(self._label_key(evidence.theme_label))
                     if theme is not None:
                         theme_id = theme.id
-                resolved_assignments.append((evidence, code, theme_id))
-
-            seen_theme_ids: set[UUID] = set()
-            for evidence, code, theme_id in _merge_resolved_assignments(
-                resolved_assignments, transcript=document.content
-            ):
                 self._session.add(
                     CodeAssignment(
                         id=uuid.uuid4(),
