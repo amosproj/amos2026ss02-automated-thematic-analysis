@@ -305,13 +305,8 @@
   /* ── Text-node traversal highlighter ─────────────────────────────────── */
 
   /**
-   * Find `quote` inside `container` using text-node traversal and wrap the
-   * matched range in a <mark> element.  Returns true on success.
-   *
-   * Uses Range.surroundContents(), which throws DOMException when the range
-   * boundary splits an element (e.g. a speaker badge).  Those cases are
-   * silently skipped — the transcript is still readable, just un-highlighted
-   * for that particular quote.
+   * Find `quote` inside `container` and wrap the matched range in <mark>
+   * elements.  Returns true if any part was highlighted.
    */
   function highlightQuote(container, quote, bgColor, tooltipText, themeId) {
     if (!quote) return false;
@@ -319,53 +314,42 @@
     const fullText = container.textContent;
     const matchIdx = fullText.indexOf(quote);
     if (matchIdx === -1) return false;
-
     const matchEnd = matchIdx + quote.length;
 
-    /* Walk only text nodes so element boundaries are invisible to us */
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-    const textNodes = [];
-    let node;
-    while ((node = walker.nextNode())) textNodes.push(node);
-
+    const segments = [];
     let charPos = 0;
-    let startNode = null, startOff = 0;
-    let endNode = null,   endOff = 0;
-
-    for (const tn of textNodes) {
-      const len = tn.nodeValue.length;
-      if (startNode === null && charPos + len > matchIdx) {
-        startNode = tn;
-        startOff  = matchIdx - charPos;
-      }
-      if (endNode === null && charPos + len >= matchEnd) {
-        endNode = tn;
-        endOff  = matchEnd - charPos;
-        break;
-      }
-      charPos += len;
+    let node;
+    while ((node = walker.nextNode())) {
+      const nodeStart = charPos;
+      const nodeEnd = charPos + node.nodeValue.length;
+      const from = Math.max(matchIdx, nodeStart);
+      const to = Math.min(matchEnd, nodeEnd);
+      if (from < to) segments.push({ node, start: from - nodeStart, end: to - nodeStart });
+      charPos = nodeEnd;
     }
 
-    if (!startNode || !endNode) return false;
+    let wrapped = false;
+    for (const seg of segments) {
+      try {
+        const range = document.createRange();
+        range.setStart(seg.node, seg.start);
+        range.setEnd(seg.node, seg.end);
 
-    try {
-      const range = document.createRange();
-      range.setStart(startNode, startOff);
-      range.setEnd(endNode,   endOff);
+        const mark = document.createElement('mark');
+        mark.className = 'theme-highlight';
+        mark.style.backgroundColor = bgColor;
+        mark.setAttribute('data-bs-toggle', 'tooltip');
+        mark.setAttribute('data-bs-placement', 'top');
+        mark.setAttribute('title', tooltipText);
+        mark.setAttribute('data-theme-id', themeId);
 
-      const mark = document.createElement('mark');
-      mark.className = 'theme-highlight';
-      mark.style.backgroundColor = bgColor;
-      mark.setAttribute('data-bs-toggle', 'tooltip');
-      mark.setAttribute('data-bs-placement', 'top');
-      mark.setAttribute('title', tooltipText);
-      mark.setAttribute('data-theme-id', themeId);
-
-      range.surroundContents(mark);
-      return true;
-    } catch (_) {
-      return false;
+        range.surroundContents(mark);
+        wrapped = true;
+      } catch (_) {
+      }
     }
+    return wrapped;
   }
 
   /* ── Apply all highlights ─────────────────────────────────────────────── */
@@ -375,9 +359,9 @@
     if (!container) return;
 
     /*
-     * Sort longest quotes first so that if two quotes overlap, the longer one
-     * gets highlighted and the inner one is skipped (rather than the shorter
-     * one blocking the longer).
+     * Sort longest quotes first so that when quotes overlap, the shorter one
+     * nests inside the longer one's highlight (their colours stack into a
+     * darker band) rather than the other way around.
      */
     const sorted = [...CODE_ASSIGNMENTS].sort(
       (a, b) => (b.quote || '').length - (a.quote || '').length
