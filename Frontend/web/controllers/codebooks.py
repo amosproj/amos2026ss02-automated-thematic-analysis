@@ -527,6 +527,7 @@ def manual_form(corpus_id: str) -> str:
         codebook_name="New Codebook",
         nodes=blank_nodes,
         error=None,
+        cancel_url=url_for("ingestion.upload_form", corpus_id=corpus_id, focus="codebook"),
     )
 
 @bp.post("/<corpus_id>/confirm")

@@ -135,8 +135,11 @@ def test_unified_upload_page_shows_codebook_card(client, fake_backend):
     assert resp.status_code == 200
     assert b"Upload Codebook" in resp.data
     assert b"CSV" in resp.data
-    assert b"Generate or enter manually" in resp.data
+
+    assert b"Generate" in resp.data
+    assert b"enter manually" in resp.data
     assert b"/codebooks/new/test-corpus-id" in resp.data
+    assert b"/codebooks/test-corpus-id/manual" in resp.data
 
 
 # ---------------------------------------------------------------------------
