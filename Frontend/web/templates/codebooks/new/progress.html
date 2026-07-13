@@ -213,6 +213,9 @@
             return "Synthesizing thematic structure";
         }
         if (job.phase === "evaluating_iterations") {
+            if (job.analysis_units_total > 0) {
+                return `Iteration ${formatCount(job.analysis_units_done)} of ${formatCount(job.analysis_units_total)}`;
+            }
             return "Evaluating iterations";
         }
         return "Worker is preparing the analysis";
