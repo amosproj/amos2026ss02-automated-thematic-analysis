@@ -295,7 +295,7 @@
               
               const raw = job.progress_percent || (total > 0 ? Math.round((done / total) * 100) : 2);
               const pct = Math.min(99, Math.max(2, raw));
-              if (job.phase === "synthesizing_themes" || job.phase === "persisting_codebook" || job.phase === "evaluating_iterations" || job.phase === "loading") {
+              if (job.phase === "synthesizing_themes" || job.phase === "persisting_codebook" || job.phase === "loading") {
                   progressEl.classList.remove("d-none");
                   progressBarEl.style.width = "100%";
                   progressBarEl.classList.add("progress-bar-striped", "progress-bar-animated");

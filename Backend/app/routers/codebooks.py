@@ -127,6 +127,9 @@ def _compute_job_progress_percent(job: CodebookGenerationJob, *, phase: str) -> 
     if phase == "consolidating_codes" and job.analysis_units_total > 0:
         unit_progress = int((job.analysis_units_done * 20) / job.analysis_units_total)
         return max(40, min(60, 40 + unit_progress))
+    if phase == "evaluating_iterations" and job.analysis_units_total > 0:
+        unit_progress = int((job.analysis_units_done * 20) / job.analysis_units_total)
+        return max(65, min(85, 65 + unit_progress))
     if phase == "applying_codebook" and job.analysis_units_total > 0:
         unit_progress = int((job.analysis_units_done * 9) / job.analysis_units_total)
         return max(90, min(99, 90 + unit_progress))
