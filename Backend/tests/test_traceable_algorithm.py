@@ -213,7 +213,8 @@ async def test_traceable_persist_rejects_multi_parent_theme_dag(db_session) -> N
 
 
 async def test_traceable_persist_application_deduplicates_per_code_only(db_session) -> None:
-    """Same-code overlaps collapse; a distinct code on the same passage is kept."""
+    """The application-pass dedup collapses same-code overlaps before persistence;
+    a distinct code on the same passage is kept."""
     corpus = Corpus(id=uuid.uuid4(), project_id=uuid.uuid4(), name="Corpus")
     document = CorpusDocument(
         id=uuid.uuid4(),
@@ -256,14 +257,14 @@ async def test_traceable_persist_application_deduplicates_per_code_only(db_sessi
         custom_id=None,
         corpus_id=corpus.id,
         documents=[_DocumentText(id=document.id, title=document.title, content=document.content)],
-        applied_evidence=[
+        applied_evidence=service._deduplicate_applied_evidence([
             _evidence("Manual Handoffs", "manual handoffs slow", 0.95),
             # Overlapping longer span of the same passage under the SAME code
             # -> collapses with the row above (higher confidence wins).
             _evidence("Manual Handoffs", "The manual handoffs slow everyone down", 0.5),
             # Same passage under a DIFFERENT code -> kept, keeping its coverage.
             _evidence("Handoff Delays", "manual handoffs slow", 0.6),
-        ],
+        ]),
         failed_document_ids=[],
         persisted=_PersistedCodebookRefs(
             codebook=codebook,

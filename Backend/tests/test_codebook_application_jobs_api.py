@@ -150,7 +150,6 @@ def _application_result(quote: str = "manual handoffs slow") -> CodebookApplicat
 
 def _patch_application(monkeypatch, single_transcript_fn) -> None:
     async def _fake_apply_documents(self, *, documents, on_progress=None, should_cancel=None, **_kwargs):
-        del self
         evidence: list[_AppliedEvidence] = []
         failed_document_ids: list[UUID] = []
         if on_progress is not None:
@@ -190,7 +189,11 @@ def _patch_application(monkeypatch, single_transcript_fn) -> None:
                 await on_progress(document_index, len(documents))
             if last_error is not None and result is None:
                 continue
-        return _ApplicationPassResult(evidence=evidence, failed_document_ids=failed_document_ids)
+        # Mirror the real application pass, which dedups before returning.
+        return _ApplicationPassResult(
+            evidence=self._deduplicate_applied_evidence(evidence),
+            failed_document_ids=failed_document_ids,
+        )
 
     monkeypatch.setattr(TraceableAnalysisService, "_apply_codebook_to_documents", _fake_apply_documents)
 

@@ -35,7 +35,6 @@ from app.services.traceable_analysis import (
     TraceableAnalysisCancelledError,
     TraceableAnalysisService,
     _AppliedEvidence,
-    _deduplicate_resolved_assignments,
 )
 from app.services.traceable_analysis import (
     _DocumentText as _TraceableDocumentText,
@@ -512,7 +511,7 @@ class CodebookApplicationService:
                 )
                 continue
 
-            resolved_assignments: list[tuple[_AppliedEvidence, _CodeRef, UUID | None]] = []
+            seen_theme_ids: set[UUID] = set()
             for evidence in document_evidence:
                 code = codes_by_label.get(self._label_key(evidence.code_label))
                 if code is None:
@@ -525,10 +524,6 @@ class CodebookApplicationService:
                     theme = themes_by_label.get(self._label_key(evidence.theme_label))
                     if theme is not None:
                         theme_id = theme.id
-                resolved_assignments.append((evidence, code, theme_id))
-
-            seen_theme_ids: set[UUID] = set()
-            for evidence, code, theme_id in _deduplicate_resolved_assignments(resolved_assignments):
                 self._session.add(
                     CodeAssignment(
                         id=uuid.uuid4(),

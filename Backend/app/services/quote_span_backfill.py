@@ -27,16 +27,9 @@ from app.services.quote_matching import (
 
 
 async def backfill_deduplicate_code_assignments(session: AsyncSession) -> int:
-    rows = list(
-        (
-            await session.scalars(
-                select(CodeAssignment).order_by(
-                    CodeAssignment.created_at, CodeAssignment.id
-                )
-            )
-        ).all()
+    rows = await session.scalars(
+        select(CodeAssignment).order_by(CodeAssignment.created_at, CodeAssignment.id)
     )
-
     quoted_rows = [row for row in rows if row.quote and row.quote.strip()]
     candidates = [
         QuoteSpanCandidate(

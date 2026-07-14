@@ -17,12 +17,8 @@ class QuoteMatch:
 
 @dataclass(frozen=True)
 class QuoteSpanCandidate:
-    """One located (or unlocatable) quote competing for persistence within a dedup group.
-
-    ``group_key`` is the dedup scope: callers pass the code id so overlapping or
-    duplicate spans of one code collapse into a single highlight, while distinct
-    codes on the same passage stay in separate groups and are all kept.
-    """
+    """One quote competing for persistence within a dedup group (its ``group_key``,
+    typically document id + code id, so distinct codes on one passage are all kept)."""
 
     group_key: Hashable
     quote: str
@@ -63,20 +59,18 @@ def select_deduplicated_quote_spans(candidates: Sequence[QuoteSpanCandidate]) ->
         candidate = candidates[index]
         normalized_text = " ".join(candidate.quote.split()).casefold()
         span = _span(candidate)
-        if span is None:
-            if normalized_text in seen_texts[candidate.group_key]:
-                continue
-        else:
-            # Record the text even when dropping, so an unlocated copy of a
-            # dropped overlapping span cannot sneak through later.
-            seen_texts[candidate.group_key].add(normalized_text)
+        if span is None and normalized_text in seen_texts[candidate.group_key]:
+            continue
+        # Located candidates record their text even when dropped, so an
+        # unlocated copy of a dropped overlapping span cannot sneak through.
+        seen_texts[candidate.group_key].add(normalized_text)
+        if span is not None:
             if any(
                 kept_start < span[1] and kept_end > span[0]
                 for kept_start, kept_end in kept_spans[candidate.group_key]
             ):
                 continue
             kept_spans[candidate.group_key].append(span)
-        seen_texts[candidate.group_key].add(normalized_text)
         kept.append(index)
     return sorted(kept)
 
