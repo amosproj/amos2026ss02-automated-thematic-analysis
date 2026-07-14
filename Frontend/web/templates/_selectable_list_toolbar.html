@@ -125,7 +125,7 @@
                    required>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
             <button type="submit" class="btn btn-primary">Create</button>
           </div>
         </form>
@@ -156,7 +156,7 @@
             <p>{{ selectable_list_delete_message | default('Are you sure you want to delete the selected items? This action cannot be undone.') | safe }}</p>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
             <button type="submit" class="btn btn-danger">
               {{ selectable_list_delete_confirm_label | default('Delete') }}
             </button>

@@ -1,15 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Demographic Data{% endblock %}
 {% block content %}
-  {% if corpus_id and corpus_options %}
-    {% set active_corpus_id = corpus_id %}
-    {% set switch_template_url = url_for('demographic.list_files', corpus_id='__CORPUS_ID__') %}
-    {% set helper_text = 'Showing demographics for this corpus.' %}
-    {% set show_create_form = False %}
-    {% include "_corpus_select.html" %}
-  {% endif %}
-
-  <div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
     <h1 class="h3 mb-0">Demographic Data</h1>
     {% if corpus_id %}
       <div class="d-flex gap-2">
@@ -26,6 +18,14 @@
       </div>
     {% endif %}
   </div>
+
+  {% if corpus_id and corpus_options %}
+    {% set active_corpus_id = corpus_id %}
+    {% set switch_template_url = url_for('demographic.list_files', corpus_id='__CORPUS_ID__') %}
+    {% set corpus_select_variant = 'scope' %}
+    {% set helper_text = 'Showing demographic data for this corpus.' %}
+    {% include "_corpus_select.html" %}
+  {% endif %}
 
   {% if error %}
     <p class="text-secondary">Couldn't load demographic data right now.</p>

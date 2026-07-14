@@ -1,4 +1,6 @@
-/* Project-specific overrides — Bootstrap handles the foundation. */
+/* Project-specific overrides — Bootstrap handles the foundation.
+   All colors come from tokens.css (issue #260). Do not add raw hex values
+   here; add or reuse a token instead. */
 
 /* ── Shared selectable lists ─────────────────────────────────────────────── */
 .ata-selectable-list {
@@ -11,8 +13,8 @@
     justify-content: space-between;
     gap: 1rem;
     padding: 0.75rem 1rem;
-    border-bottom: 1px solid #e5e7eb;
-    background: #f8fafc;
+    border-bottom: 1px solid var(--ata-line);
+    background: var(--ata-surface-muted);
 }
 
 .ata-selectable-list__selection,
@@ -27,13 +29,13 @@
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
-    color: #111827;
+    color: var(--ata-ink-900);
     font-weight: 600;
     line-height: 1.2;
 }
 
 .ata-selectable-list__selected-count {
-    color: #4b5563;
+    color: var(--ata-ink-600);
     font-size: 0.88rem;
     font-weight: 500;
 }
@@ -48,7 +50,7 @@
 }
 
 .ata-selectable-list__row--selected > * {
-    background-color: #eef2ff !important;
+    background-color: var(--ata-primary-050) !important;
 }
 
 @media (max-width: 575.98px) {
@@ -63,13 +65,159 @@
     }
 }
 
-/* ── Theme browser page header ─────────────────────────────────────────────── */
-.theme-page-header {
-    background: linear-gradient(135deg, #3730a3 0%, #4f46e5 55%, #6366f1 100%);
+/* ── Hover-lift affordance ───────────────────────────────────────────────────
+   Same motion recipe as .upload-card. Used by the Home category cards
+   (buttons remain the click target there, per PO) and the codebook mode
+   cards (fully clickable labels). */
+.hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
+.hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 28px -12px rgba(15, 23, 42, 0.18);
+}
+
+.hover-lift:active {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px -8px rgba(15, 23, 42, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hover-lift,
+    .hover-lift:hover,
+    .hover-lift:active {
+        transition: none;
+        transform: none;
+    }
+}
+
+/* The mode cards are <label>s wrapping a radio — clickable everywhere, so
+   they should look it. */
+.mode-card { cursor: pointer; }
+
+/* ── Corpus toolbar (shared partial _corpus_select.html) ─────────────────────
+   One slim bar: label + compact select on the left, New/Delete actions on the
+   right. Replaces the old full-size card so list pages lead with content. */
+.corpus-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.6rem 0.9rem;
+    background: var(--ata-surface-muted);
+    border: 1px solid var(--ata-line);
+    border-radius: var(--ata-radius-control);
+}
+
+.corpus-bar-main {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.corpus-bar-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    font-size: 0.74rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ata-ink-500);
+    white-space: nowrap;
+}
+
+.corpus-bar-label .bi {
+    color: var(--ata-primary-500);
+    font-size: 1rem;
+}
+
+.corpus-bar-select {
+    flex: 0 1 auto;
+    min-width: 200px;
+    max-width: 340px;
+    background-color: #fff;
+    font-weight: 500;
+}
+
+.corpus-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+.corpus-bar-hint {
+    font-size: 0.78rem;
+    color: var(--ata-ink-500);
+}
+
+@media (max-width: 575.98px) {
+    .corpus-bar-select { max-width: 100%; flex: 1 1 100%; }
+    .corpus-bar-actions { margin-left: 0; }
+}
+
+/* Scope variant — a full-width one-line strip directly under the page title:
+   labelled corpus select + helper caption, closed by a hairline so the
+   context reads separately from both the title actions and the content. */
+.corpus-scope {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--ata-line);
+}
+
+.corpus-scope-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    font-size: 0.74rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ata-ink-500);
+    white-space: nowrap;
+}
+
+.corpus-scope-label .bi {
+    color: var(--ata-primary-500);
+    font-size: 1rem;
+}
+
+.corpus-scope-select {
+    width: auto;
+    min-width: 200px;
+    max-width: 320px;
+    background-color: #fff;
+    font-weight: 500;
+}
+
+.corpus-scope-hint {
+    font-size: 0.8rem;
+    color: var(--ata-ink-500);
+}
+
+@media (max-width: 575.98px) {
+    .corpus-scope-select { max-width: 100%; flex: 1 1 100%; }
+}
+
+/* ── Theme browser page header ─────────────────────────────────────────────── */
+.theme-page-header {
+    background: var(--ata-gradient-hero);
+}
+
+/* Analysis-run context row INSIDE the hero — a translucent divider separates
+   it from the title row (was a second stacked gradient banner, which read as
+   two competing page headers). */
 .analysis-run-bar {
-    background: linear-gradient(135deg, #3730a3 0%, #4f46e5 55%, #6366f1 100%);
+    border-top: 1px solid rgba(255, 255, 255, 0.28);
+    margin-top: 1rem;
+    padding-top: 1rem;
 }
 
 .analysis-run-badge {
@@ -133,16 +281,16 @@
     line-height: 1;
 }
 
-.metric-card--indigo { background: linear-gradient(135deg, #4338ca, #6366f1); }
-.metric-card--cyan   { background: linear-gradient(135deg, #0e7490, #06b6d4); }
-.metric-card--teal   { background: linear-gradient(135deg, #0f766e, #14b8a6); }
+.metric-card--indigo { background: var(--ata-gradient-primary); }
+.metric-card--cyan   { background: var(--ata-gradient-cyan); }
+.metric-card--teal   { background: var(--ata-gradient-teal); }
 
 /* ── Panel section titles ───────────────────────────────────────────────────── */
 .panel-title {
     font-weight: 600;
-    color: #1e1b4b;
+    color: var(--ata-primary-950);
     padding-left: 10px;
-    border-left: 3px solid #4f46e5;
+    border-left: 3px solid var(--ata-primary-500);
     margin-bottom: 1rem;
 }
 
@@ -152,17 +300,17 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #6b7280;
-    border-bottom: 2px solid #e5e7eb;
+    color: var(--ata-ink-500);
+    border-bottom: 2px solid var(--ata-line);
     background: transparent;
     padding-top: 0;
 }
 
 .theme-row-selectable { cursor: pointer; }
 
-.theme-row-selected td { background-color: #eef2ff !important; }
+.theme-row-selected td { background-color: var(--ata-primary-050) !important; }
 
-.theme-zero { color: #9ca3af; }
+.theme-zero { color: var(--ata-ink-400); }
 
 /* ── Researcher-topic highlighting (amber, distinct from indigo selection) ── */
 .theme-topic-badge {
@@ -171,9 +319,9 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #92400e;
-    background: #fef3c7;
-    border: 1px solid #fde68a;
+    color: var(--ata-warning-ink);
+    background: var(--ata-warning-bg);
+    border: 1px solid var(--ata-warning-line);
     border-radius: 10px;
     padding: 1px 8px;
     margin-left: 6px;
@@ -196,7 +344,7 @@
 .theme-progress {
     height: 6px;
     border-radius: 10px;
-    background: #e0e7ff;
+    background: var(--ata-primary-100);
     flex: 1;
     overflow: hidden;
 }
@@ -209,7 +357,7 @@
     /* One neutral indigo for every coverage level (issue #261) — low coverage
        isn't "bad", so no traffic-light colors. Same gradient as .breakdown-bar
        and the page headers, on the indigo-100 track above. */
-    background: linear-gradient(90deg, #4338ca, #6366f1);
+    background: var(--ata-gradient-bar);
 }
 
 /* ── Demographic breakdown (UC 3.6) ─────────────────────────────────────────── */
@@ -221,7 +369,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #4f46e5;
+    color: var(--ata-primary-500);
     margin-bottom: 0.6rem;
 }
 
@@ -239,7 +387,7 @@
 
 .breakdown-row-label {
     font-size: 0.82rem;
-    color: #374151;
+    color: var(--ata-ink-700);
     text-align: left;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -249,7 +397,7 @@
 .breakdown-track {
     position: relative;
     height: 20px;
-    background: #eef2ff;
+    background: var(--ata-primary-050);
     border-radius: 6px;
     overflow: hidden;
 }
@@ -257,21 +405,21 @@
 .breakdown-bar {
     height: 100%;
     border-radius: 6px;
-    background: linear-gradient(90deg, #4338ca, #6366f1);
+    background: var(--ata-gradient-bar);
     transition: width 0.4s ease;
     min-width: 2px;
 }
 
 .breakdown-bar-pct {
     font-size: 0.75rem;
-    color: #1e1b4b;
+    color: var(--ata-primary-950);
     text-align: right;
     white-space: nowrap;
 }
 
 .breakdown-bar-count {
     font-size: 0.75rem;
-    color: #6b7280;
+    color: var(--ata-ink-500);
     white-space: nowrap;
 }
 
@@ -280,7 +428,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #6b7280;
+    color: var(--ata-ink-500);
 }
 
 .breakdown-small-sample {
@@ -289,9 +437,9 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    color: #92400e;
-    background: #fef3c7;
-    border: 1px solid #fde68a;
+    color: var(--ata-warning-ink);
+    background: var(--ata-warning-bg);
+    border: 1px solid var(--ata-warning-line);
     border-radius: 10px;
     padding: 1px 7px;
     margin-left: 6px;
@@ -323,12 +471,12 @@
     height: 0;
     border-style: solid;
     border-width: 4px 0 4px 6px;
-    border-color: transparent transparent transparent #9ca3af;
+    border-color: transparent transparent transparent var(--ata-ink-400);
     transition: transform 0.18s ease;
 }
 .tree-toggle[aria-expanded="true"]::before { transform: rotate(90deg); }
 .theme-row-selected .tree-toggle::before {
-    border-color: transparent transparent transparent #1d4ed8;
+    border-color: transparent transparent transparent var(--ata-primary-600);
 }
 
 /* Alignment spacer for leaf rows (same footprint as the chevron). */
@@ -356,24 +504,24 @@
     margin-bottom: -0.25rem;
 }
 .tree-indent--line {
-    background: linear-gradient(#d1d5db, #d1d5db) no-repeat center top / 1.5px 100%;
+    background: linear-gradient(var(--ata-ink-300), var(--ata-ink-300)) no-repeat center top / 1.5px 100%;
 }
 .tree-indent--tee {
     background:
-        linear-gradient(#d1d5db, #d1d5db) no-repeat center top / 1.5px 100%,
-        linear-gradient(#d1d5db, #d1d5db) no-repeat right center / 50% 1.5px;
+        linear-gradient(var(--ata-ink-300), var(--ata-ink-300)) no-repeat center top / 1.5px 100%,
+        linear-gradient(var(--ata-ink-300), var(--ata-ink-300)) no-repeat right center / 50% 1.5px;
 }
 .tree-indent--elbow {
     background:
-        linear-gradient(#d1d5db, #d1d5db) no-repeat center top / 1.5px 50%,
-        linear-gradient(#d1d5db, #d1d5db) no-repeat right center / 50% 1.5px;
+        linear-gradient(var(--ata-ink-300), var(--ata-ink-300)) no-repeat center top / 1.5px 50%,
+        linear-gradient(var(--ata-ink-300), var(--ata-ink-300)) no-repeat right center / 50% 1.5px;
 }
 
 /* Divider between the themes table and the quotes panel inside the merged
    box: a vertical rule when the columns sit side by side (xl+), a horizontal
    rule when they stack on smaller screens. */
 .quotes-panel {
-    border-top: 1px solid #e5e7eb;
+    border-top: 1px solid var(--ata-line);
     padding-top: 1rem;
 }
 
@@ -396,14 +544,14 @@
     background: #fff;
     z-index: 1;
     /* border-bottom doesn't travel with sticky cells; draw it as a shadow. */
-    box-shadow: inset 0 -2px 0 #e5e7eb;
+    box-shadow: inset 0 -2px 0 var(--ata-line);
     border-bottom: 0;
 }
 @media (min-width: 1200px) {
     .quotes-panel {
         border-top: 0;
         padding-top: 0;
-        border-left: 1px solid #e5e7eb;
+        border-left: 1px solid var(--ata-line);
         padding-left: 1.5rem;
     }
 }
@@ -412,7 +560,7 @@
 .td-name {
     font-size: 1.35rem;
     font-weight: 700;
-    color: #1e1b4b;
+    color: var(--ata-primary-950);
     line-height: 1.25;
 }
 
@@ -420,9 +568,9 @@
     display: inline-block;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.72rem;
-    color: #6b7280;
-    background: #f3f4f6;
-    border: 1px solid #e5e7eb;
+    color: var(--ata-ink-500);
+    background: var(--ata-surface-subtle);
+    border: 1px solid var(--ata-line);
     border-radius: 6px;
     padding: 3px 8px;
     word-break: break-all;
@@ -436,7 +584,7 @@
 .td-stat-number {
     font-size: 2rem;
     font-weight: 700;
-    color: #4f46e5;
+    color: var(--ata-primary-500);
     line-height: 1;
 }
 
@@ -445,7 +593,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.07em;
-    color: #374151;
+    color: var(--ata-ink-700);
     margin-top: 0.3rem;
 }
 
@@ -478,9 +626,9 @@
 /* ── Site footer ────────────────────────────────────────────────────────────── */
 .site-footer {
     flex-shrink: 0;
-    background: #f8f9fb;
-    border-top: 3px solid #4f46e5;
-    color: #374151;
+    background: var(--ata-surface-muted);
+    border-top: 3px solid var(--ata-primary-500);
+    color: var(--ata-ink-700);
 }
 
 .footer-logo {
@@ -490,14 +638,14 @@
 
 .footer-project-name {
     font-weight: 600;
-    color: #1e1b4b;
+    color: var(--ata-primary-950);
     font-size: 0.9rem;
     line-height: 1.2;
 }
 
 .footer-project-sub {
     font-size: 0.75rem;
-    color: #6b7280;
+    color: var(--ata-ink-500);
     line-height: 1.2;
 }
 
@@ -506,20 +654,20 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #4f46e5;
+    color: var(--ata-primary-500);
     line-height: 1.2;
 }
 
 .footer-partner-name {
     font-weight: 600;
-    color: #1f2937;
+    color: var(--ata-ink-800);
     font-size: 0.85rem;
     line-height: 1.25;
 }
 
 .footer-partner-tag {
     font-size: 0.76rem;
-    color: #6b7280;
+    color: var(--ata-ink-500);
     font-style: italic;
     line-height: 1.2;
 }
@@ -527,19 +675,19 @@
 .footer-link {
     font-size: 0.78rem;
     font-weight: 500;
-    color: #4f46e5;
+    color: var(--ata-primary-500);
     text-decoration: none;
 }
 
 .footer-link:hover {
-    color: #3730a3;
+    color: var(--ata-primary-700);
     text-decoration: underline;
 }
 
 .footer-bottom {
-    border-top: 1px solid #e5e7eb;
-    background: #f3f4f6;
-    color: #6b7280;
+    border-top: 1px solid var(--ata-line);
+    background: var(--ata-surface-subtle);
+    color: var(--ata-ink-500);
     font-size: 0.78rem;
 }
 
@@ -561,22 +709,19 @@
 }
 
 /* ── Upload cards (Uploads page two-card side-by-side layout) ───────────────
-   Reuses the indigo/teal gradient palette from the theme-browser metric cards
-   so the Uploads page visually belongs to the same design system. Cards lift
+   Indigo marks the primary card (transcripts); teal marks the supporting,
+   optional cards (demographics, codebook). The former cyan variant is an
+   alias of teal so the page uses exactly two accents (issue #260). Cards lift
    on hover (translateY + shadow) for a clear tactile affordance.
 */
 
-/* Soft max-width cap keeps the cards from sprawling across 1920px+ monitors
-   without making them awkwardly narrow on medium screens. */
-.upload-row {
-    max-width: 1080px;
-    margin-left: auto;
-    margin-right: auto;
-}
+/* The card row spans the full container width so it lines up with the corpus
+   toolbar above it (previously capped at 1080px, which left the cards
+   visually narrower than every other component on the page). */
 
 .upload-card {
     background: #fff;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--ata-line);
     border-radius: 14px;
     overflow: hidden;
     display: flex;
@@ -600,19 +745,19 @@
 }
 
 .upload-card--indigo .upload-card-header {
-    background: linear-gradient(135deg, #4338ca, #6366f1);
+    background: var(--ata-gradient-primary);
 }
-.upload-card--indigo:hover { border-color: #6366f1; }
+.upload-card--indigo:hover { border-color: var(--ata-primary-400); }
 
 .upload-card--teal .upload-card-header {
-    background: linear-gradient(135deg, #0f766e, #14b8a6);
+    background: var(--ata-gradient-teal);
 }
-.upload-card--teal:hover { border-color: #14b8a6; }
+.upload-card--teal:hover { border-color: var(--ata-teal-500); }
 
 .upload-card--cyan .upload-card-header {
-    background: linear-gradient(135deg, #0e7490, #06b6d4);
+    background: var(--ata-gradient-cyan);
 }
-.upload-card--cyan:hover { border-color: #06b6d4; }
+.upload-card--cyan:hover { border-color: var(--ata-cyan-500); }
 
 .upload-card--dimmed {
     opacity: 0.35;
@@ -661,7 +806,8 @@
 
 /* ── Theme-coloured submit buttons (match each card's gradient header) ───── */
 .btn-indigo,
-.btn-teal {
+.btn-teal,
+.btn-cyan {
     color: #fff;
     border: 1px solid transparent;
     font-weight: 500;
@@ -674,11 +820,11 @@
        .upload-card--indigo header gradient. A small button can't render the
        header's 135deg gradient meaningfully — the colour just looks washed
        out — so a solid pull from the same palette reads as "same family". */
-    background: #4338ca;
+    background: var(--ata-primary-600);
 }
 .btn-indigo:hover,
 .btn-indigo:focus {
-    background: #3730a3;
+    background: var(--ata-primary-700);
     color: #fff;
     box-shadow: 0 6px 14px -6px rgba(67, 56, 202, 0.45);
 }
@@ -688,8 +834,8 @@
 }
 .btn-indigo:disabled,
 .btn-indigo.disabled {
-    background: #c7d2fe;
-    color: #eef2ff;
+    background: var(--ata-primary-200);
+    color: var(--ata-primary-050);
     opacity: 0.85;
     cursor: not-allowed;
     /* Bootstrap's .btn:disabled sets pointer-events: none, which makes the
@@ -701,11 +847,11 @@
 }
 
 .btn-teal {
-    background: #0d9488;
+    background: var(--ata-teal-600);
 }
 .btn-teal:hover,
 .btn-teal:focus {
-    background: #0f766e;
+    background: var(--ata-teal-700);
     color: #fff;
     box-shadow: 0 6px 14px -6px rgba(13, 148, 136, 0.45);
 }
@@ -715,26 +861,21 @@
 }
 .btn-teal:disabled,
 .btn-teal.disabled {
-    background: #dcfce7;
-    color: #f0fdf4;
+    background: var(--ata-teal-100);
+    color: var(--ata-teal-050);
     opacity: 0.85;
     cursor: not-allowed;
     pointer-events: auto;     /* see .btn-indigo:disabled for rationale */
     box-shadow: none;
 }
 
-/* Cyan variant: used for demographic upload card */
+/* Cyan variant: used for the demographic upload card */
 .btn-cyan {
-    color: #fff;
-    border: 1px solid transparent;
-    font-weight: 500;
-    padding: 0.45rem 1.1rem;
-    transition: background 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
-    background: #0e7490;
+    background: var(--ata-cyan-700);
 }
 .btn-cyan:hover,
 .btn-cyan:focus {
-    background: #075985;
+    background: var(--ata-cyan-800);
     color: #fff;
     box-shadow: 0 6px 14px -6px rgba(14, 116, 144, 0.45);
 }
@@ -744,11 +885,11 @@
 }
 .btn-cyan:disabled,
 .btn-cyan.disabled {
-    background: #cffafe;
-    color: #ecfeff;
+    background: var(--ata-cyan-100);
+    color: var(--ata-cyan-050);
     opacity: 0.85;
     cursor: not-allowed;
-    pointer-events: auto;
+    pointer-events: auto;     /* see .btn-indigo:disabled for rationale */
     box-shadow: none;
 }
 
@@ -763,14 +904,14 @@
     margin-top: 2px;
 }
 .file-list-item:hover {
-    background: #f3f4f6;
+    background: var(--ata-surface-subtle);
 }
 .file-list-item.is-oversize {
-    background: #fef2f2;
-    color: #991b1b;
+    background: var(--ata-danger-bg);
+    color: var(--ata-danger-700);
 }
 .file-list-item.is-oversize:hover {
-    background: #fee2e2;
+    background: var(--ata-danger-100);
 }
 
 .file-list-remove {
@@ -778,7 +919,7 @@
     height: 26px;
     padding: 0;
     border-radius: 50%;
-    color: #6b7280;
+    color: var(--ata-ink-500);
     background: transparent;
     border: 1px solid transparent;
     display: inline-flex;
@@ -788,10 +929,14 @@
 }
 .file-list-remove:hover,
 .file-list-remove:focus {
-    background: #fee2e2;
-    color: #b91c1c;
-    border-color: #fecaca;
+    background: var(--ata-danger-100);
+    color: var(--ata-danger-700);
+    border-color: var(--ata-danger-200);
+}
+/* Keep a visible ring for keyboard users (a11y — do not remove). */
+.file-list-remove:focus-visible {
     outline: none;
+    box-shadow: var(--ata-focus-ring);
 }
 .file-list-remove svg {
     width: 13px;
@@ -812,34 +957,34 @@
 .ata-toast {
   position: relative;
   background: #fff;
-  border: 1px solid #dee2e6;
-  border-left: 4px solid #6c757d;
+  border: 1px solid var(--ata-line);
+  border-left: 4px solid var(--ata-ink-500);
   border-radius: .5rem;
   padding: .85rem 2.25rem .85rem 1rem;
   box-shadow: 0 6px 16px rgba(0, 0, 0, .12);
   font-size: .95rem;
 }
-.ata-toast-success { border-left-color: var(--bs-success, #198754); }
-.ata-toast-danger  { border-left-color: var(--bs-danger,  #dc3545); }
-.ata-toast-warning { border-left-color: var(--bs-warning, #ffc107); }
+.ata-toast-success { border-left-color: var(--ata-success); }
+.ata-toast-danger  { border-left-color: var(--ata-danger); }
+.ata-toast-warning { border-left-color: var(--ata-warning-ink); }
 .ata-toast-clickable { cursor: pointer; }
-.ata-toast-clickable:hover { background: #f8f9fa; }
+.ata-toast-clickable:hover { background: var(--ata-surface-muted); }
 .ata-toast .btn-close {
   position: absolute;
   top: .55rem;
   right: .55rem;
 }
 .ata-toast-title { font-weight: 600; margin-bottom: .2rem; }
-.ata-toast-body  { color: #495057; }
+.ata-toast-body  { color: var(--ata-ink-700); }
 
 /* ── Codebook "saved" confirmation ──────────────────────────────────────── */
 .success-check {
     width: 72px;
     height: 72px;
     border-radius: 50%;
-    background: #ecfdf5;
-    border: 2px solid #a7f3d0;
-    color: #10b981;
+    background: var(--ata-success-bg);
+    border: 2px solid var(--ata-success-200);
+    color: var(--ata-success);
     font-size: 2.25rem;
     line-height: 1;
     display: flex;
@@ -854,18 +999,18 @@
 }
 .ata-link-card[data-transcript-card] { cursor: grab; }
 .ata-link-card[data-transcript-card]:focus-visible {
-  outline: 2px solid var(--bs-primary, #0d6efd);
+  outline: 2px solid var(--ata-primary-500);
   outline-offset: 2px;
 }
 .ata-link-card--dragging { opacity: .5; cursor: grabbing; }
 .ata-link-card--selected {
-  border-color: var(--bs-primary, #0d6efd);
-  box-shadow: 0 0 0 .15rem rgba(13, 110, 253, .25);
+  border-color: var(--ata-primary-500);
+  box-shadow: var(--ata-focus-ring);
 }
-.ata-link-card--linked { border-color: var(--bs-success, #198754); }
+.ata-link-card--linked { border-color: var(--ata-success); }
 .ata-link-dropzone--over {
-  border-color: var(--bs-primary, #0d6efd);
-  background: rgba(13, 110, 253, .08);
+  border-color: var(--ata-primary-500);
+  background: rgba(79, 70, 229, .08);
 }
 .ata-linking-board [data-transcripts-column],
 .ata-linking-board [data-demographic-column] {
@@ -877,15 +1022,15 @@
    Teal family — matches .btn-teal / .metric-card--teal — so the trigger and
    modal read as their own feature, distinct from the indigo View Analysis. */
 .btn-outline-teal {
-    color: #0d9488;
-    border: 1px solid #0d9488;
+    color: var(--ata-teal-600);
+    border: 1px solid var(--ata-teal-600);
     background: transparent;
     font-weight: 500;
     transition: background 0.15s ease, color 0.15s ease, box-shadow 0.18s ease;
 }
 .btn-outline-teal:hover,
 .btn-outline-teal:focus {
-    background: #0d9488;
+    background: var(--ata-teal-600);
     color: #fff;
     box-shadow: 0 6px 14px -6px rgba(13, 148, 136, 0.45);
 }
@@ -895,7 +1040,7 @@
 }
 
 .transcripts-modal-header {
-    background: linear-gradient(135deg, #0f766e, #14b8a6);
+    background: var(--ata-gradient-teal);
     border-bottom: 0;
 }
 .transcripts-modal-header .modal-title { color: #fff; }
@@ -925,9 +1070,9 @@
 .transcript-link {
     display: block;
     padding: 0.5rem 0.75rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--ata-line);
     border-radius: 0.5rem;
-    color: #334155;
+    color: var(--ata-ink-700);
     background: #fff;
     text-decoration: none;
     transition: background 0.15s ease, border-color 0.15s ease,
@@ -935,13 +1080,14 @@
 }
 .transcript-link:hover,
 .transcript-link:focus {
-    background: #f0fdfa;
-    border-color: #99f6e4;
-    color: #0f766e;
+    background: var(--ata-teal-050);
+    border-color: var(--ata-teal-200);
+    color: var(--ata-teal-700);
     transform: translateX(2px);
 }
 
-/* Pipeline Stepper */
+/* Pipeline Stepper — active steps use the brand primary, terminal states use
+   the shared status tokens (was a third, off-palette blue/emerald family). */
 .pipeline-stepper {
     display: flex;
     flex-direction: column;
@@ -966,7 +1112,7 @@
     top: 1.6rem;
     bottom: 0;
     width: 2px;
-    background-color: #e5e7eb;
+    background-color: var(--ata-line);
 }
 
 .pipeline-step:last-child::before {
@@ -981,8 +1127,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: #f3f4f6;
-    color: #9ca3af;
+    background-color: var(--ata-surface-subtle);
+    color: var(--ata-ink-400);
     z-index: 1;
     font-size: 0.85rem;
     border: 2px solid white;
@@ -997,62 +1143,62 @@
 .pipeline-step-title {
     font-size: 0.95rem;
     font-weight: 500;
-    color: #4b5563;
+    color: var(--ata-ink-600);
 }
 
 .pipeline-step-subtitle {
     font-size: 0.85rem;
-    color: #6b7280;
+    color: var(--ata-ink-500);
     margin-top: 0.25rem;
 }
 
 /* States */
 .pipeline-step-active .pipeline-step-icon {
-    background-color: #eff6ff;
-    color: #3b82f6;
+    background-color: var(--ata-primary-050);
+    color: var(--ata-primary-500);
 }
 .pipeline-step-active .pipeline-step-title {
-    color: #1f2937;
+    color: var(--ata-ink-800);
     font-weight: 600;
 }
 .pipeline-step-active::before {
-    background-color: #bfdbfe;
+    background-color: var(--ata-primary-200);
 }
 
 .pipeline-step-completed .pipeline-step-icon {
-    background-color: #ecfdf5;
-    color: #10b981;
+    background-color: var(--ata-success-bg);
+    color: var(--ata-success);
 }
 .pipeline-step-completed .pipeline-step-title {
-    color: #111827;
+    color: var(--ata-ink-900);
 }
 .pipeline-step-completed::before {
-    background-color: #10b981;
+    background-color: var(--ata-success);
 }
 
 .pipeline-step-failed .pipeline-step-icon {
-    background-color: #fef2f2;
-    color: #ef4444;
+    background-color: var(--ata-danger-bg);
+    color: var(--ata-danger);
 }
 .pipeline-step-failed .pipeline-step-title {
-    color: #b91c1c;
+    color: var(--ata-danger-700);
 }
 
 .pipeline-step-progress {
     height: 6px;
     border-radius: 4px;
-    background-color: #f3f4f6;
+    background-color: var(--ata-surface-subtle);
     overflow: hidden;
     margin-top: 0.5rem;
 }
 
 .pipeline-step-progress-bar {
     height: 100%;
-    background-color: #3b82f6;
+    background-color: var(--ata-primary-500);
     transition: width 0.3s ease;
 }
 .pipeline-step-failed .pipeline-step-progress-bar {
-    background-color: #ef4444;
+    background-color: var(--ata-danger);
 }
 
 .copy-error-btn {
@@ -1060,11 +1206,11 @@
     padding: 0.2rem 0.5rem;
     border-radius: 4px;
     background: transparent;
-    border: 1px solid #f87171;
-    color: #b91c1c;
+    border: 1px solid var(--ata-danger-300);
+    color: var(--ata-danger-700);
     cursor: pointer;
     transition: all 0.2s ease;
 }
 .copy-error-btn:hover {
-    background: #fef2f2;
+    background: var(--ata-danger-bg);
 }

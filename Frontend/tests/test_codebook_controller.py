@@ -86,7 +86,7 @@ def test_list_codebooks_renders_empty_state(client, fake_codebook_backend):
     fake_codebook_backend.list_codebooks_result = []
     resp = client.get("/codebooks/test-corpus-id/")
     assert resp.status_code == 200
-    assert b"No codebooks found" in resp.data
+    assert b"No codebooks created yet" in resp.data
 
 
 def test_list_codebooks_renders_saved_entries(client, fake_codebook_backend):
@@ -100,7 +100,7 @@ def test_list_codebooks_renders_saved_entries(client, fake_codebook_backend):
     assert resp.status_code == 200
     assert b"Interview Framework" in resp.data
     assert b"Health Study" in resp.data
-    assert b"No codebooks found" not in resp.data
+    assert b"No codebooks" not in resp.data
 
 
 def test_list_codebooks_surfaces_backend_error(client, fake_codebook_backend):

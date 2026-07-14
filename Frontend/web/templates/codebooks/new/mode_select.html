@@ -19,7 +19,7 @@
       ] %}
       {% for value, title, description in modes %}
         <div class="col-md-4">
-          <label class="mode-card bg-white border rounded-2 p-4 h-100 d-flex flex-column gap-2 {% if selected == value %}border-primary border-2 shadow-sm{% endif %}"
+          <label class="mode-card hover-lift bg-white border rounded-2 p-4 h-100 d-flex flex-column gap-2 {% if selected == value %}border-primary border-2 shadow-sm{% endif %}"
                  data-mode-card="{{ value }}">
             <input class="visually-hidden mode-radio"
                    type="radio"
