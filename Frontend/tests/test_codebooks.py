@@ -57,7 +57,9 @@ def test_codebook_list_renders_empty_state(client, fake_backend):
     fake_backend.codebooks = []
     resp = client.get("/codebooks/", follow_redirects=True)
     assert resp.status_code == 200
-    assert b"No codebooks found" in resp.data
+    assert b"No codebooks created yet" in resp.data
+    # Same empty-state pattern as Transcripts/Demographic: message + action link.
+    assert b"Create a codebook" in resp.data
 
 
 # The "Create New Codebook" button is the wizard entry point. It lives in the
@@ -152,7 +154,7 @@ def test_codebook_list_shows_unavailable_message_when_backend_down(client, fake_
     # HTML-escapes to "can&#39;t" when rendering the flash message.
     assert b"reach the analysis service" in resp.data
     # Empty-state line must NOT appear alongside the error.
-    assert b"No codebooks found" not in resp.data
+    assert b"No codebooks" not in resp.data
 
 
 def test_codebook_list_shows_error_when_requested_corpus_missing(client, fake_backend):
@@ -160,7 +162,7 @@ def test_codebook_list_shows_error_when_requested_corpus_missing(client, fake_ba
     resp = client.get("/codebooks/missing-corpus/", follow_redirects=True)
     assert resp.status_code == 200
     assert b"selected corpus couldn" in resp.data
-    assert b"No codebooks found" not in resp.data
+    assert b"No codebooks" not in resp.data
 
 
 # GET /codebooks/<id>/themes
@@ -184,7 +186,10 @@ def test_codebook_themes_renders_frequency_and_tree(client, fake_backend):
     resp = client.get("/codebooks/test-corpus-id/cb-1/themes", follow_redirects=True)
     assert resp.status_code == 200
     assert b"Work-Life Balance" in resp.data
-    assert b'id="global-corpus-select"' in resp.data
+    # Detail page: no corpus switcher here — it would navigate away to another
+    # corpus's codebook list, not re-scope this page. The hero + breadcrumb
+    # carry the context.
+    assert b'id="global-corpus-select"' not in resp.data
 
 
 def test_codebook_themes_highlights_analysis_nav_tab(client, fake_backend):
