@@ -276,6 +276,7 @@
 
   const CODE_ASSIGNMENTS = {{ code_assignments | tojson | safe }};
   const THEMES = {{ themes | tojson | safe }};
+  const RAW_CONTENT = {{ document.content | tojson | safe }};
 
   /* 10-colour pastel palette — enough for any realistic codebook */
   const PALETTE = [
@@ -369,8 +370,26 @@
              || (a.start_char ?? 0) - (b.start_char ?? 0)
     );
 
-    /* Track search position per (code, text) to highlight each occurrence */
-    const searchFrom = {};
+    /* Badge letters shift rendered offsets, so target each quote's occurrence
+       (counted before start_char in the raw transcript) instead of its offset. */
+    const renderedText = container.textContent;
+
+    function occurrenceStart(quote, startChar) {
+      let count = 0;
+      let i = RAW_CONTENT.indexOf(quote);
+      while (i !== -1 && i < startChar) {
+        count += 1;
+        i = RAW_CONTENT.indexOf(quote, i + 1);
+      }
+      let from = 0;
+      while (count > 0) {
+        const hit = renderedText.indexOf(quote, from);
+        if (hit === -1) return 0;
+        from = hit + 1;
+        count -= 1;
+      }
+      return from;
+    }
 
     for (const ca of sorted) {
       if (!ca.quote || (!ca.theme_id && !ca.code_id)) continue;
@@ -402,9 +421,7 @@
       }
 
       const quote = ca.quote.trim();
-      const key = colorId + '|' + quote;
-      const matchEnd = highlightQuote(container, quote, color, tooltipText, colorId, searchFrom[key] || 0);
-      if (matchEnd >= 0) searchFrom[key] = matchEnd;
+      highlightQuote(container, quote, color, tooltipText, colorId, occurrenceStart(quote, ca.start_char ?? 0));
     }
 
     /* Initialise Bootstrap tooltips on all freshly created marks */
