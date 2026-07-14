@@ -1,0 +1,163 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Design tokens — single source of truth for every color, radius, shadow and
+   focus style in the frontend (issue #260, "Unify the whole frontend").
+
+   Rules:
+   - Raw hex values may ONLY appear in this file. Everything in main.css and
+     the templates must reference a token (or a Bootstrap variable that is
+     mapped to a token below).
+   - Brand primary is the indigo family already used by the logo, footer,
+     Theme Browser and Upload page. Teal is the ONE secondary accent, reserved
+     for "optional / supporting" surfaces (demographic & codebook upload cards,
+     interviewee speaker badges) — never for primary actions.
+   - Status colors match Bootstrap's contextual classes (text-bg-success etc.)
+     so templates that still use those classes stay consistent.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Brand (indigo) ────────────────────────────────────────────────────── */
+  --ata-primary-950: #1e1b4b;
+  --ata-primary-700: #3730a3;   /* hover / active, gradient start */
+  --ata-primary-600: #4338ca;   /* buttons, links (7.3:1 on white) */
+  --ata-primary-500: #4f46e5;   /* accents, borders, gradient mid  */
+  --ata-primary-400: #6366f1;   /* gradient end */
+  --ata-primary-200: #c7d2fe;   /* disabled fills */
+  --ata-primary-100: #e0e7ff;   /* progress tracks */
+  --ata-primary-050: #eef2ff;   /* selected-row tint */
+
+  /* ── Secondary accent (teal) — supporting/optional surfaces only ───────── */
+  --ata-teal-700: #0f766e;
+  --ata-teal-600: #0d9488;
+  --ata-teal-500: #14b8a6;
+  --ata-teal-200: #99f6e4;
+  --ata-teal-100: #ccfbf1;
+  --ata-teal-050: #f0fdfa;
+
+  /* ── Tertiary accent (cyan) — demographic upload card only ─────────────── */
+  --ata-cyan-800: #075985;
+  --ata-cyan-700: #0e7490;
+  --ata-cyan-500: #06b6d4;
+  --ata-cyan-100: #cffafe;
+  --ata-cyan-050: #ecfeff;
+
+  /* ── Neutrals (gray family already dominant in main.css) ───────────────── */
+  --ata-ink-900: #111827;
+  --ata-ink-800: #1f2937;
+  --ata-ink-700: #374151;
+  --ata-ink-600: #4b5563;
+  --ata-ink-500: #6b7280;
+  --ata-ink-400: #9ca3af;
+  --ata-ink-300: #d1d5db;
+  --ata-line: #e5e7eb;
+  --ata-surface-subtle: #f3f4f6;
+  --ata-surface-muted: #f8fafc;
+
+  /* ── Status — one set for badges, stepper, toasts, table rows ──────────── */
+  --ata-success: #198754;
+  --ata-success-200: #a7f3d0;
+  --ata-success-bg: #ecfdf5;
+
+  --ata-warning-ink: #92400e;
+  --ata-warning-line: #fde68a;
+  --ata-warning-bg: #fef3c7;
+
+  --ata-danger: #dc3545;
+  --ata-danger-700: #b91c1c;
+  --ata-danger-300: #f87171;
+  --ata-danger-200: #fecaca;
+  --ata-danger-100: #fee2e2;
+  --ata-danger-bg: #fef2f2;
+
+  /* ── Shared gradients ───────────────────────────────────────────────────── */
+  --ata-gradient-hero: linear-gradient(135deg, var(--ata-primary-700) 0%, var(--ata-primary-500) 55%, var(--ata-primary-400) 100%);
+  --ata-gradient-bar: linear-gradient(90deg, var(--ata-primary-600), var(--ata-primary-400));
+  --ata-gradient-primary: linear-gradient(135deg, var(--ata-primary-600), var(--ata-primary-400));
+  --ata-gradient-teal: linear-gradient(135deg, var(--ata-teal-700), var(--ata-teal-500));
+  --ata-gradient-cyan: linear-gradient(135deg, var(--ata-cyan-700), var(--ata-cyan-500));
+
+  /* ── Shape, elevation, focus ────────────────────────────────────────────── */
+  --ata-radius-control: 0.5rem;
+  --ata-radius-surface: 0.75rem;
+  --ata-shadow-raise: 0 6px 16px -8px rgba(15, 23, 42, 0.18);
+  --ata-focus-ring: 0 0 0 0.2rem rgba(79, 70, 229, 0.35);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Bootstrap 5.3 mapping — repaints stock components (buttons, links, badges,
+   pagination, forms, spinners) to the brand without touching any template.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --bs-primary: var(--ata-primary-600);
+  --bs-primary-rgb: 67, 56, 202;              /* #4338ca */
+  --bs-link-color: var(--ata-primary-600);
+  --bs-link-color-rgb: 67, 56, 202;
+  --bs-link-hover-color: var(--ata-primary-700);
+  --bs-link-hover-color-rgb: 55, 48, 163;     /* #3730a3 */
+}
+
+.btn-primary {
+  --bs-btn-bg: var(--ata-primary-600);
+  --bs-btn-border-color: var(--ata-primary-600);
+  --bs-btn-hover-bg: var(--ata-primary-700);
+  --bs-btn-hover-border-color: var(--ata-primary-700);
+  --bs-btn-active-bg: var(--ata-primary-700);
+  --bs-btn-active-border-color: var(--ata-primary-700);
+  --bs-btn-disabled-bg: var(--ata-primary-200);
+  --bs-btn-disabled-border-color: var(--ata-primary-200);
+  --bs-btn-focus-shadow-rgb: 79, 70, 229;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--ata-primary-600);
+  --bs-btn-border-color: var(--ata-primary-600);
+  --bs-btn-hover-bg: var(--ata-primary-600);
+  --bs-btn-hover-border-color: var(--ata-primary-600);
+  --bs-btn-active-bg: var(--ata-primary-700);
+  --bs-btn-active-border-color: var(--ata-primary-700);
+  --bs-btn-disabled-color: var(--ata-primary-400);
+  --bs-btn-disabled-border-color: var(--ata-primary-200);
+  --bs-btn-focus-shadow-rgb: 79, 70, 229;
+}
+
+.btn-link { --bs-btn-color: var(--ata-primary-600); --bs-btn-hover-color: var(--ata-primary-700); }
+
+.pagination {
+  --bs-pagination-active-bg: var(--ata-primary-600);
+  --bs-pagination-active-border-color: var(--ata-primary-600);
+  --bs-pagination-focus-box-shadow: var(--ata-focus-ring);
+}
+
+.progress { --bs-progress-bar-bg: var(--ata-primary-600); }
+
+.accordion {
+  --bs-accordion-active-bg: var(--ata-primary-050);
+  --bs-accordion-active-color: var(--ata-primary-700);
+  --bs-accordion-btn-focus-box-shadow: var(--ata-focus-ring);
+}
+
+.breadcrumb { --bs-breadcrumb-item-active-color: var(--ata-ink-500); }
+
+/* Compiled Bootstrap hardcodes the blue focus/checked styles on form controls
+   (they don't read --bs-primary), so they need explicit overrides. */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--ata-primary-400);
+  box-shadow: var(--ata-focus-ring);
+}
+.form-check-input:checked {
+  background-color: var(--ata-primary-600);
+  border-color: var(--ata-primary-600);
+}
+.form-check-input:focus {
+  border-color: var(--ata-primary-400);
+  box-shadow: var(--ata-focus-ring);
+}
+.btn-close:focus { box-shadow: var(--ata-focus-ring); }
+
+/* A11y: `.shadow-none` on the corpus selector kills Bootstrap's focus ring
+   (box-shadow: none !important). Restore a visible ring for keyboard users. */
+.form-control.shadow-none:focus,
+.form-select.shadow-none:focus {
+  box-shadow: var(--ata-focus-ring) !important;
+}
