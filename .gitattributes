@@ -3,3 +3,4 @@
 # which would break the bash shebang line.
 *.sh    text eol=lf
 *.sh    diff
+*.mp4 filter=lfs diff=lfs merge=lfs -text
