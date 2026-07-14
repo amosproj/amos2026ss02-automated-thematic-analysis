@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 {% block title %}View — {{ file_info.name if file_info else 'Demographic Data' }}{% endblock %}
 {% block content %}
-  {% if corpus_id and corpus_options %}
-    {% set active_corpus_id = corpus_id %}
-    {% set switch_template_url = url_for('demographic.list_files', corpus_id='__CORPUS_ID__') %}
-    {% set helper_text = 'Showing demographic view for this corpus.' %}
-    {% set show_create_form = False %}
-    {% include "_corpus_select.html" %}
-  {% endif %}
-
-  <div class="mb-2">
+  <div class="mb-3">
     <a class="text-decoration-none small"
        href="{{ url_for('demographic.list_files', corpus_id=corpus_id) }}">&larr; Back to file list</a>
   </div>
+
+  {% if corpus_id and corpus_options %}
+    {% set active_corpus_id = corpus_id %}
+    {% set switch_template_url = url_for('demographic.list_files', corpus_id='__CORPUS_ID__') %}
+    {% set corpus_select_variant = 'scope' %}
+    {% set helper_text = 'Showing demographic data for this corpus.' %}
+    {% include "_corpus_select.html" %}
+  {% endif %}
 
   {% if error %}
     <h1 class="h3 mb-4">Demographic Data</h1>
