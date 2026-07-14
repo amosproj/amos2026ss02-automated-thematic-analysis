@@ -31,9 +31,12 @@ The CSV must contain the following column headers. The headers are case-insensit
 
 ## Relationship to System Entities
 
-As noted in the `theme-data-type.md` documentation, a separate `Code` entity also exists in the backend (`codes` table). However, CSV codebook uploads map all node types (`THEME`, `SUBTHEME`, and `CODE`) to `Theme` objects internally for simplicity.
+As noted in the [theme-data-type.md](theme-data-type) documentation, `Theme` and `Code` are separate, first-class persisted entities. CSV codebook uploads preserve this distinction:
 
-All nodes—whether defined as `THEME`, `SUBTHEME`, or `CODE` in the CSV—are stored as `Theme` objects in the database. The node type from the CSV is not preserved as a database field; the hierarchy is expressed entirely through `ThemeHierarchyRelationship` edges derived from the `Parent Name` column.
+- `THEME` and `SUBTHEME` rows are persisted as `Theme` objects, connected to each other via `ThemeHierarchyRelationship` edges derived from the `Parent Name` column.
+- `CODE` rows are persisted as `Code` objects (their own `codes` table), attached to their parent `Theme`/`Subtheme` via `ThemeCodeRelationship` edges. A `CODE` row's `Parent Name` must therefore reference a `THEME` or `SUBTHEME` row, never another `CODE` row — codes are always leaves.
+
+The node type from the CSV **is** preserved, in the sense that it determines which table the row lands in (`themes` vs. `codes`); it is not stored as a literal column on either table.
 
 ## Example
 

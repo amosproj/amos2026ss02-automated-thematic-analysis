@@ -1,103 +1,91 @@
 # Codebook Application API
 
-This document describes autonomous application of an existing codebook to corpus transcripts.
+"Applying a codebook" means deductive coding: taking an **already-created** codebook (its `Theme`/`Code` rows) and running an LLM pass over selected — or all — transcripts in that codebook's corpus, producing per-document theme presence and span-level code assignments. No new themes or codes are created; this is distinct from [codebook-generation.md](codebook-generation), which synthesizes a codebook from scratch (and can optionally run this same application step at the end).
 
-## Core behavior
+In the frontend this is the **Analysis** page/blueprint ("Trigger Analysis").
 
-- Each application creates a new `CodebookApplicationRun`.
-- Existing runs are never overwritten.
-- A run can target either selected transcript IDs or all transcripts in the corpus.
-- Each transcript receives one `DocumentCoding` row.
-- LLM failures are retried up to 3 times per transcript.
-- If one transcript still fails after retries, only that transcript is marked failed and the job continues.
-- Generated coding assignments are span-oriented so future manual coding can reuse the same structures.
+## Base routes
 
-## Job endpoints
+- `POST /codebooks/{codebook_id}/apply-jobs`
+- `GET /codebooks/apply-jobs/{job_id}`
+- `POST /codebooks/apply-jobs/{job_id}/cancel`
+- `GET /codebooks/{codebook_id}/application-runs`
+- `GET /codebook-application-runs/{run_id}`
+- `DELETE /codebook-application-runs/{run_id}`
+- `GET /codebook-application-runs/{run_id}/documents`
+- `GET /codebook-application-runs/{run_id}/export`
 
-### `POST /api/v1/codebooks/{codebook_id}/apply-jobs`
+All JSON responses use the shared envelope `{"success": true, "data": ..., "error": null, "meta": null}`. The export endpoint returns raw CSV instead.
 
-Creates an asynchronous codebook application job.
+## 1) Create an application job
+
+### `POST /codebooks/{codebook_id}/apply-jobs`
 
 Request body:
 
-```json
-{
-  "transcript_document_ids": ["uuid"]
-}
-```
+- `name` (`string`, optional) — auto-generated as `"<Corpus name> Analysis"` (or `"...Analysis N"` for the Nth run) if omitted
+- `custom_id` (`string`, optional) — auto-generated as `RUN-001`, `RUN-002`, ... if omitted
+- `transcript_document_ids` (`uuid[]`, optional) — selected transcripts; omit or pass empty to apply to every document in the codebook's corpus
+- `corpus_id` (`uuid`, optional, **deprecated**) — the corpus is resolved from the codebook; if supplied it must match
 
-Selection behavior:
+Validates that every `transcript_document_ids` entry actually belongs to the codebook's corpus (`422` otherwise).
 
-- The target corpus is resolved from the selected `codebook_id`; clients do not need to submit `corpus_id`.
-- `transcript_document_ids` present: apply to exactly those documents in the codebook's corpus.
-- `transcript_document_ids` omitted or empty: apply to all documents in the codebook's corpus.
+Success: `202 Accepted`, `data` is a `CodebookApplicationJobSchema`.
 
-Success:
+## 2) Job polling
 
-- `202 Accepted`
-- Returns a `CodebookApplicationJobSchema` snapshot.
+### `GET /codebooks/apply-jobs/{job_id}`
 
-### `GET /api/v1/codebooks/apply-jobs/{job_id}`
-
-Polls an application job.
-
-Important fields:
+Returns:
 
 - `status`: `queued | running | succeeded | failed | cancelled`
-- `phase`: `queued | loading_codebook | coding_documents | persisting | succeeded | failed | cancelled`
-- `progress_percent`
-- `documents_total`
-- `documents_done`
-- `documents_coded`
-- `documents_failed`
-- `application_run_id`
-- `error_message`
+- `phase`: e.g. `loading_codebook`, `applying_codebook` (per-document progress), `persisting`, or terminal
+- `progress_percent`: 0-100 estimate
+- `application_run_id` (set once the run is created)
+- `documents_total`, `documents_done`, `documents_coded`, `documents_failed`
+- `llm_tokens_input`, `llm_tokens_output` (nullable) — running LLM token usage, updated live (drives the wait page's live token counter)
+- `error_message` (set on failure)
 
-Partial transcript failures are reported as structured JSON in `error_message` while the job can still finish with `status = succeeded`.
+## 3) Job cancellation
 
-### `POST /api/v1/codebooks/apply-jobs/{job_id}/cancel`
+### `POST /codebooks/apply-jobs/{job_id}/cancel`
 
-Requests cancellation for a queued or running application job.
+Same semantics as codebook generation jobs: queued jobs cancel immediately; running jobs cancel once observed; terminal jobs return `422`.
 
-Queued jobs cancel immediately. Running jobs cancel when the worker observes the cancellation flag between transcript-level operations.
+## 4) Application runs
 
-## Run endpoints
+An application run (`CodebookApplicationRun`) is the persisted result of one job — one autonomous application of a codebook to a selected transcript set.
 
-### `GET /api/v1/codebooks/{codebook_id}/application-runs`
+### `GET /codebooks/{codebook_id}/application-runs`
 
-Lists historical application runs for a codebook, newest first.
+Lists all runs for a codebook, newest first, each including its `transcript_document_ids`.
 
-### `GET /api/v1/codebook-application-runs/{run_id}`
+### `GET /codebook-application-runs/{run_id}`
 
-Returns a run and its document codings.
+Returns run detail (including final `llm_tokens_input`/`llm_tokens_output` totals) plus every `document_codings` entry, each with nested `theme_assignments` and `code_assignments`.
 
-### `GET /api/v1/codebook-application-runs/{run_id}/documents`
+- `ThemeAssignmentSchema`: `theme_id`, `is_present`, `confidence`, `quote`, `start_char`/`end_char`, `quote_match_status`
+- `CodeAssignmentSchema`: `code_id`, `theme_id` (nullable), `quote`, `start_char`/`end_char`, `quote_match_status`, `confidence`, `rationale`
 
-Returns document codings for one run, including theme and code assignments.
+`quote_match_status` is one of `exact`, `normalized`, `fuzzy`, or `not_found` — see [Backend-Software-Architecture-and-Data-Model-Documentation.md, §5 Traceability](Backend-Software-Architecture-and-Data-Model-Documentation).
 
-## Quote tagging
+### `GET /codebook-application-runs/{run_id}/documents`
 
-Every code assignment stores:
+Same `document_codings` list as above, without the run summary wrapper.
 
-- `quote`
-- `start_char`
-- `end_char`
-- `quote_match_status`
+### `DELETE /codebook-application-runs/{run_id}`
 
-Matching order:
+Hard-deletes a run and cascades to its document codings and their theme/code assignments. Refused (`422`) while `status == "running"` — cancel the job first.
 
-1. `exact`: exact substring match.
-2. `normalized`: whitespace-normalized match.
-3. `fuzzy`: strict fuzzy fallback.
-4. `not_found`: quote persisted, but no reliable span found.
+## 5) Export
 
-Manual coding can later reuse `DocumentCoding`, `ThemeAssignment`, and `CodeAssignment` rather than introducing a separate incompatible model.
+### `GET /codebook-application-runs/{run_id}/export?format=theme-based|participant-based`
 
-## Theme frequencies
+Returns a raw CSV download (not the JSON envelope).
 
-`GET /api/v1/codebooks/{codebook_id}/themes` now accepts optional `application_run_id`.
+- `theme-based` — one row per tagged quote (theme, code, quote, confidence, document).
+- `participant-based` — the same data with demographic columns repeated per quote, for participant-level analysis.
 
-- If provided, frequencies are computed for that run.
-- If omitted, frequencies use the latest successful application run.
-- If no successful run exists, existing behavior is preserved: all frequencies are zero.
+## Guarded deletion
 
+Deleting a document, codebook, or corpus that has an **active** (`queued`/`running`) application job is refused with `409 Conflict` unless the request passes `force=true`, in which case the affected jobs are cancelled first (`AnalysisDependencyGuard`). Completed/failed/cancelled application runs do not block deletion by themselves — but note that deleting a codebook or document also cascades to any completed runs and codings that reference it.
