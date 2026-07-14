@@ -36,9 +36,9 @@ For **`.jsonl`** files, each line must be a JSON object representing one message
 ```
 
 - Messages are grouped by `username` — each participant becomes one `CorpusDocument`.
-- Only `human_response` events are included in the document text; chatbot turns are excluded.
 - Messages are ordered by `message_index` before joining.
-- Participants with no non-blank human responses are skipped.
+- Both `human_response` and `chatbot_response` events with non-blank content are kept and formatted as a dialogue: `chatbot_response` -> `Interviewer: ...`, `human_response` -> `Interviewee: ...`.
+- Participants with no non-blank `human_response` turns are skipped entirely (a participant who never actually answered contributes no document, even if the chatbot spoke).
 
 For **`.txt`**, **`.docx`**, and **`.pdf`** files, the extracted text is stored directly as one `CorpusDocument` per uploaded file.
 
@@ -53,15 +53,21 @@ All routes are under `/api/v1/ingestion`.
 | `POST` | `/corpora` | Create a corpus |
 | `GET` | `/corpora` | List corpora (filter by `project_id`) |
 | `GET` | `/corpora/{corpus_id}` | Get a single corpus |
-| `DELETE` | `/corpora/{corpus_id}` | Delete a corpus |
+| `DELETE` | `/corpora/{corpus_id}` | Delete a corpus (query `force: bool`) |
 | `POST` | `/corpora/{corpus_id}/documents/bulk` | Ingest documents from JSON body |
+| `POST` | `/corpora/{corpus_id}/documents/copy` | Copy documents from this corpus into an existing target corpus (body: `target_corpus_id`, `document_ids`) |
+| `POST` | `/corpora/{corpus_id}/create-corpus-from-documents` | Atomically create a **new** corpus and copy selected documents into it (body: `name`, `document_ids`); the copy is rolled back if corpus creation fails and vice versa |
 | `POST` | `/corpora/{corpus_id}/upload` | Ingest from a `.txt`, `.docx`, `.pdf`, or `.jsonl` file upload |
 | `GET` | `/corpora/{corpus_id}/documents` | List documents (paginated) |
+| `GET` | `/corpora/{corpus_id}/documents/{document_id}` | Get one document's full content and demographic data |
+| `DELETE` | `/corpora/{corpus_id}/documents/{document_id}` | Delete one document (query `force: bool`) |
 
-All responses are wrapped in `{"success": true, "data": ...}`. Paginated responses include a `meta` object with `total`, `page`, `page_size`, and `pages`.
+All responses are wrapped in `{"success": true, "data": ...}`. Paginated responses include a `meta` object with `total`, `page`, `page_size`, and `pages`. `copy_documents` and `create_corpus_from_documents` return an `IngestResultSchema`-shaped result — the latter (`CreateCorpusFromDocumentsResultSchema`) additionally nests the created `corpus`, plus `documents_created` and `missing_document_ids` counts for source ids that no longer existed.
+
+Deleting a corpus or document is refused with `409 Conflict` if it has an active (queued/running) codebook application job, unless `force=true` is passed — see [codebook-application.md](codebook-application).
 
 ## Notes
 
 - Documents with empty text are silently skipped during ingestion.
-- The full document text is stored in `CorpusDocument.content`. Codebook generation splits the content into in-memory passages at analysis time — passages are not persisted as separate database rows.
-- Chunks are exposed to LangChain consumers via `load_corpus_chunks_as_langchain_documents`, which returns `langchain_core.documents.Document` objects with `corpus_id`, `document_id`, and `chunk_index` in metadata.
+- The full document text is stored in `CorpusDocument.content`. There is no separate chunk/passage table — codebook generation and application work directly against each document's full text at analysis time.
+- `app/services/langchain_export.py::load_corpus_documents_as_langchain_documents` converts every `CorpusDocument` in a corpus into a `langchain_core.documents.Document` (metadata: `corpus_id`, `document_id`) for ad hoc LangChain tooling. It is not wired into any API route.

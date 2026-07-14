@@ -39,7 +39,7 @@ Past talks and recordings can be found here:
 2. research required hardware for hosting (inference, storage)
 
 3. request access to HPC via hpc portal (small cluster)
-    - access was granted for the project
+    - access got granted by Prof. Riehle
     - configure file storage systems on the cluster via ssh to understand setup possibilities on smaller cluster, and to understand setup constraints
     - Limited GPU availability on small cluster, identified storage quota limits
 
