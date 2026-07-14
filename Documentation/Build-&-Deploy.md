@@ -114,66 +114,16 @@ The full list of variables is documented in [`Backend/.env.example`](../Backend/
 |---|---|---|---|
 | `LLM_API_KEY_FAU` | yes (if `SELECTED_API=FAU`) | — | NHR@FAU gateway key |
 | `LLM_API_KEY` | yes (if `SELECTED_API=ACADEMIC`) | — | Academic Cloud key |
-| `SELECTED_API` | no | `FAU` | **Default** provider (`FAU` or `ACADEMIC`). Used only when no provider has been selected in the UI — the active provider can be switched live from the Home page (**LLM Provider** card) and is stored server-side in the `app_settings` table. Any AI task (codebook generation / analysis) reads the active provider at run start. |
+| `SELECTED_API` | no | `FAU` | `FAU` or `ACADEMIC` |
 | `LLM_MODEL_FAU` | no | `gpt-oss-120b` | Override to use a different FAU-hosted model |
-| `LLM_MODEL` | no | `gemma-3-27b-it` | Override for Academic Cloud |
-| `EMBEDDING_MODEL_FAU` | no | `intfloat/multilingual-e5-large` | Embedding model used when the selected provider is `FAU` |
-| `EMBEDDING_MODEL` | no | `multilingual-e5-large-instruct` | Embedding model used when the selected provider is `ACADEMIC` |
+| `LLM_MODEL` | no | `gemma-4-31b-it` | Override for Academic Cloud |
 | `LLM_REQUEST_TIMEOUT_S` | no | `120.0` | Raise if you hit timeouts on large corpora |
 | `DATABASE_URL` | no inside Docker | `postgresql+asyncpg://postgres:postgres@localhost:5433/appdb` | Compose overrides this with `db:5432` automatically |
 | `CORS_ALLOWED_ORIGINS` | no | `["http://localhost:3000"]` | JSON array of allowed origins |
 | `APP_PORT` | no | `8000` | Host port for the API; Compose maps `${APP_PORT}:8000` |
 | `LOG_LEVEL` | no | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
 
-### LLM and embedding model selection
-
-The Home page **LLM Provider** setting controls the provider for both chat-model
-calls and embedding calls. The backend intentionally keeps them together so one
-analysis run uses one consistent external AI provider. The selected provider is
-read when a job starts; changing the Home page setting affects later jobs, not a
-job that is already running.
-
-Embeddings are not another text-generating LLM. An embedding model converts a
-text snippet into a numeric vector that preserves semantic similarity. In this
-project, embeddings are used during automated codebook generation and
-consolidation to compare generated code labels/descriptions, shortlist likely
-duplicates or related codes, and reduce the number of expensive LLM relationship
-checks. Users usually do not see embedding output directly.
-
-For each selected provider, the same API key and base URL are used for chat and
-embeddings:
-
-| Selected provider | Chat model | Embedding model | Endpoint used for embeddings |
-|---|---|---|---|
-| `FAU` | `LLM_MODEL_FAU` | `EMBEDDING_MODEL_FAU` | `${LLM_BASE_URL_FAU}/embeddings` |
-| `ACADEMIC` | `LLM_MODEL` | `EMBEDDING_MODEL` | `${LLM_BASE_URL}/embeddings` |
-
-The embedding endpoint must be OpenAI-compatible: it must accept a `POST` to
-`/embeddings` with `model` and `input`, and return embedding vectors in the
-standard `data[].embedding` response shape.
-
-#### Using OpenAI or another commercial OpenAI-compatible provider
-
-The current UI exposes two provider ids, `FAU` and `ACADEMIC`. There is no
-separate "OpenAI" label yet. To route both chat and embeddings through OpenAI,
-configure the `ACADEMIC` slot as an OpenAI-compatible endpoint:
-
-```env
-SELECTED_API=ACADEMIC
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_API_KEY=<your_openai_api_key>
-LLM_MODEL=gpt-4.1-mini
-EMBEDDING_MODEL=text-embedding-3-large
-```
-
-Then restart the backend and select **Academic Cloud** on the Home page. The UI
-label will still say "Academic Cloud" because provider labels are defined in the
-backend provider registry; the actual endpoint and model come from the
-environment variables above.
-
-To use OpenAI only for embeddings while keeping FAU for chat, the application
-would need a code change: embeddings currently follow the selected provider and
-do not have an independent runtime selector.
+`SELECTED_API` is only the **startup default**. The active LLM provider can be switched at runtime from the frontend home page (or via `GET`/`PUT /api/v1/settings/llm-provider`), which persists the choice in the `app_settings` table and takes precedence over `SELECTED_API` on every subsequent request until changed again or the row is cleared.
 
 ### Frontend (set in Compose, not in a `.env`)
 
@@ -276,48 +226,6 @@ Or via the bootstrap script:
 
 **Frontend** uses a `FakeBackend` fixture so no live backend is required for the test container.
 
-## SBOM and legal notices
-
-The final release includes a CycloneDX SBOM and generated legal notices for the
-application-level third-party components:
-
-- backend Python dependencies resolved from `Backend/pyproject.toml` with `uv`
-- frontend Python dependencies resolved from `Frontend/pyproject.toml` with `uv`
-- the Python 3.11 runtime declared by the backend and frontend Dockerfiles
-- frontend CDN libraries referenced by `Frontend/web/templates/base.html`
-  (`bootstrap` and `bootstrap-icons`)
-
-Regenerate the artifacts from the repository root:
-
-```powershell
-python scripts\generate_compliance_artifacts.py
-```
-
-```bash
-python3 scripts/generate_compliance_artifacts.py
-```
-
-This writes:
-
-| File | Purpose |
-|---|---|
-| `sbom.cdx.json` | CycloneDX 1.5 SBOM for the released application |
-| `LEGAL_NOTICES.md` | Markdown legal notice table for repository review |
-| `Frontend/web/static/legal_notices.json` | Data rendered by the `/legal-notices` UI page |
-
-The generator reads package metadata from the `uv` environments. If a dependency
-is part of the Linux/Python 3.11 runtime graph but not installed on the local
-host, the script installs that package into a temporary target directory only to
-read its metadata. This keeps platform-conditional packages such as `uvloop`
-covered without changing the project environment.
-
-Local project source files, templates, custom JavaScript/CSS, and GitHub Actions
-workflows are intentionally not listed as third-party legal notice entries. They
-are project code or CI infrastructure, not external components distributed to
-users as application dependencies. Operating-system packages from the Docker base
-images are also out of scope for this application-level release SBOM; include
-them only if a container-image SBOM is explicitly required.
-
 ## Stack lifecycle
 
 ```bash
@@ -382,7 +290,7 @@ Avoid `docker system prune -af --volumes` unless you actually want a blank datab
 
 **Symptom:** the codebook generation job moves from `running` to `failed`, with `error_message` along the lines of `insert or update on table "codes" violates foreign key constraint "codes_codebook_id_fkey"`.
 
-**Cause:** SQLAlchemy unit-of-work autoflush ordering can interleave parent and child INSERTs incorrectly when the model graph lacks explicit `relationship()` declarations. The persistence path in [`Backend/app/services/codebook_generation.py`](../Backend/app/services/codebook_generation.py) uses a layered-flush pattern (`session.flush()` between each dependency layer) to work around this. If you see this error, confirm the patched version is what's deployed; recent versions on `main` include the fix.
+**Cause:** SQLAlchemy unit-of-work autoflush ordering can interleave parent and child INSERTs incorrectly when the model graph lacks explicit `relationship()` declarations. The persistence path in [`Backend/app/services/traceable_analysis.py`](../Backend/app/services/traceable_analysis.py) uses a layered-flush pattern (`session.flush()` between each dependency layer) to work around this. If you see this error, confirm the patched version is what's deployed; recent versions on `main` include the fix.
 
 ### Port already in use
 
@@ -396,7 +304,8 @@ APP_PORT=8001 FRONTEND_PORT=3001 docker compose up -d
 
 - [Backend README](../Backend/README.md) — project structure, response envelope, in-Docker test runs
 - [Frontend README](../Frontend/README.md) — page-by-page routes, error-handling model, Dockerfile build stages
-- [`Documentation/ingestion-pipeline.md`](./ingestion-pipeline.md) — corpus / document / chunk data model and ingest API
-- [`Documentation/codebook-generation.md`](./codebook-generation.md) — sync vs. async generation endpoints, job lifecycle
-- [`Documentation/LLM-cluster-documentation.md`](./LLM-cluster-documentation.md) — FAU GPU cluster vs. Academic Cloud notes
-- [`Documentation/csv-codebook-standard.md`](./csv-codebook-standard.md) — uploadable codebook CSV format
+- [`ingestion-pipeline.md`](./ingestion-pipeline.md) — corpus / document data model and ingest API
+- [`codebook-generation.md`](./codebook-generation.md) — generating a new codebook: sync vs. async endpoints, job lifecycle
+- [`codebook-application.md`](./codebook-application.md) — applying an existing codebook to transcripts (analysis runs), export
+- [`LLM-cluster-documentation.md`](./LLM-cluster-documentation.md) — FAU GPU cluster vs. Academic Cloud notes
+- [`csv-codebook-standard.md`](./csv-codebook-standard.md) — uploadable codebook CSV format
