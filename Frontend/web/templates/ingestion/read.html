@@ -305,15 +305,16 @@
   /* ── Text-node traversal highlighter ─────────────────────────────────── */
 
   /**
-   * Find `quote` inside `container` and wrap the matched range in <mark>
-   * elements.  Returns true if any part was highlighted.
+   * Find `quote` inside `container` (searching from `fromIndex`) and wrap the
+   * matched range in <mark> elements.  Returns the match end offset if any
+   * part was highlighted, -1 otherwise.
    */
-  function highlightQuote(container, quote, bgColor, tooltipText, themeId) {
-    if (!quote) return false;
+  function highlightQuote(container, quote, bgColor, tooltipText, themeId, fromIndex) {
+    if (!quote) return -1;
 
     const fullText = container.textContent;
-    const matchIdx = fullText.indexOf(quote);
-    if (matchIdx === -1) return false;
+    const matchIdx = fullText.indexOf(quote, fromIndex || 0);
+    if (matchIdx === -1) return -1;
     const matchEnd = matchIdx + quote.length;
 
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
@@ -349,7 +350,7 @@
       } catch (_) {
       }
     }
-    return wrapped;
+    return wrapped ? matchEnd : -1;
   }
 
   /* ── Apply all highlights ─────────────────────────────────────────────── */
@@ -365,7 +366,11 @@
      */
     const sorted = [...CODE_ASSIGNMENTS].sort(
       (a, b) => (b.quote || '').length - (a.quote || '').length
+             || (a.start_char ?? 0) - (b.start_char ?? 0)
     );
+
+    /* Track search position per (code, text) to highlight each occurrence */
+    const searchFrom = {};
 
     for (const ca of sorted) {
       if (!ca.quote || (!ca.theme_id && !ca.code_id)) continue;
@@ -396,7 +401,10 @@
           tooltipText = "Unknown Code";
       }
 
-      highlightQuote(container, ca.quote.trim(), color, tooltipText, colorId);
+      const quote = ca.quote.trim();
+      const key = colorId + '|' + quote;
+      const matchEnd = highlightQuote(container, quote, color, tooltipText, colorId, searchFrom[key] || 0);
+      if (matchEnd >= 0) searchFrom[key] = matchEnd;
     }
 
     /* Initialise Bootstrap tooltips on all freshly created marks */
