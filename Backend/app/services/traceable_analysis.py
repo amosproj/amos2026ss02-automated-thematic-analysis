@@ -72,7 +72,11 @@ from app.schemas.traceable_llm import (
     ThemeSynthesisResult,
     TraceableApplicationResult,
 )
-from app.services.quote_matching import locate_quote_span
+from app.services.quote_matching import (
+    QuoteSpanCandidate,
+    locate_quote_span,
+    select_deduplicated_quote_spans,
+)
 from app.services.theme_graph import ThemeGraphService
 from app.services.traceable_code_consolidation import (
     CodeCandidate,
@@ -4004,10 +4008,26 @@ class TraceableAnalysisService:
             action_log.extend(doc_result.action_log)
 
         return _ApplicationPassResult(
-            evidence=applied,
+            # Deduplicate here so metrics, action logs, provenance, and
+            # persistence all see the same assignments.
+            evidence=self._deduplicate_applied_evidence(applied),
             failed_document_ids=failed_document_ids,
             action_log=action_log,
         )
+
+    def _deduplicate_applied_evidence(self, evidence: list[_AppliedEvidence]) -> list[_AppliedEvidence]:
+        candidates = [
+            QuoteSpanCandidate(
+                group_key=(item.document_id, self._label_key(item.code_label)),
+                quote=item.quote,
+                start_char=item.start_char,
+                end_char=item.end_char,
+                confidence=item.confidence,
+                quote_match_status=item.quote_match_status,
+            )
+            for item in evidence
+        ]
+        return [evidence[index] for index in select_deduplicated_quote_spans(candidates)]
 
     @staticmethod
     def _build_application_codebook_context(

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+from collections import defaultdict
+from collections.abc import Hashable, Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
@@ -11,6 +13,66 @@ class QuoteMatch:
     start_char: int | None
     end_char: int | None
     quote_match_status: str
+
+
+@dataclass(frozen=True)
+class QuoteSpanCandidate:
+    """One quote competing for persistence within a dedup group (its ``group_key``,
+    typically document id + code id, so distinct codes on one passage are all kept)."""
+
+    group_key: Hashable
+    quote: str
+    start_char: int | None
+    end_char: int | None
+    confidence: float
+    quote_match_status: str = "not_found"
+
+
+_STATUS_RANK = {"exact": 3, "normalized": 2, "fuzzy": 1}
+
+
+def select_deduplicated_quote_spans(candidates: Sequence[QuoteSpanCandidate]) -> list[int]:
+    def _span(candidate: QuoteSpanCandidate) -> tuple[int, int] | None:
+        if candidate.start_char is None or candidate.end_char is None:
+            return None
+        if candidate.end_char <= candidate.start_char:
+            return None
+        return (candidate.start_char, candidate.end_char)
+
+    # Located candidates first, then verbatim over approximate matches, then
+    # higher confidence; span length only breaks remaining ties.
+    def _sort_key(index: int) -> tuple[bool, int, float, int, int]:
+        candidate = candidates[index]
+        span = _span(candidate)
+        return (
+            span is None,
+            -_STATUS_RANK.get(candidate.quote_match_status, 0),
+            -candidate.confidence,
+            span[0] - span[1] if span else 1,
+            index,
+        )
+
+    kept: list[int] = []
+    kept_spans: dict[Hashable, list[tuple[int, int]]] = defaultdict(list)
+    seen_texts: dict[Hashable, set[str]] = defaultdict(set)
+    for index in sorted(range(len(candidates)), key=_sort_key):
+        candidate = candidates[index]
+        normalized_text = " ".join(candidate.quote.split()).casefold()
+        span = _span(candidate)
+        if span is None and normalized_text in seen_texts[candidate.group_key]:
+            continue
+        # Located candidates record their text even when dropped, so an
+        # unlocated copy of a dropped overlapping span cannot sneak through.
+        seen_texts[candidate.group_key].add(normalized_text)
+        if span is not None:
+            if any(
+                kept_start < span[1] and kept_end > span[0]
+                for kept_start, kept_end in kept_spans[candidate.group_key]
+            ):
+                continue
+            kept_spans[candidate.group_key].append(span)
+        kept.append(index)
+    return sorted(kept)
 
 
 def locate_quote_span(transcript: str, quote: str | None) -> QuoteMatch:
