@@ -15,14 +15,6 @@
      data-breakdown-url-template="{{ url_for('codebooks.theme_demographic_breakdown_json', corpus_id=corpus_id, codebook_id=codebook_id, theme_id='__THEME__') }}"
      data-read-url-template="{{ url_for('ingestion.read_transcript', corpus_id=corpus_id, document_id='__DOC__', run_id='__RUN__') }}">
 
-  {% if corpus_id and corpus_options %}
-    {% set active_corpus_id = corpus_id %}
-    {% set switch_template_url = url_for('codebooks.list_codebooks_for_corpus', corpus_id='__CORPUS_ID__') %}
-    {% set helper_text = 'Showing themes for this corpus.' %}
-    {% set show_create_form = False %}
-    {% include "_corpus_select.html" %}
-  {% endif %}
-
   {# Breadcrumb #}
   <nav aria-label="breadcrumb" class="mb-3">
     <ol class="breadcrumb mb-0">
@@ -35,12 +27,18 @@
     </ol>
   </nav>
 
+  {# No corpus scope line here: this is a detail page for one codebook/run
+     (identity shown in the hero), and "switching corpus" would actually
+     navigate away to another corpus's codebook LIST — a trap, not a filter.
+     The breadcrumb is the way back. #}
   {% if error %}
   <p class="text-secondary">Couldn't load themes for this codebook right now.</p>
   {% elif frequencies or tree or codes %}
 
-  {# Gradient page header #}
-  <div class="theme-page-header rounded-3 mb-3 p-4">
+  {# Gradient page hero — one banner per page: codebook identity on top,
+     analysis-run context as a second row inside the same hero, separated by
+     a translucent divider (previously two stacked same-color banners). #}
+  <div class="theme-page-header rounded-3 mb-4 p-4">
     <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
       <div>
         <p class="text-white-50 small mb-1 text-uppercase fw-semibold" style="letter-spacing:.07em">Theme Browser</p>
@@ -59,9 +57,8 @@
         </a>
       </div>
     </div>
-  </div>
 
-  <div class="analysis-run-bar rounded-3 mb-4 p-4">
+    <div class="analysis-run-bar">
     <div class="d-flex align-items-start flex-wrap gap-3">
       <div>
         <p class="text-white-50 small mb-1 text-uppercase fw-semibold" style="letter-spacing:.07em">Analysis Run</p>
@@ -113,6 +110,7 @@
           <p class="analysis-run-message mb-0">No analysis runs for this codebook.</p>
         {% endif %}
       </div>
+    </div>
     </div>
   </div>
 
