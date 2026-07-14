@@ -1,15 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Codebooks{% endblock %}
 {% block content %}
-  {% if corpus_id and corpus_options %}
-    {% set active_corpus_id = corpus_id %}
-    {% set switch_template_url = url_for('codebooks.list_codebooks_for_corpus', corpus_id='__CORPUS_ID__') %}
-    {% set helper_text = 'Showing codebooks for this corpus.' %}
-    {% set show_create_form = False %}
-    {% include "_corpus_select.html" %}
-  {% endif %}
-
-  <div class="d-flex justify-content-between align-items-baseline mb-4">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
     <h1 class="h3 mb-0">Codebooks</h1>
     <a class="btn btn-primary"
        id="new-codebook-btn"
@@ -17,6 +9,14 @@
       Create New Codebook
     </a>
   </div>
+
+  {% if corpus_id and corpus_options %}
+    {% set active_corpus_id = corpus_id %}
+    {% set switch_template_url = url_for('codebooks.list_codebooks_for_corpus', corpus_id='__CORPUS_ID__') %}
+    {% set corpus_select_variant = 'scope' %}
+    {% set helper_text = 'Showing codebooks for this corpus.' %}
+    {% include "_corpus_select.html" %}
+  {% endif %}
 
   {% include "_analysis_delete_confirm_modal.html" %}
 
@@ -131,8 +131,13 @@
         </table>
       </div>
     </div>
+  {% elif corpus_id %}
+    <p class="text-secondary" id="empty-state">
+      No codebooks created yet.
+      <a href="{{ url_for('codebooks.new_codebook_mode_select', corpus_id=corpus_id) }}">Create a codebook</a>
+    </p>
   {% else %}
-    <p class="text-secondary">No codebooks found.</p>
+    <p class="text-secondary">No codebooks to show.</p>
   {% endif %}
 {% endblock %}
 {% block scripts %}
