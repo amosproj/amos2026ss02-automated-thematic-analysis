@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Slide 1 – What is Thematic Analysis?{% endblock %}
+
+{% block head_extra %}
+<style>
+  body {
+    background-color: #f8f9fa;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  
+  .navbar, body > .site-footer, #ata-toasts, .site-flash {
+    display: none !important;
+  }
+
+  .presentation-slide {
+    width: 1280px;
+    height: 720px;
+    background: #ffffff;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    padding: 60px 60px 0 60px; 
+    overflow: hidden;
+    position: relative;
+  }
+
+  .slide-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 3px solid #dee2e6;
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+  }
+
+  .slide-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #212529;
+    margin: 0;
+  }
+
+  .slide-logo img {
+    height: 90px;
+    object-fit: contain;
+  }
+
+  .slide-content {
+    font-size: 1.35rem;
+    line-height: 1.7;
+    color: #212529;
+  }
+
+  .slide-content h2 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-top: 10px;
+    margin-bottom: 15px;
+    color: #111111;
+  }
+
+  .slide-content ul {
+    padding-left: 1.2rem;
+  }
+
+  .slide-content li {
+    margin-bottom: 0.6rem;
+  }
+
+  .slide-footer-replica {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+  }
+
+  .slide-footer-replica .container-xl {
+    padding-left: 60px !important;
+    padding-right: 60px !important;
+    max-width: 100%;
+  }
+
+  .slide-footer-replica .site-footer {
+    margin-top: 0;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="presentation-slide">
+  
+  <div class="slide-header">
+    <h1 class="slide-title">Group 2: Automated Thematic Analysis</h1>
+    <div class="slide-logo">
+      <img src="{{ url_for('static', filename='img/team-logo.svg') }}" alt="Project Logo">
+    </div>
+  </div>
+
+  <div class="slide-content">
+    <div class="row">
+      <div class="col-md-7">
+        <h2>What is Thematic Analysis?</h2>
+        <ul>
+          <li>Researchers conduct interviews and collect transcripts.</li>
+          <li>A <strong>theme</strong> is a recurring pattern across interviews.</li>
+          <li>A <strong>codebook</strong> catalogs all discovered themes with definitions.</li>
+          <li><strong>Coding</strong> tags every relevant quote with its theme.</li>
+          <li>Done manually, this takes <strong>weeks</strong> for a single study.</li>
+        </ul>
+      </div>
+      <div class="col-md-5 d-flex flex-column justify-content-center gap-3">
+        <img src="{{ url_for('static', filename='img/pic2.png') }}" class="img-fluid rounded shadow" alt="Raw interview transcript data">
+      </div>
+    </div>
+  </div>
+
+  <!-- Replicated Site Footer -->
+  <div class="slide-footer-replica">
+    <footer class="site-footer">
+      <div class="container-xl py-3">
+        <div class="row g-3">
+          <div class="col-12 col-md-4 footer-project d-flex align-items-center">
+            <p class="footer-project-sub mb-0 text-muted" style="font-size: 1.05rem; font-weight: 500;">AMOS SS 2026 Project</p>
+          </div>
+          <div class="col-12 col-md-4 footer-partner">
+            <p class="footer-label mb-1">Funded by</p>
+            <p class="footer-partner-name mb-0">Nuremberg Institute for Market Decisions (NIM)</p>
+            <a class="footer-link" href="https://www.nim.org" target="_blank" rel="noopener">nim.org &rarr;</a>
+          </div>
+          <div class="col-12 col-md-4 footer-partner">
+            <p class="footer-label mb-1">Academic Partner</p>
+            <p class="footer-partner-name mb-0">Professorship for Open-Source Software</p>
+            <p class="footer-partner-tag mb-1">Friedrich-Alexander University Erlangen-Nürnberg</p>
+            <a class="footer-link" href="https://oss.cs.fau.de" target="_blank" rel="noopener">oss.cs.fau.de &rarr;</a>
+          </div>
+        </div>
+
+        <div class="mt-2 text-center" style="font-size: 0.85rem; color: #6c757d;">
+          <strong>Team:</strong> Alexander Schmidt, Christoph Mantsch, Fabiano de Sa Filho, Hamid Rasul, Julian Wendlandt, Mohammad Annus, Ole Müermann, Paul Ammann, Paul Klarer, Selin Kahvecioglu
+        </div>
+      </div>
+    </footer>
+  </div>
+
+</div>
+{% endblock %}

@@ -79,3 +79,20 @@ def legal_notices() -> str:
 def health() -> dict:
     """Liveness probe for Docker HEALTHCHECK; does not check the backend."""
     return {"status": "ok"}
+
+@bp.get("/slide")
+def presentation_slide1() -> str:
+    """Slide 1: What is Thematic Analysis?"""
+    return render_template("slide1.html")
+
+
+@bp.get("/slide1")
+def presentation_slide2() -> str:
+    """Slide 2: Our Solution."""
+    return render_template("slide.html")
+
+
+@bp.get("/slide2")
+def presentation_slide3() -> str:
+    """Codebook Generation Algorithm"""
+    return render_template("slide2.html")
