@@ -39,7 +39,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
+packages = ["app", "research_algorithms"]
 
 [tool.uv]
 dev-dependencies = [

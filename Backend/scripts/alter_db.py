@@ -23,6 +23,7 @@ async def alter_db():
         "ALTER TABLE codebook_application_runs ADD COLUMN IF NOT EXISTS llm_tokens_input INTEGER;",
         "ALTER TABLE codebook_application_runs ADD COLUMN IF NOT EXISTS llm_tokens_output INTEGER;",
         "ALTER TABLE codebook_generation_jobs ADD COLUMN IF NOT EXISTS phase VARCHAR;",
+        "ALTER TABLE codebook_generation_jobs ADD COLUMN IF NOT EXISTS generation_algorithm VARCHAR(512);",
     ]
 
     async with engine.connect() as conn:
@@ -37,6 +38,7 @@ async def alter_db():
                 await conn.rollback()
                 print(f"Skipping statement (might already exist or be unsupported): {stmt}")
                 print(f"  -> Error: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(alter_db())

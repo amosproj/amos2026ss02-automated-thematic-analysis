@@ -260,6 +260,7 @@ class CodebookGenerationJobSchema(BaseSchema):
     phase: str
     progress_percent: int
     codebook_name: str
+    generation_algorithm: str | None = None
     analysis_name: str | None = None
     custom_id: str | None = None
     corpus_id: UUID

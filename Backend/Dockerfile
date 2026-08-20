@@ -28,6 +28,7 @@ WORKDIR /app
 COPY --from=builder-runtime /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder-runtime /usr/local/bin/uvicorn /usr/local/bin/uvicorn
 COPY app/ app/
+COPY research_algorithms/ research_algorithms/
 # COPY migrations/ migrations/
 # COPY alembic.ini .
 
@@ -53,6 +54,7 @@ COPY --from=builder-test /usr/local/bin/ruff /usr/local/bin/ruff
 COPY --from=builder-test /usr/local/bin/mypy /usr/local/bin/mypy
 COPY pyproject.toml .
 COPY app/ app/
+COPY research_algorithms/ research_algorithms/
 COPY tests/ tests/
 
 CMD ["pytest"]

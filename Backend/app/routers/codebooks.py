@@ -12,6 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.config import get_settings
 from app.dependencies import DbSession
 from app.exceptions import NotFoundError, UnprocessableError
+from app.generation.loader import (
+    GenerationAlgorithmLoadError,
+    LoadedGenerationAlgorithm,
+    load_generation_algorithm,
+)
 from app.llm import providers
 from app.models import Codebook, CodebookGenerationJob
 from app.schemas.codebook import (
@@ -68,7 +73,16 @@ def _validate_provider_config(provider_id: str) -> None:
     if not getattr(settings, embed_spec.api_key_attr, None):
         raise UnprocessableError(f"API key is missing for embedding provider '{embed_spec.label}'.")
     if not getattr(settings, embed_spec.embedding_model_attr, None):
-        raise UnprocessableError(f"Embedding model is missing for embedding provider '{embed_spec.label}'.")
+        raise UnprocessableError(
+            f"Embedding model is missing for embedding provider '{embed_spec.label}'."
+        )
+
+
+def _resolve_configured_generation_algorithm() -> LoadedGenerationAlgorithm:
+    try:
+        return load_generation_algorithm(get_settings().GENERATION_ALGORITHM)
+    except GenerationAlgorithmLoadError as exc:
+        raise UnprocessableError(str(exc)) from exc
 
 
 def _to_job_schema(job: CodebookGenerationJob) -> CodebookGenerationJobSchema:
@@ -80,6 +94,7 @@ def _to_job_schema(job: CodebookGenerationJob) -> CodebookGenerationJobSchema:
         phase=phase,
         progress_percent=progress_percent,
         codebook_name=job.codebook_name,
+        generation_algorithm=job.generation_algorithm,
         analysis_name=job.analysis_name,
         custom_id=job.custom_id,
         corpus_id=job.corpus_id,
@@ -193,7 +208,9 @@ async def generate_codebook(
     # path. Embeddings use the same provider, so this endpoint never silently
     # runs on different AI providers than the one chosen in the UI.
     active_provider = await get_active_provider(session)
-    _validate_provider_config(active_provider)
+    loaded_algorithm = _resolve_configured_generation_algorithm()
+    if getattr(loaded_algorithm.algorithm, "requires_llm", True):
+        _validate_provider_config(active_provider)
     resolved_document_ids = await resolve_transcript_document_ids(
         session,
         corpus_id=payload.corpus_id,
@@ -212,6 +229,7 @@ async def generate_codebook(
         max_refinement_rounds=payload.max_refinement_rounds,
         apply_after_generation=payload.apply_after_generation,
         provider=active_provider,
+        generation_algorithm=loaded_algorithm.spec,
     )
     return JSONResponse(
         status_code=201,
@@ -237,7 +255,9 @@ async def create_generate_codebook_job(
     session: DbSession,
 ) -> JSONResponse:
     active_provider = await get_active_provider(session)
-    _validate_provider_config(active_provider)
+    loaded_algorithm = _resolve_configured_generation_algorithm()
+    if getattr(loaded_algorithm.algorithm, "requires_llm", True):
+        _validate_provider_config(active_provider)
     resolved_document_ids = await resolve_transcript_document_ids(
         session,
         corpus_id=payload.corpus_id,
@@ -249,6 +269,7 @@ async def create_generate_codebook_job(
         status="queued",
         phase="queued",
         codebook_name=payload.codebook_name,
+        generation_algorithm=loaded_algorithm.spec,
         analysis_name=payload.analysis_name or payload.codebook_name,
         custom_id=payload.custom_id,
         corpus_id=payload.corpus_id,
@@ -302,9 +323,7 @@ async def list_generate_codebook_jobs(
     session: DbSession,
     status: str | None = None,
 ) -> JSONResponse:
-    stmt = select(CodebookGenerationJob).where(
-        CodebookGenerationJob.corpus_id == corpus_id
-    )
+    stmt = select(CodebookGenerationJob).where(CodebookGenerationJob.corpus_id == corpus_id)
     if status:
         statuses = [s.strip() for s in status.split(",") if s.strip()]
         if statuses:
@@ -411,7 +430,9 @@ async def get_codebook_detail(
 ) -> JSONResponse:
     """Fetch details of a specific codebook, including all associated themes."""
     service = CodebookService(session)
-    codebook, themes, edges, codes, theme_code_edges = await service.get_codebook_detail(codebook_id)
+    codebook, themes, edges, codes, theme_code_edges = await service.get_codebook_detail(
+        codebook_id
+    )
     detail = CodebookService.build_detail_schema(codebook, themes, edges, codes, theme_code_edges)
     return JSONResponse(content=ResponseEnvelope.ok(detail).model_dump(mode="json"))
 

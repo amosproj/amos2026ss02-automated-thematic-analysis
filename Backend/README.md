@@ -42,6 +42,15 @@ docker compose up --build
 # Docs at http://localhost:8000/docs
 ```
 
+### Local Generation Algorithms
+
+Codebook generation uses `GENERATION_ALGORITHM` from `.env`. The default is
+`app.generation.algorithms.traceable:create`. To try a local algorithm, copy
+`research_algorithms/example.py`, edit its `generate()` method, set for example
+`GENERATION_ALGORITHM=research_algorithms.my_algorithm:create`, then restart the
+backend. See `research_algorithms/README.md` for the contract and validation
+rules.
+
 ### Docker: Dev vs Prod
 
 - `api` service uses the `runtime` target (production-style image, no test tooling).

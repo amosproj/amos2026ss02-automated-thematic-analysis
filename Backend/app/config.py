@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     TRACEABLE_HELDOUT_RATIO: float = 0.2
     TRACEABLE_MAX_ITERATIONS: int = 10
     TRACEABLE_REFINEMENT_JACCARD_THRESHOLD: float = 0.98
+    GENERATION_ALGORITHM: str = "app.generation.algorithms.traceable:create"
 
     # Select which provider is active: "FAU" | "ACADEMIC"
     SELECTED_API: str = "FAU"

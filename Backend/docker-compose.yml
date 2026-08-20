@@ -22,6 +22,8 @@ services:
     env_file: .env
     ports:
       - "${APP_PORT:-8000}:8000"
+    volumes:
+      - ./research_algorithms:/app/research_algorithms:ro
     depends_on:
       db:
         condition: service_healthy
@@ -41,6 +43,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/appdb
     volumes:
       - ./htmlcov:/app/htmlcov
+      - ./research_algorithms:/app/research_algorithms:ro
     depends_on:
       db:
         condition: service_healthy

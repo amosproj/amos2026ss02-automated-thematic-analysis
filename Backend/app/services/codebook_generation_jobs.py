@@ -60,9 +60,13 @@ class CodebookGenerationJobRunner:
             return
 
         terminal_job_ids = [
-            phase_job_id for phase_job_id, phase in self._phases.items() if phase in self._TERMINAL_PHASES
+            phase_job_id
+            for phase_job_id, phase in self._phases.items()
+            if phase in self._TERMINAL_PHASES
         ]
-        terminal_job_ids.sort(key=lambda phase_job_id: self._phase_updated_at.get(phase_job_id, 0.0))
+        terminal_job_ids.sort(
+            key=lambda phase_job_id: self._phase_updated_at.get(phase_job_id, 0.0)
+        )
         overflow = len(self._phases) - self._MAX_PHASE_ENTRIES
         for evict_job_id in terminal_job_ids[:overflow]:
             self._phases.pop(evict_job_id, None)
@@ -178,7 +182,9 @@ class CodebookGenerationJobRunner:
             job.started_at = _utc_now_naive()
             await session.commit()
 
-            transcript_document_ids = [UUID(raw) for raw in json.loads(job.transcript_document_ids_json)]
+            transcript_document_ids = [
+                UUID(raw) for raw in json.loads(job.transcript_document_ids_json)
+            ]
             # Bind the globally selected LLM provider at run start so the whole
             # job stays consistent even if settings change mid-run. Embeddings
             # use the same provider. Read it via a short-lived session so this
@@ -187,6 +193,8 @@ class CodebookGenerationJobRunner:
             async with session_factory() as provider_session:
                 active_provider = await get_active_provider(provider_session)
             service = CodebookGenerationService(session)
+            generation_algorithm = job.generation_algorithm
+            random_seed = int.from_bytes(job.id.bytes[:8], "big")
 
             async def _on_progress(done: int, total: int) -> None:
                 # Use a short-lived session so progress writes are visible even
@@ -201,8 +209,8 @@ class CodebookGenerationJobRunner:
                     progress_job.analysis_units_total = total
                     progress_job.passages_done = done
                     progress_job.passages_total = total
-                    progress_job.llm_tokens_input = service.traceable_service.llm_tokens_input
-                    progress_job.llm_tokens_output = service.traceable_service.llm_tokens_output
+                    progress_job.llm_tokens_input = service.llm_tokens_input
+                    progress_job.llm_tokens_output = service.llm_tokens_output
                     await progress_session.commit()
 
             async def _on_phase_progress(phase: str, done: int, total: int) -> None:
@@ -215,8 +223,8 @@ class CodebookGenerationJobRunner:
                     progress_job.analysis_units_total = total
                     progress_job.passages_done = done
                     progress_job.passages_total = total
-                    progress_job.llm_tokens_input = service.traceable_service.llm_tokens_input
-                    progress_job.llm_tokens_output = service.traceable_service.llm_tokens_output
+                    progress_job.llm_tokens_input = service.llm_tokens_input
+                    progress_job.llm_tokens_output = service.llm_tokens_output
                     await progress_session.commit()
 
             async def _should_cancel() -> bool:
@@ -236,8 +244,8 @@ class CodebookGenerationJobRunner:
                     phase_job.analysis_units_total = 0
                     phase_job.passages_done = 0
                     phase_job.passages_total = 0
-                    phase_job.llm_tokens_input = service.traceable_service.llm_tokens_input
-                    phase_job.llm_tokens_output = service.traceable_service.llm_tokens_output
+                    phase_job.llm_tokens_input = service.llm_tokens_input
+                    phase_job.llm_tokens_output = service.llm_tokens_output
                     await phase_session.commit()
 
             async def _on_codebook_created(codebook_id: UUID) -> None:
@@ -274,6 +282,8 @@ class CodebookGenerationJobRunner:
                     on_codebook_created=_on_codebook_created,
                     on_application_run_created=_on_application_run_created,
                     should_cancel=_should_cancel,
+                    generation_algorithm=generation_algorithm,
+                    random_seed=random_seed,
                 )
                 await session.refresh(job)
                 job.status = "succeeded"
@@ -294,8 +304,8 @@ class CodebookGenerationJobRunner:
                 job.documents_failed = generated.documents_failed
                 job.passages_done = generated.passages_processed
                 job.passages_total = max(job.passages_total, generated.passages_processed)
-                job.llm_tokens_input = service.traceable_service.llm_tokens_input
-                job.llm_tokens_output = service.traceable_service.llm_tokens_output
+                job.llm_tokens_input = service.llm_tokens_input
+                job.llm_tokens_output = service.llm_tokens_output
                 if generated.provenance is not None:
                     job.provenance_json = json.dumps(generated.provenance, ensure_ascii=False)
                 job.action_log_json = json.dumps(generated.action_log, ensure_ascii=False)
@@ -306,7 +316,10 @@ class CodebookGenerationJobRunner:
                         {
                             "type": "passage_generation_partial_failures",
                             "passages_failed": generated.passages_failed,
-                            "failed_passages": [failure.model_dump(mode="json") for failure in generated.failed_passages],
+                            "failed_passages": [
+                                failure.model_dump(mode="json")
+                                for failure in generated.failed_passages
+                            ],
                         },
                         ensure_ascii=False,
                     )
@@ -323,6 +336,7 @@ class CodebookGenerationJobRunner:
                 job.finished_at = _utc_now_naive()
                 await session.commit()
             except Exception as exc:
+                logger.exception("Codebook generation job {} failed: {}", job_id, exc)
                 await session.rollback()
                 await session.refresh(job)
                 job.status = "failed"
