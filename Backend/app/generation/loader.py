@@ -119,6 +119,11 @@ def _validate_algorithm_object(algorithm: object, *, spec: str) -> None:
         raise GenerationAlgorithmLoadError(
             f"Generation algorithm '{spec}' returned an object with an empty algorithm_version."
         )
+    requires_llm = getattr(algorithm, "requires_llm", None)
+    if not isinstance(requires_llm, bool):
+        raise GenerationAlgorithmLoadError(
+            f"Generation algorithm '{spec}' must declare boolean requires_llm."
+        )
     generate = getattr(algorithm, "generate", None)
     if not callable(generate) or not inspect.iscoroutinefunction(generate):
         raise GenerationAlgorithmLoadError(

@@ -209,7 +209,7 @@ async def generate_codebook(
     # runs on different AI providers than the one chosen in the UI.
     active_provider = await get_active_provider(session)
     loaded_algorithm = _resolve_configured_generation_algorithm()
-    if getattr(loaded_algorithm.algorithm, "requires_llm", True):
+    if loaded_algorithm.algorithm.requires_llm:
         _validate_provider_config(active_provider)
     resolved_document_ids = await resolve_transcript_document_ids(
         session,
@@ -256,7 +256,7 @@ async def create_generate_codebook_job(
 ) -> JSONResponse:
     active_provider = await get_active_provider(session)
     loaded_algorithm = _resolve_configured_generation_algorithm()
-    if getattr(loaded_algorithm.algorithm, "requires_llm", True):
+    if loaded_algorithm.algorithm.requires_llm:
         _validate_provider_config(active_provider)
     resolved_document_ids = await resolve_transcript_document_ids(
         session,

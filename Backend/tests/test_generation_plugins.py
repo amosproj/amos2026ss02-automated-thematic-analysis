@@ -80,6 +80,7 @@ def test_missing_modules_and_factories_produce_useful_errors() -> None:
         "tests.generation_algorithms.invalid:create_missing_generate",
         "tests.generation_algorithms.invalid:create_sync_generate",
         "tests.generation_algorithms.invalid:create_empty_id",
+        "tests.generation_algorithms.invalid:create_missing_requires_llm",
     ],
 )
 def test_invalid_algorithm_objects_are_rejected(spec: str) -> None:

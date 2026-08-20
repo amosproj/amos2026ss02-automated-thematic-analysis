@@ -91,3 +91,19 @@ Add a short "Try a local algorithm end to end" section that includes:
 - A minimal API or UI path with `apply_after_generation=false`.
 - The focused Docker test command for researchers who want to validate their
   algorithm before running it through the UI.
+
+## Follow-Up Implementation
+
+Implemented after the trial:
+
+- Added a direct root README pointer to local codebook-generation algorithms.
+- Added PowerShell copy instructions.
+- Added exact Docker restart guidance for root and backend compose usage.
+- Added an end-to-end local algorithm trial with `apply_after_generation=false`.
+- Added the focused Docker validation command to the local algorithm docs.
+- Made `requires_llm` part of the `GenerationAlgorithm` protocol and loader
+  validation.
+- Replaced non-ASCII README punctuation/tree glyphs that rendered poorly in
+  PowerShell with ASCII equivalents.
+- Refreshed application-job rows before terminal status writes and cleared stale
+  read transactions before loading application-run document codings.

@@ -376,6 +376,10 @@ async def list_codebook_application_run_documents(
     run = await session.get(CodebookApplicationRun, run_id)
     if run is None:
         raise NotFoundError(f"Codebook application run '{run_id}' not found")
+    # Shared-cache SQLite tests can reuse a connection that just served a job
+    # polling request. End that read transaction before loading child rows so a
+    # terminal job response cannot be followed by stale empty document codings.
+    await session.rollback()
     document_codings = await _load_document_coding_schemas(run_id=run_id, session=session)
     return JSONResponse(content=ResponseEnvelope.ok(document_codings).model_dump(mode="json"))
 

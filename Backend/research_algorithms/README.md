@@ -13,8 +13,16 @@ application, API responses, and provenance wrapping.
    cp Backend/research_algorithms/example.py Backend/research_algorithms/my_algorithm.py
    ```
 
+   PowerShell:
+
+   ```powershell
+   Copy-Item Backend\research_algorithms\example.py Backend\research_algorithms\my_algorithm.py
+   ```
+
 2. Edit only the `generate()` method and, if useful, `algorithm_id` and
-   `algorithm_version`.
+   `algorithm_version`. Set `requires_llm = False` for algorithms that do not
+   call an LLM. Set it to `True` when the algorithm needs the configured chat or
+   embedding provider.
 
 3. Select it in `Backend/.env`:
 
@@ -59,12 +67,70 @@ The Docker image copies this directory. The development Compose files also mount
 does not require rebuilding the image. Restart the API container after changing
 `GENERATION_ALGORITHM` or algorithm code.
 
+Run Docker commands from the repository root when using the root
+`docker-compose.yml`:
+
+```bash
+docker compose restart api
+```
+
+If you intentionally work from `Backend/` with `Backend/docker-compose.yml`, use
+the same command from that directory instead.
+
 To run the algorithm/plugin checks from the repository root:
 
 ```bash
 docker compose run --rm api-test pytest tests/test_generation_plugins.py
 docker compose run --rm api-test ruff check research_algorithms tests/test_generation_plugins.py
 ```
+
+## Try A Local Algorithm End To End
+
+This path validates non-LLM generation without applying the codebook to
+transcripts afterward.
+
+1. Set the example algorithm in `Backend/.env`:
+
+   ```text
+   GENERATION_ALGORITHM=research_algorithms.keyword_frequency:create
+   ```
+
+2. Restart the API container from the repository root:
+
+   ```bash
+   docker compose restart api
+   ```
+
+3. Create a small corpus:
+
+   ```bash
+   curl -X POST http://localhost:8000/api/v1/ingestion/corpora \
+     -H "Content-Type: application/json" \
+     -d '{"corpus_id":"11111111-1111-1111-1111-111111111111","name":"Local Algorithm Trial"}'
+   ```
+
+4. Add transcripts:
+
+   ```bash
+   curl -X POST http://localhost:8000/api/v1/ingestion/corpora/11111111-1111-1111-1111-111111111111/documents/bulk \
+     -H "Content-Type: application/json" \
+     -d '{"documents":[{"title":"Transcript 1","text":"Manual handoffs create delays and unclear ownership."},{"title":"Transcript 2","text":"Operational handoffs need clearer ownership and trust."}]}'
+   ```
+
+5. Generate a codebook without final application:
+
+   ```bash
+   curl -X POST http://localhost:8000/api/v1/codebooks/generate \
+     -H "Content-Type: application/json" \
+     -d '{"codebook_name":"Keyword Frequency Trial","corpus_id":"11111111-1111-1111-1111-111111111111","research_query":"handoffs and delays","researcher_topics":"operations, ownership","apply_after_generation":false}'
+   ```
+
+The response should include `themes_created`, `codes_created`, and provenance
+showing `research_algorithms.keyword_frequency:create`.
+
+You can run the same flow through the UI at http://localhost:3000 by uploading
+transcripts, generating a codebook, and leaving final application disabled for a
+non-LLM trial.
 
 ## Input And Output
 
@@ -80,6 +146,8 @@ docker compose run --rm api-test ruff check research_algorithms tests/test_gener
   phase callbacks, and a cancellation check.
 
 `generate()` must return `GenerationResult` with a `CodebookDraft`.
+Algorithm objects must also expose `algorithm_id`, `algorithm_version`, and
+`requires_llm`.
 
 ## Validation Rules
 

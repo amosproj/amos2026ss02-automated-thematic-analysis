@@ -39,6 +39,19 @@ class EmptyId:
         raise AssertionError("not used")
 
 
+class MissingRequiresLlm:
+    algorithm_id = "missing_requires_llm"
+    algorithm_version = "1.0"
+
+    async def generate(
+        self,
+        generation_input: GenerationInput,
+        context: GenerationContext,
+    ) -> GenerationResult:
+        del generation_input, context
+        raise AssertionError("not used")
+
+
 class InvalidDraftAlgorithm:
     requires_llm = False
     algorithm_id = "invalid_draft"
@@ -71,6 +84,10 @@ def create_sync_generate() -> object:
 
 def create_empty_id() -> object:
     return EmptyId()
+
+
+def create_missing_requires_llm() -> object:
+    return MissingRequiresLlm()
 
 
 def create_raises() -> object:

@@ -100,6 +100,7 @@ class GenerationResult(_FrozenGenerationModel):
 class GenerationAlgorithm(Protocol):
     algorithm_id: str
     algorithm_version: str
+    requires_llm: bool
 
     async def generate(
         self,

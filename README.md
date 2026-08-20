@@ -10,8 +10,8 @@ By mapping documents and extracted text chunks to a hierarchical thematic tree (
 
 When demographic data (a CSV linked to your transcripts) is uploaded for a corpus, the Theme Browser lets researchers break a theme's frequency down by demographic group:
 
-- **Choose variables per theme** — pick one or more demographic dimensions (e.g. gender, age group, political affiliation) from the variables present in the uploaded data. Only variables that exist in the data are offered, and the selection applies to the selected theme only (changeable at any time). If no demographic data is uploaded, the panel is shown in a disabled state with an explanation.
-- **See frequency across groups** — for each selected dimension, the theme's frequency is shown per group as both an absolute count and a percentage within that group, rendered as a table and bar chart. Groups with no occurrences are shown with a count of 0, very small groups are flagged with a small-sample warning, and interviews without a linked demographic value are bucketed as "Not specified". The breakdown updates immediately as dimensions are toggled.
+- **Choose variables per theme** - pick one or more demographic dimensions (e.g. gender, age group, political affiliation) from the variables present in the uploaded data. Only variables that exist in the data are offered, and the selection applies to the selected theme only (changeable at any time). If no demographic data is uploaded, the panel is shown in a disabled state with an explanation.
+- **See frequency across groups** - for each selected dimension, the theme's frequency is shown per group as both an absolute count and a percentage within that group, rendered as a table and bar chart. Groups with no occurrences are shown with a count of 0, very small groups are flagged with a small-sample warning, and interviews without a linked demographic value are bucketed as "Not specified". The breakdown updates immediately as dimensions are toggled.
 
 ## Built With
 
@@ -77,6 +77,16 @@ To apply schema migrations, run:
 docker compose run --rm api uv run scripts/alter_db.py
 ```
 *(If you are setting up the project for the first time, this is not needed since the backend automatically provisions a fresh schema on startup).*
+
+### Local Codebook Generation Algorithms
+
+Researchers can add local Python algorithms that replace only codebook
+generation while the backend still handles document loading, validation,
+persistence, jobs, and provenance. See
+[`Backend/research_algorithms/README.md`](./Backend/research_algorithms/README.md)
+for the copy commands, Docker restart command, validation tests, and an
+end-to-end `apply_after_generation=false` trial using the included
+`keyword_frequency.py` example.
 
 #### Common commands
 
