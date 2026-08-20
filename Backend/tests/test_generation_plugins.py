@@ -9,7 +9,15 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.config import Settings
 from app.exceptions import UnprocessableError
-from app.generation.contracts import CodebookDraft, CodeDraft, GenerationResult, ThemeDraft
+from app.generation.contracts import (
+    CodebookDraft,
+    CodeDraft,
+    GenerationContext,
+    GenerationDocument,
+    GenerationInput,
+    GenerationResult,
+    ThemeDraft,
+)
 from app.generation.loader import GenerationAlgorithmLoadError, load_generation_algorithm
 from app.generation.validation import GenerationDraftValidationError, validate_generation_result
 from app.models import Code, Codebook, CodebookGenerationJob, Corpus, CorpusDocument, Theme
@@ -99,6 +107,71 @@ async def test_deterministic_algorithm_persists_core_codebook(db_session) -> Non
     codes = list((await db_session.scalars(select(Code))).all())
     assert [theme.label for theme in themes] == ["Operations"]
     assert [code.label for code in codes] == ["Delay"]
+
+
+async def test_keyword_frequency_research_algorithm_persists_codebook(db_session) -> None:
+    corpus_id, document_ids = await _seed_corpus(db_session)
+    response = await CodebookGenerationService(db_session).generate_codebook(
+        codebook_name="Keyword Frequency Generated",
+        corpus_id=corpus_id,
+        transcript_document_ids=document_ids,
+        research_query="handoffs and delays",
+        researcher_topics="operational handoffs",
+        apply_after_generation=False,
+        generation_algorithm="research_algorithms.keyword_frequency:create",
+        random_seed=123,
+    )
+
+    assert response.codebook.name == "Keyword Frequency Generated"
+    assert response.themes_created == 2
+    assert response.codes_created == 5
+    assert response.quotes_created == 0
+    assert response.provenance["selected_terms"][0] == "handoffs"
+
+    codes = list((await db_session.scalars(select(Code))).all())
+    assert "Handoffs" in [code.label for code in codes]
+
+
+async def test_keyword_frequency_research_algorithm_reports_progress_and_validates() -> None:
+    loaded = load_generation_algorithm("research_algorithms.keyword_frequency:create")
+    progress: list[tuple[int, int]] = []
+    phases: list[str] = []
+
+    async def on_progress(done: int, total: int) -> None:
+        progress.append((done, total))
+
+    async def on_phase(phase: str) -> None:
+        phases.append(phase)
+
+    result = await loaded.algorithm.generate(
+        GenerationInput(
+            documents=(
+                GenerationDocument(
+                    document_id=uuid4(),
+                    title="Transcript 1",
+                    content="Handoffs create delays, delays affect trust.",
+                ),
+                GenerationDocument(
+                    document_id=uuid4(),
+                    title="Transcript 2",
+                    content="Operational handoffs need clearer ownership.",
+                ),
+            ),
+            research_query="handoffs and delays",
+            researcher_topics="operations",
+            random_seed=123,
+        ),
+        GenerationContext(on_progress=on_progress, on_phase=on_phase),
+    )
+
+    validate_generation_result(result, algorithm_id=loaded.algorithm.algorithm_id)
+    assert phases == ["keyword_frequency_extracting"]
+    assert progress == [(0, 2), (1, 2), (2, 2)]
+    assert [theme.label for theme in result.codebook.themes] == [
+        "Keyword Patterns",
+        "Frequent Terms",
+    ]
+    assert [code.label for code in result.codebook.codes][:2] == ["Handoffs", "Delays"]
 
 
 async def test_invalid_draft_fails_without_partial_persistence(db_session) -> None:
@@ -242,3 +315,6 @@ def test_builtin_and_research_example_configs_load() -> None:
         "app.generation.algorithms.traceable:create"
     ).algorithm.algorithm_id
     assert load_generation_algorithm("research_algorithms.example:create").algorithm.algorithm_id
+    assert load_generation_algorithm(
+        "research_algorithms.keyword_frequency:create"
+    ).algorithm.algorithm_id

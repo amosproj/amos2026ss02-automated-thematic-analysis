@@ -30,6 +30,17 @@ The built-in default is:
 GENERATION_ALGORITHM=app.generation.algorithms.traceable:create
 ```
 
+## Included Examples
+
+- `example.py`: minimal static template for copying into a new file.
+- `keyword_frequency.py`: deterministic baseline that derives up to five codes
+  from frequent non-stopword transcript terms. It does not require an LLM and
+  can be selected with:
+
+  ```text
+  GENERATION_ALGORITHM=research_algorithms.keyword_frequency:create
+  ```
+
 ## Run Locally
 
 From `Backend/`, start the API as usual:
@@ -47,6 +58,13 @@ The Docker image copies this directory. The development Compose files also mount
 `research_algorithms` read-only into the API container, so editing an algorithm
 does not require rebuilding the image. Restart the API container after changing
 `GENERATION_ALGORITHM` or algorithm code.
+
+To run the algorithm/plugin checks from the repository root:
+
+```bash
+docker compose run --rm api-test pytest tests/test_generation_plugins.py
+docker compose run --rm api-test ruff check research_algorithms tests/test_generation_plugins.py
+```
 
 ## Input And Output
 
