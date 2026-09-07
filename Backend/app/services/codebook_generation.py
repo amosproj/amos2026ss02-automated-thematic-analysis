@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import random
 import re
+import secrets
 import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import cast
 from uuid import UUID
 
 from langchain_core.exceptions import OutputParserException
@@ -15,7 +18,28 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.exceptions import NotFoundError, UnprocessableError
+from app.generation.contracts import (
+    CodebookDraft,
+    GenerationCancelledError,
+    GenerationContext,
+    GenerationDocument,
+    GenerationInput,
+    GenerationResult,
+    ThemeDraft,
+)
+from app.generation.loader import (
+    GenerationAlgorithmLoadError,
+    LoadedGenerationAlgorithm,
+    load_generation_algorithm,
+)
+from app.generation.validation import (
+    GenerationDraftValidationError,
+    coerce_generation_result,
+    validate_generation_result,
+)
+from app.llm import providers
 from app.llm.pipelines import (
     TokenTracker,
     build_codebook_generation_chain,
@@ -40,6 +64,10 @@ from app.schemas.llm import (
     GeneratedThemeNode,
     GeneratedThemePath,
     PassageCodebookGeneration,
+)
+from app.services.codebook_application import (
+    CodebookApplicationCancelledError,
+    CodebookApplicationService,
 )
 from app.services.theme_graph import ThemeGraphService
 from app.services.traceable_analysis import (
@@ -115,11 +143,23 @@ async def resolve_transcript_document_ids(
 
 
 class CodebookGenerationService:
-    """Generate and persist a new codebook through the traceable pipeline."""
+    """Generate and persist a new codebook through a configured strategy."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+        self._llm_tokens_input = 0
+        self._llm_tokens_output = 0
+        # Kept for compatibility with existing tests and callers that inspect
+        # the traceable service token counters directly.
         self.traceable_service = TraceableAnalysisService(self._session)
+
+    @property
+    def llm_tokens_input(self) -> int:
+        return self._llm_tokens_input
+
+    @property
+    def llm_tokens_output(self) -> int:
+        return self._llm_tokens_output
 
     async def generate_codebook(
         self,
@@ -140,45 +180,174 @@ class CodebookGenerationService:
         on_codebook_created: Callable[[UUID], Awaitable[None]] | None = None,
         on_application_run_created: Callable[[UUID], Awaitable[None]] | None = None,
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
+        generation_algorithm: str | None = None,
+        random_seed: int | None = None,
     ) -> GeneratedCodebookResponse:
+        self._llm_tokens_input = 0
+        self._llm_tokens_output = 0
+        algorithm_spec = generation_algorithm or get_settings().GENERATION_ALGORITHM
+        seed = random_seed if random_seed is not None else secrets.randbits(64)
         try:
-            result = await self.traceable_service.run_analysis(
-                codebook_name=codebook_name,
-                analysis_name=analysis_name or codebook_name,
-                custom_id=custom_id,
+            loaded_algorithm = load_generation_algorithm(algorithm_spec)
+            algorithm = loaded_algorithm.algorithm
+            normalized_document_ids = self._deduplicate_document_ids(transcript_document_ids)
+            await self._load_corpus(corpus_id)
+            documents = await self._load_documents(
                 corpus_id=corpus_id,
-                transcript_document_ids=transcript_document_ids,
-                research_query=research_query,
-                researcher_topics=researcher_topics,
-                max_refinement_rounds=max_refinement_rounds,
-                apply_after_generation=apply_after_generation,
-                provider=provider,
-                on_unit_progress=on_progress,
-                on_phase_progress=on_phase_progress,
+                transcript_document_ids=normalized_document_ids,
+            )
+            generation_documents = tuple(
+                GenerationDocument(
+                    document_id=document.id,
+                    title=document.title,
+                    content=(document.content or "").strip(),
+                )
+                for document in documents
+                if (document.content or "").strip()
+            )
+            if not generation_documents:
+                raise UnprocessableError("No non-empty transcripts found for codebook generation.")
+            await self._session.rollback()
+
+            context = GenerationContext(
+                selected_llm_provider=provider,
+                llm_model=self._llm_model_for_provider(provider),
+                embedding_model=self._embedding_model_for_provider(provider),
+                on_progress=on_progress,
                 on_phase=on_phase,
-                on_codebook_created=on_codebook_created,
-                on_application_run_created=on_application_run_created,
+                on_phase_progress=on_phase_progress,
                 should_cancel=should_cancel,
             )
+            generation_input = GenerationInput(
+                documents=generation_documents,
+                research_query=research_query,
+                researcher_topics=researcher_topics,
+                random_seed=seed,
+                algorithm_options={"max_refinement_rounds": max_refinement_rounds},
+            )
+            raw_result = await algorithm.generate(generation_input, context)
+            generation_result = validate_generation_result(
+                coerce_generation_result(raw_result, algorithm_id=algorithm.algorithm_id),
+                algorithm_id=algorithm.algorithm_id,
+            )
+            self._llm_tokens_input = self._token_count(generation_result, "input_tokens")
+            self._llm_tokens_output = self._token_count(generation_result, "output_tokens")
+
+            if on_phase is not None:
+                await on_phase("persisting_codebook")
+            await self._raise_if_cancelled(should_cancel)
+            created_codebook, themes_created, codes_created = await self._persist_draft_codebook(
+                codebook_name=codebook_name,
+                corpus_id=corpus_id,
+                research_query=research_query,
+                researcher_topics=researcher_topics,
+                draft=generation_result.codebook,
+                llm_tokens_input=self._llm_tokens_input,
+                llm_tokens_output=self._llm_tokens_output,
+                algorithm_id=algorithm.algorithm_id,
+            )
+            created_codebook_id = created_codebook.id
+            if on_codebook_created is not None:
+                await on_codebook_created(created_codebook_id)
+
+            action_log: list[object] = [dict(action) for action in generation_result.action_log]
+            documents_coded = 0
+            documents_failed = 0
+            application_run_id: UUID | None = None
+            if apply_after_generation:
+                if on_phase is not None:
+                    await on_phase("applying_codebook")
+
+                async def _on_application_progress(
+                    done: int,
+                    total: int,
+                    _coded: int,
+                    _failed: int,
+                ) -> None:
+                    if on_progress is not None:
+                        await on_progress(done, total)
+
+                application_service = CodebookApplicationService(self._session)
+                application_summary = await application_service.apply_codebook(
+                    name=analysis_name or codebook_name,
+                    custom_id=custom_id,
+                    corpus_id=corpus_id,
+                    codebook_id=created_codebook_id,
+                    transcript_document_ids=[
+                        document.document_id for document in generation_documents
+                    ],
+                    provider=provider,
+                    on_progress=_on_application_progress,
+                    on_phase=None,
+                    on_run_created=on_application_run_created,
+                    should_cancel=should_cancel,
+                )
+                application_run_id = application_summary.application_run.id
+                documents_coded = application_summary.documents_coded
+                documents_failed = application_summary.documents_failed
+                self._llm_tokens_input += application_service.traceable_service.llm_tokens_input
+                self._llm_tokens_output += application_service.traceable_service.llm_tokens_output
+                await self._update_generated_token_totals(
+                    codebook_id=created_codebook_id,
+                    application_run_id=application_run_id,
+                    llm_tokens_input=self._llm_tokens_input,
+                    llm_tokens_output=self._llm_tokens_output,
+                )
+                if application_summary.action_log:
+                    action_log.extend(application_summary.action_log)
+                action_log.append(
+                    {
+                        "action": "apply_final_codebook",
+                        "documents": len(generation_documents),
+                        "documents_coded": documents_coded,
+                        "documents_failed": documents_failed,
+                    }
+                )
+            else:
+                action_log.append(
+                    {
+                        "action": "skip_final_application",
+                        "reason": "apply_after_generation=false",
+                    }
+                )
+
+            response_codebook = await self._session.get(Codebook, created_codebook_id)
+            if response_codebook is None:
+                raise NotFoundError("Generated codebook disappeared before response construction")
+            provenance = self._enrich_provenance(
+                generation_result=generation_result,
+                loaded_algorithm=loaded_algorithm,
+                random_seed=seed,
+                selected_document_ids=[document.document_id for document in generation_documents],
+                provider=provider,
+                algorithm_options={"max_refinement_rounds": max_refinement_rounds},
+                application_run_id=application_run_id,
+                documents_coded=documents_coded,
+                documents_failed=documents_failed,
+            )
+            response_action_log = self._with_action_ids(action_log)
+            return GeneratedCodebookResponse(
+                codebook=CodebookSchema.model_validate(response_codebook),
+                application_run_id=application_run_id,
+                transcripts_processed=len(generation_documents),
+                passages_processed=generation_result.processed_unit_count
+                or len(generation_documents),
+                themes_created=themes_created,
+                codes_created=codes_created,
+                documents_coded=documents_coded,
+                documents_failed=documents_failed,
+                quotes_created=generation_result.quote_count,
+                provenance=provenance,
+                action_log=response_action_log,
+            )
+        except GenerationCancelledError as exc:
+            raise CodebookGenerationCancelledError("Codebook generation was cancelled") from exc
         except TraceableAnalysisCancelledError as exc:
             raise CodebookGenerationCancelledError("Codebook generation was cancelled") from exc
-
-        created_codebook = await self._session.get(Codebook, result.codebook_id)
-        if created_codebook is None:
-            raise NotFoundError(f"Generated codebook '{result.codebook_id}' not found")
-        return GeneratedCodebookResponse(
-            codebook=CodebookSchema.model_validate(created_codebook),
-            application_run_id=result.application_run_id,
-            transcripts_processed=result.documents_processed,
-            passages_processed=result.analysis_units_processed,
-            themes_created=result.themes_created,
-            codes_created=result.codes_created,
-            documents_coded=result.documents_coded,
-            documents_failed=result.documents_failed,
-            quotes_created=result.quotes_created,
-            provenance=result.provenance,
-            action_log=result.action_log,
-        )
+        except CodebookApplicationCancelledError as exc:
+            raise CodebookGenerationCancelledError("Codebook generation was cancelled") from exc
+        except (GenerationAlgorithmLoadError, GenerationDraftValidationError) as exc:
+            raise UnprocessableError(str(exc)) from exc
 
     @staticmethod
     def _deduplicate_document_ids(document_ids: list[UUID] | None) -> list[UUID]:
@@ -195,9 +364,7 @@ class CodebookGenerationService:
 
     async def _load_corpus(self, corpus_id: UUID) -> Corpus:
         corpus = (
-            await self._session.execute(
-                select(Corpus).where(Corpus.id == corpus_id)
-            )
+            await self._session.execute(select(Corpus).where(Corpus.id == corpus_id))
         ).scalar_one_or_none()
         if corpus is None:
             raise NotFoundError(f"Corpus '{corpus_id}' not found")
@@ -231,12 +398,15 @@ class CodebookGenerationService:
             ).all()
         )
         documents_by_id = {document.id: document for document in documents}
-        missing = [document_id for document_id in transcript_document_ids if document_id not in documents_by_id]
+        missing = [
+            document_id
+            for document_id in transcript_document_ids
+            if document_id not in documents_by_id
+        ]
         if missing:
             missing_str = ", ".join(str(document_id) for document_id in missing)
             raise UnprocessableError(
-                "Some transcript_document_ids were not found in the selected corpus: "
-                f"{missing_str}"
+                f"Some transcript_document_ids were not found in the selected corpus: {missing_str}"
             )
         return [documents_by_id[document_id] for document_id in transcript_document_ids]
 
@@ -330,7 +500,10 @@ class CodebookGenerationService:
                         continue
 
                     # Retry transient provider/network failures, but fail fast on hard errors.
-                    if self._is_retryable_llm_exception(result) and attempt_count < _PASSAGE_GENERATION_MAX_ATTEMPTS:
+                    if (
+                        self._is_retryable_llm_exception(result)
+                        and attempt_count < _PASSAGE_GENERATION_MAX_ATTEMPTS
+                    ):
                         retryable_failure_detected = True
                         retry_indexes.append(passage_index)
                         continue
@@ -378,7 +551,7 @@ class CodebookGenerationService:
 
     @staticmethod
     def _chunked(items: list[int], chunk_size: int) -> list[list[int]]:
-        return [items[index:index + chunk_size] for index in range(0, len(items), chunk_size)]
+        return [items[index : index + chunk_size] for index in range(0, len(items), chunk_size)]
 
     @staticmethod
     def _is_retryable_llm_exception(exc: Exception) -> bool:
@@ -514,7 +687,9 @@ class CodebookGenerationService:
 
         consolidated_labels = [code.label for code in consolidated_codes]
         kept_label_keys = {label.lower() for label in consolidated_labels}
-        removed_labels = sorted([label for label in original_labels if label.lower() not in kept_label_keys])
+        removed_labels = sorted(
+            [label for label in original_labels if label.lower() not in kept_label_keys]
+        )
         logger.info(
             "Code consolidation finished: before={before}, after={after}, removed={removed}",
             before=len(original_labels),
@@ -526,7 +701,9 @@ class CodebookGenerationService:
         return consolidated_codes
 
     @staticmethod
-    def _theme_key_from_path(theme_path: list[str] | tuple[str, ...] | None) -> tuple[str, ...] | None:
+    def _theme_key_from_path(
+        theme_path: list[str] | tuple[str, ...] | None,
+    ) -> tuple[str, ...] | None:
         if not theme_path:
             return None
         normalized = [
@@ -563,10 +740,7 @@ class CodebookGenerationService:
             return codes
 
         candidate_keys = cls._candidate_theme_keys(theme_nodes)
-        leaf_key_by_label = {
-            theme_nodes[key].label.lower(): key
-            for key in candidate_keys
-        }
+        leaf_key_by_label = {theme_nodes[key].label.lower(): key for key in candidate_keys}
 
         remapped: list[_CodeDraft] = []
         for code in codes:
@@ -612,7 +786,7 @@ class CodebookGenerationService:
                     description=code.description,
                     parent_theme_key=resolved_key,
                 )
-        )
+            )
         return remapped
 
     @classmethod
@@ -665,11 +839,7 @@ class CodebookGenerationService:
 
     @staticmethod
     def _label_tokens(value: str) -> set[str]:
-        return {
-            token
-            for token in re.findall(r"[a-z0-9]+", value.lower())
-            if len(token) >= 3
-        }
+        return {token for token in re.findall(r"[a-z0-9]+", value.lower()) if len(token) >= 3}
 
     @staticmethod
     def _token_overlap_score(source_tokens: set[str], candidate_tokens: set[str]) -> int:
@@ -678,8 +848,10 @@ class CodebookGenerationService:
             for candidate in candidate_tokens:
                 if source == candidate:
                     score += 3
-                elif len(source) >= 5 and len(candidate) >= 5 and (
-                    source in candidate or candidate in source
+                elif (
+                    len(source) >= 5
+                    and len(candidate) >= 5
+                    and (source in candidate or candidate in source)
                 ):
                     score += 1
         return score
@@ -691,7 +863,9 @@ class CodebookGenerationService:
         hierarchy_edges: list[tuple[tuple[str, ...], tuple[str, ...]]],
         should_cancel: Callable[[], Awaitable[bool]] | None = None,
         tracker: TokenTracker | None = None,
-    ) -> tuple[dict[tuple[str, ...], _ThemeNodeDraft], list[tuple[tuple[str, ...], tuple[str, ...]]]]:
+    ) -> tuple[
+        dict[tuple[str, ...], _ThemeNodeDraft], list[tuple[tuple[str, ...], tuple[str, ...]]]
+    ]:
         """Consolidate theme paths and rebuild the theme tree from consolidated paths."""
         await self._raise_if_cancelled(should_cancel)
         if not theme_nodes:
@@ -730,7 +904,9 @@ class CodebookGenerationService:
             )
             return theme_nodes, hierarchy_edges
 
-        consolidated_theme_nodes, consolidated_edges = self._build_theme_graph_from_paths(consolidated.themes)
+        consolidated_theme_nodes, consolidated_edges = self._build_theme_graph_from_paths(
+            consolidated.themes
+        )
         if not consolidated_theme_nodes:
             logger.warning(
                 "Theme consolidation returned no usable themes; using pre-consolidation tree (themes={count})",
@@ -739,7 +915,9 @@ class CodebookGenerationService:
             return theme_nodes, hierarchy_edges
 
         # If first pass remains too broad, run a stricter compression pass.
-        consolidated_root_count = self._count_root_themes(consolidated_edges, consolidated_theme_nodes)
+        consolidated_root_count = self._count_root_themes(
+            consolidated_edges, consolidated_theme_nodes
+        )
         if consolidated_root_count > 10 or len(consolidated_theme_nodes) > target_total_themes:
             strict_constraints = self._build_theme_consolidation_constraints(
                 max_root_themes=8,
@@ -754,7 +932,9 @@ class CodebookGenerationService:
                     tracker=tracker,
                 )
                 await self._raise_if_cancelled(should_cancel)
-                strict_nodes, strict_edges = self._build_theme_graph_from_paths(strict_consolidated.themes)
+                strict_nodes, strict_edges = self._build_theme_graph_from_paths(
+                    strict_consolidated.themes
+                )
                 if strict_nodes:
                     consolidated = strict_consolidated
                     consolidated_theme_nodes = strict_nodes
@@ -762,12 +942,16 @@ class CodebookGenerationService:
             except CodebookGenerationCancelledError:
                 raise
             except Exception:
-                logger.exception("Strict theme consolidation pass failed; using first-pass consolidated tree")
+                logger.exception(
+                    "Strict theme consolidation pass failed; using first-pass consolidated tree"
+                )
 
         original_labels = sorted({node.label for node in theme_nodes.values()})
         consolidated_labels = sorted({node.label for node in consolidated_theme_nodes.values()})
         kept_label_keys = {label.lower() for label in consolidated_labels}
-        removed_labels = sorted([label for label in original_labels if label.lower() not in kept_label_keys])
+        removed_labels = sorted(
+            [label for label in original_labels if label.lower() not in kept_label_keys]
+        )
 
         logger.info(
             "Theme consolidation finished: before_themes={before_themes}, after_themes={after_themes}, "
@@ -809,9 +993,13 @@ class CodebookGenerationService:
         aggressive: bool,
     ) -> str:
         extra = (
-            "- Be highly aggressive: collapse near-duplicates and subordinate variants unless analytically necessary.\n"
-            "- Do not keep narrow examples (specific jobs, incidents, or anecdotes) as Level-1 or Level-2 themes.\n"
-        ) if aggressive else ""
+            (
+                "- Be highly aggressive: collapse near-duplicates and subordinate variants unless analytically necessary.\n"
+                "- Do not keep narrow examples (specific jobs, incidents, or anecdotes) as Level-1 or Level-2 themes.\n"
+            )
+            if aggressive
+            else ""
+        )
         return (
             "- Use 3 conceptual levels whenever possible:\n"
             "  1) Domain-level themes (Level-1 roots).\n"
@@ -876,7 +1064,9 @@ class CodebookGenerationService:
     def _build_theme_graph_from_paths(
         cls,
         theme_paths: list[GeneratedThemePath],
-    ) -> tuple[dict[tuple[str, ...], _ThemeNodeDraft], list[tuple[tuple[str, ...], tuple[str, ...]]]]:
+    ) -> tuple[
+        dict[tuple[str, ...], _ThemeNodeDraft], list[tuple[tuple[str, ...], tuple[str, ...]]]
+    ]:
         theme_nodes_by_key: dict[tuple[str, ...], _ThemeNodeDraft] = {}
         raw_edges: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
 
@@ -899,7 +1089,9 @@ class CodebookGenerationService:
                 elif not existing.description and description and description.strip():
                     existing.description = description.strip()
                 if index > 1:
-                    raw_edges.append((tuple(part.lower() for part in normalized_labels[: index - 1]), key))
+                    raw_edges.append(
+                        (tuple(part.lower() for part in normalized_labels[: index - 1]), key)
+                    )
 
         # Merge identical labels across different paths; the resulting graph
         # must have one canonical node per label to avoid duplicate themes.
@@ -926,7 +1118,9 @@ class CodebookGenerationService:
         canonical_edges: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
         child_parent: dict[tuple[str, ...], tuple[str, ...]] = {}
         seen_edges: set[tuple[tuple[str, ...], tuple[str, ...]]] = set()
-        for parent, child in sorted(raw_edges, key=lambda pair: (len(pair[0]), pair[0], len(pair[1]), pair[1])):
+        for parent, child in sorted(
+            raw_edges, key=lambda pair: (len(pair[0]), pair[0], len(pair[1]), pair[1])
+        ):
             canonical_parent = canonical_key_by_original.get(parent)
             canonical_child = canonical_key_by_original.get(child)
             if canonical_parent is None or canonical_child is None:
@@ -950,14 +1144,20 @@ class CodebookGenerationService:
     def _deduplicate_generation(
         cls,
         generation_results: list[PassageCodebookGeneration],
-    ) -> tuple[dict[tuple[str, ...], _ThemeNodeDraft], list[_CodeDraft], list[tuple[tuple[str, ...], tuple[str, ...]]]]:
+    ) -> tuple[
+        dict[tuple[str, ...], _ThemeNodeDraft],
+        list[_CodeDraft],
+        list[tuple[tuple[str, ...], tuple[str, ...]]],
+    ]:
         theme_nodes_by_key: dict[tuple[str, ...], _ThemeNodeDraft] = {}
         codes_by_key: dict[str, _CodeDraft] = {}
         raw_edges: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
 
         for result in generation_results:
             for generated_path in result.themes:
-                normalized_labels = [cls._normalize_label(node.label) for node in generated_path.path]
+                normalized_labels = [
+                    cls._normalize_label(node.label) for node in generated_path.path
+                ]
                 normalized_labels = [label for label in normalized_labels if label]
                 if not normalized_labels:
                     continue
@@ -975,7 +1175,9 @@ class CodebookGenerationService:
                     elif not existing.description and description and description.strip():
                         existing.description = description.strip()
                     if index > 1:
-                        raw_edges.append((tuple(part.lower() for part in normalized_labels[: index - 1]), key))
+                        raw_edges.append(
+                            (tuple(part.lower() for part in normalized_labels[: index - 1]), key)
+                        )
 
             for generated_code in result.codes:
                 normalized_code_label = cls._normalize_label(generated_code.label)
@@ -1003,7 +1205,9 @@ class CodebookGenerationService:
                 if existing_code is None:
                     codes_by_key[code_key] = _CodeDraft(
                         label=normalized_code_label,
-                        description=generated_code.description.strip() if generated_code.description else None,
+                        description=generated_code.description.strip()
+                        if generated_code.description
+                        else None,
                         parent_theme_key=theme_key if theme_key else None,
                     )
                 elif not existing_code.description and generated_code.description:
@@ -1040,7 +1244,9 @@ class CodebookGenerationService:
         canonical_edges: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
         child_parent: dict[tuple[str, ...], tuple[str, ...]] = {}
         seen_edges: set[tuple[tuple[str, ...], tuple[str, ...]]] = set()
-        for parent, child in sorted(raw_edges, key=lambda pair: (len(pair[0]), pair[0], len(pair[1]), pair[1])):
+        for parent, child in sorted(
+            raw_edges, key=lambda pair: (len(pair[0]), pair[0], len(pair[1]), pair[1])
+        ):
             canonical_parent = canonical_key_by_original.get(parent)
             canonical_child = canonical_key_by_original.get(child)
             if canonical_parent is None or canonical_child is None:
@@ -1060,6 +1266,287 @@ class CodebookGenerationService:
             canonical_edges.append(edge)
 
         return canonical_theme_nodes, sorted_codes, canonical_edges
+
+    async def _persist_draft_codebook(
+        self,
+        *,
+        codebook_name: str,
+        corpus_id: UUID,
+        research_query: str | None,
+        researcher_topics: str | None,
+        draft: CodebookDraft,
+        llm_tokens_input: int | None,
+        llm_tokens_output: int | None,
+        algorithm_id: str,
+    ) -> tuple[Codebook, int, int]:
+        try:
+            version = await self._next_codebook_version(corpus_id=corpus_id)
+            codebook = Codebook(
+                id=uuid.uuid4(),
+                corpus_id=corpus_id,
+                name=codebook_name,
+                description=f"Generated by {algorithm_id}.",
+                version=version,
+                created_by="system-llm",
+                research_query=research_query,
+                researcher_topics=researcher_topics,
+                llm_tokens_input=llm_tokens_input,
+                llm_tokens_output=llm_tokens_output,
+            )
+            self._session.add(codebook)
+            await self._session.flush()
+
+            themes_by_key: dict[str, ThemeDraft] = {}
+            for theme in draft.themes:
+                theme_key = self._draft_key(theme.key)
+                if theme_key is not None:
+                    themes_by_key[theme_key] = theme
+            theme_id_by_key: dict[str, UUID] = {}
+            for theme_key in sorted(
+                themes_by_key, key=lambda key: (self._theme_depth(key, themes_by_key), key)
+            ):
+                theme = themes_by_key[theme_key]
+                theme_row = Theme(
+                    id=uuid.uuid4(),
+                    codebook_id=codebook.id,
+                    label=self._truncate_label(self._normalize_label(theme.label)),
+                    description=self._clean_optional_text(theme.description),
+                    is_active=True,
+                )
+                self._session.add(theme_row)
+                await self._session.flush()
+                theme_id_by_key[theme_key] = theme_row.id
+                self._session.add(
+                    CodebookThemeRelationship(
+                        id=uuid.uuid4(),
+                        codebook_id=codebook.id,
+                        theme_id=theme_row.id,
+                        is_active=True,
+                    )
+                )
+
+            added_edges: set[tuple[UUID, UUID]] = set()
+            for theme_key in sorted(
+                themes_by_key, key=lambda key: (self._theme_depth(key, themes_by_key), key)
+            ):
+                parent_key = self._draft_key(themes_by_key[theme_key].parent_theme_key)
+                if parent_key is None:
+                    continue
+                parent_theme_id = theme_id_by_key.get(parent_key)
+                child_theme_id = theme_id_by_key.get(theme_key)
+                if parent_theme_id is None or child_theme_id is None:
+                    continue
+                edge_key = (parent_theme_id, child_theme_id)
+                if parent_theme_id == child_theme_id or edge_key in added_edges:
+                    continue
+                self._session.add(
+                    ThemeHierarchyRelationship(
+                        id=uuid.uuid4(),
+                        codebook_id=codebook.id,
+                        parent_theme_id=parent_theme_id,
+                        child_theme_id=child_theme_id,
+                        is_active=True,
+                    )
+                )
+                added_edges.add(edge_key)
+
+            codes_created = 0
+            for code_draft in draft.codes:
+                code_label = self._truncate_label(self._normalize_label(code_draft.label))
+                code = Code(
+                    id=uuid.uuid4(),
+                    codebook_id=codebook.id,
+                    label=code_label,
+                    description=self._clean_optional_text(code_draft.description),
+                    is_active=True,
+                )
+                self._session.add(code)
+                await self._session.flush()
+                self._session.add(
+                    CodebookCodeRelationship(
+                        id=uuid.uuid4(),
+                        codebook_id=codebook.id,
+                        code_id=code.id,
+                        is_active=True,
+                    )
+                )
+                theme_key = self._draft_key(code_draft.theme_key)
+                if theme_key is not None and theme_key in theme_id_by_key:
+                    self._session.add(
+                        ThemeCodeRelationship(
+                            id=uuid.uuid4(),
+                            codebook_id=codebook.id,
+                            theme_id=theme_id_by_key[theme_key],
+                            code_id=code.id,
+                            is_active=True,
+                        )
+                    )
+                codes_created += 1
+
+            validation = await ThemeGraphService(self._session).validate_theme_dag(
+                codebook_id=codebook.id,
+                ensure_codebook_exists=False,
+            )
+            if not validation.is_valid:
+                violations = "; ".join(validation.violations)
+                raise UnprocessableError(f"Generated hierarchy is invalid: {violations}")
+
+            await self._session.commit()
+            await self._session.refresh(codebook)
+            return codebook, len(theme_id_by_key), codes_created
+        except Exception:
+            await self._session.rollback()
+            raise
+
+    async def _update_generated_token_totals(
+        self,
+        *,
+        codebook_id: UUID,
+        application_run_id: UUID,
+        llm_tokens_input: int,
+        llm_tokens_output: int,
+    ) -> None:
+        codebook = await self._session.get(Codebook, codebook_id)
+        if codebook is not None:
+            codebook.llm_tokens_input = llm_tokens_input
+            codebook.llm_tokens_output = llm_tokens_output
+        from app.models import CodebookApplicationRun
+
+        application_run = await self._session.get(CodebookApplicationRun, application_run_id)
+        if application_run is not None:
+            application_run.llm_tokens_input = llm_tokens_input
+            application_run.llm_tokens_output = llm_tokens_output
+        await self._session.commit()
+
+    def _enrich_provenance(
+        self,
+        *,
+        generation_result: GenerationResult,
+        loaded_algorithm: LoadedGenerationAlgorithm,
+        random_seed: int,
+        selected_document_ids: list[UUID],
+        provider: str | None,
+        algorithm_options: dict[str, object],
+        application_run_id: UUID | None,
+        documents_coded: int,
+        documents_failed: int,
+    ) -> dict[str, object]:
+        provenance = self._json_dict(generation_result.provenance)
+        provenance["generation_algorithm"] = {
+            "module_spec": loaded_algorithm.spec,
+            "algorithm_id": loaded_algorithm.algorithm.algorithm_id,
+            "algorithm_version": loaded_algorithm.algorithm.algorithm_version,
+            "source_sha256": loaded_algorithm.source_sha256,
+            "random_seed": random_seed,
+            "selected_document_ids": [str(document_id) for document_id in selected_document_ids],
+            "llm_provider": provider,
+            "llm_model": self._llm_model_for_provider(provider),
+            "embedding_model": self._embedding_model_for_provider(provider),
+            "token_usage": {
+                "input_tokens": self._llm_tokens_input,
+                "output_tokens": self._llm_tokens_output,
+                "total_tokens": self._llm_tokens_input + self._llm_tokens_output,
+                "algorithm_reported": self._json_dict(generation_result.token_usage),
+            },
+            "algorithm_options": self._json_dict(algorithm_options),
+        }
+        if application_run_id is not None:
+            provenance["final_application"] = {
+                "application_run_id": str(application_run_id),
+                "documents_coded": documents_coded,
+                "documents_failed": documents_failed,
+            }
+        return provenance
+
+    @staticmethod
+    def _with_action_ids(action_log: list[object]) -> list[dict[str, object]]:
+        enriched: list[dict[str, object]] = []
+        for index, action in enumerate(action_log, start=1):
+            action_dict = action if isinstance(action, dict) else {"action": str(action)}
+            action_with_id = {
+                "action_id": f"act_{index:04d}",
+                "inputs": action_dict.get("inputs", {}),
+                "outputs": action_dict.get("outputs", {}),
+                **action_dict,
+            }
+            enriched.append(cast(dict[str, object], action_with_id))
+        return enriched
+
+    @staticmethod
+    def _token_count(result: GenerationResult, key: str) -> int:
+        aliases = {
+            "input_tokens": ("input_tokens", "llm_tokens_input", "prompt_tokens"),
+            "output_tokens": ("output_tokens", "llm_tokens_output", "completion_tokens"),
+        }
+        for alias in aliases.get(key, (key,)):
+            value = result.token_usage.get(alias)
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, int):
+                return value
+            if isinstance(value, float):
+                return int(value)
+            if isinstance(value, str):
+                try:
+                    return int(value)
+                except ValueError:
+                    continue
+        return 0
+
+    @staticmethod
+    def _json_dict(value: object) -> dict[str, object]:
+        decoded = json.loads(json.dumps(value, ensure_ascii=False))
+        if isinstance(decoded, dict):
+            return cast(dict[str, object], decoded)
+        return {}
+
+    @staticmethod
+    def _draft_key(value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = " ".join(value.split()).strip()
+        return cleaned or None
+
+    def _theme_depth(self, key: str, themes_by_key: dict[str, ThemeDraft]) -> int:
+        current_key: str | None = key
+        depth = 0
+        seen: set[str] = set()
+        while current_key is not None and current_key not in seen:
+            seen.add(current_key)
+            theme = themes_by_key.get(current_key)
+            parent_key = self._draft_key(theme.parent_theme_key if theme is not None else None)
+            current_key = parent_key if parent_key in themes_by_key else None
+            depth += 1
+        return depth
+
+    @staticmethod
+    def _truncate_label(value: str) -> str:
+        return value[:255].strip()
+
+    @staticmethod
+    def _clean_optional_text(value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = " ".join(value.split()).strip()
+        return cleaned or None
+
+    @staticmethod
+    def _llm_model_for_provider(provider: str | None) -> str | None:
+        settings = get_settings()
+        spec = providers.get_provider(provider)
+        if spec is None:
+            return settings.LLM_MODEL
+        value = getattr(settings, spec.model_attr, None)
+        return str(value) if value else None
+
+    @staticmethod
+    def _embedding_model_for_provider(provider: str | None) -> str | None:
+        settings = get_settings()
+        spec = providers.get_provider(provider)
+        if spec is None:
+            return settings.EMBEDDING_MODEL
+        value = getattr(settings, spec.embedding_model_attr, None)
+        return str(value) if value else None
 
     async def _persist_generated_codebook(
         self,
@@ -1090,7 +1577,9 @@ class CodebookGenerationService:
             self._session.add(codebook)
             await self._session.flush()
 
-            ordered_theme_nodes = sorted(theme_nodes.values(), key=lambda node: (len(node.key), node.key))
+            ordered_theme_nodes = sorted(
+                theme_nodes.values(), key=lambda node: (len(node.key), node.key)
+            )
             theme_id_by_key: dict[tuple[str, ...], UUID] = {}
             theme_id_by_label: dict[str, UUID] = {}
             for node in ordered_theme_nodes:
@@ -1185,7 +1674,9 @@ class CodebookGenerationService:
 
             # Validate before commit so an invalid generated hierarchy rolls
             # back atomically with its codebook, themes, and codes.
-            validation = await ThemeGraphService(self._session).validate_theme_dag(codebook_id=codebook.id)
+            validation = await ThemeGraphService(self._session).validate_theme_dag(
+                codebook_id=codebook.id
+            )
             if not validation.is_valid:
                 violations = "; ".join(validation.violations)
                 raise UnprocessableError(f"Generated hierarchy is invalid: {violations}")

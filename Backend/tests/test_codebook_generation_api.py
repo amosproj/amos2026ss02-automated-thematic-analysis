@@ -605,8 +605,12 @@ async def test_generate_codebook_returns_404_for_unknown_corpus(client) -> None:
 
 async def test_sync_generate_uses_active_provider(client, db_engine, monkeypatch) -> None:
     """The synchronous /generate endpoint must run on the UI-selected provider."""
+    from app.config import get_settings
     from app.exceptions import UnprocessableError
     from app.models.app_settings import ACTIVE_LLM_PROVIDER_KEY, AppSetting
+
+    monkeypatch.setenv("LLM_API_KEY", "test-academic-key")
+    get_settings.cache_clear()
 
     factory = async_sessionmaker(db_engine, expire_on_commit=False, class_=AsyncSession)
     async with factory() as setup_session:
@@ -629,6 +633,7 @@ async def test_sync_generate_uses_active_provider(client, db_engine, monkeypatch
 
     assert response.status_code == 422
     assert captured["provider"] == "ACADEMIC"
+    get_settings.cache_clear()
 
 
 async def test_generate_codebook_uses_all_corpus_documents_when_ids_omitted(

@@ -192,7 +192,7 @@ class CodebookApplicationJobRunner:
                     on_run_created=_on_run_created,
                     should_cancel=_should_cancel,
                 )
-                current_job = await session.get(CodebookApplicationJob, job_id)
+                current_job = await self._get_current_job(session, job_id)
                 if current_job is None:
                     return
                 if current_job.cancel_requested:
@@ -227,7 +227,7 @@ class CodebookApplicationJobRunner:
                 await session.commit()
             except CodebookApplicationCancelledError:
                 await session.rollback()
-                current_job = await session.get(CodebookApplicationJob, job_id)
+                current_job = await self._get_current_job(session, job_id)
                 if current_job is None:
                     return
                 current_job.status = "cancelled"
@@ -237,7 +237,7 @@ class CodebookApplicationJobRunner:
                 await session.commit()
             except Exception as exc:
                 await session.rollback()
-                current_job = await session.get(CodebookApplicationJob, job_id)
+                current_job = await self._get_current_job(session, job_id)
                 if current_job is None:
                     return
                 if current_job.cancel_requested:
@@ -253,6 +253,13 @@ class CodebookApplicationJobRunner:
                 current_job.finished_at = _utc_now_naive()
                 await self._mark_run_terminal(session, current_job.application_run_id, status="failed")
                 await session.commit()
+
+    @staticmethod
+    async def _get_current_job(
+        session: AsyncSession,
+        job_id: UUID,
+    ) -> CodebookApplicationJob | None:
+        return await session.get(CodebookApplicationJob, job_id, populate_existing=True)
 
     @staticmethod
     async def _mark_run_terminal(

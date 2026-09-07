@@ -1,6 +1,6 @@
 # Backend
 
-FastAPI backend — async SQLAlchemy 2.x, Pydantic v2, Loguru.
+FastAPI backend - async SQLAlchemy 2.x, Pydantic v2, Loguru.
 
 ## Quick Start
 
@@ -42,6 +42,34 @@ docker compose up --build
 # Docs at http://localhost:8000/docs
 ```
 
+### Local Generation Algorithms
+
+Codebook generation uses `GENERATION_ALGORITHM` from `.env`. The default is
+`app.generation.algorithms.traceable:create`. To try a local algorithm, copy
+`research_algorithms/example.py`, edit its `generate()` method, set for example
+`GENERATION_ALGORITHM=research_algorithms.my_algorithm:create`, then restart the
+backend. See `research_algorithms/README.md` for the contract and validation
+rules.
+
+The included non-LLM trial algorithm can be selected with:
+
+```text
+GENERATION_ALGORITHM=research_algorithms.keyword_frequency:create
+```
+
+After changing `GENERATION_ALGORITHM` in the root Docker setup, restart from the
+repository root:
+
+```bash
+docker compose restart api
+```
+
+Validate local generation algorithms with:
+
+```bash
+docker compose run --rm api-test pytest tests/test_generation_plugins.py
+```
+
 ### Docker: Dev vs Prod
 
 - `api` service uses the `runtime` target (production-style image, no test tooling).
@@ -61,17 +89,17 @@ Open `Backend/htmlcov/index.html` in your browser after the test run.
 
 ```
 app/
-├── main.py            # Application factory + lifespan
-├── config.py          # Pydantic Settings (from .env)
-├── database.py        # Async SQLAlchemy engine + session
-├── dependencies.py    # FastAPI dependency injection aliases
-├── exceptions.py      # Custom exceptions + handlers
-├── logging_config.py  # Loguru setup + stdlib bridge
-├── middleware.py      # RequestId, logging, CORS, GZip
-├── models/            # SQLAlchemy ORM models (add here)
-├── routers/           # FastAPI APIRouters (add here)
-├── schemas/           # Pydantic request/response schemas
-└── services/          # Business logic layer (add here)
+|-- main.py            # Application factory + lifespan
+|-- config.py          # Pydantic Settings (from .env)
+|-- database.py        # Async SQLAlchemy engine + session
+|-- dependencies.py    # FastAPI dependency injection aliases
+|-- exceptions.py      # Custom exceptions + handlers
+|-- logging_config.py  # Loguru setup + stdlib bridge
+|-- middleware.py      # RequestId, logging, CORS, GZip
+|-- models/            # SQLAlchemy ORM models (add here)
+|-- routers/           # FastAPI APIRouters (add here)
+|-- schemas/           # Pydantic request/response schemas
+`-- services/          # Business logic layer (add here)
 ```
 
 ## Response Format
@@ -85,4 +113,4 @@ All endpoints return a `ResponseEnvelope`:
 
 ## Environment Variables
 
-See `.env.example` — every variable the app reads is documented there.
+See `.env.example` - every variable the app reads is documented there.

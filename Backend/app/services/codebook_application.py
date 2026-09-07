@@ -75,6 +75,7 @@ class CodebookApplicationSummary:
     documents_coded: int
     documents_failed: int
     failed_documents: list[dict[str, str]]
+    action_log: list[dict[str, object]]
 
 
 class CodebookApplicationService:
@@ -151,7 +152,7 @@ class CodebookApplicationService:
         try:
             # Reuse the paper-style application pass without invoking the
             # generation/refinement loop.
-            application_result = await self.traceable_service._apply_codebook_to_documents(
+            application_result = await self.traceable_service.apply_codebook_to_documents(
                 documents=[
                     _TraceableDocumentText(
                         id=document.id,
@@ -197,6 +198,7 @@ class CodebookApplicationService:
             documents_coded=documents_coded,
             documents_failed=len(failed_documents),
             failed_documents=failed_documents,
+            action_log=application_result.action_log or [],
         )
 
     @staticmethod

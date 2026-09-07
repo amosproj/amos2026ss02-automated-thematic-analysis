@@ -23,6 +23,7 @@ class CodebookGenerationJob(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(32), index=True, default="queued")
     phase: Mapped[str] = mapped_column(String(64), default="queued")
     codebook_name: Mapped[str] = mapped_column(String(255))
+    generation_algorithm: Mapped[str | None] = mapped_column(String(512), nullable=True)
     analysis_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     custom_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     corpus_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), index=True)
