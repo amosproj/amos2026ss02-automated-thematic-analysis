@@ -19,13 +19,16 @@ from app.config import Settings
 pytestmark = pytest.mark.asyncio
 
 LLM_PREFIX = "/api/v1/settings/llm-provider"
+ALGORITHM_PREFIX = "/api/v1/settings/generation-algorithm"
 
 
 def _settings(**overrides) -> Settings:
     base = dict(
+        _env_file=None,
         DATABASE_URL="sqlite+aiosqlite:///:memory:",
         LLM_API_KEY_FAU="fau-key",
         LLM_API_KEY="academic-key",
+        LLM_API_KEY_OPENROUTER=None,
         SELECTED_API="FAU",
     )
     base.update(overrides)
@@ -74,7 +77,7 @@ async def test_get_returns_default_and_options(provider_client) -> None:
     assert data["active"] == "FAU"
     assert data["default"] == "FAU"
     ids = [opt["id"] for opt in data["available"]]
-    assert ids == ["FAU", "ACADEMIC"]
+    assert ids == ["FAU", "ACADEMIC", "OPENROUTER"]
     assert all("has_api_key" in opt and "label" in opt for opt in data["available"])
 
 
@@ -94,6 +97,58 @@ async def test_put_unknown_provider_is_422(provider_client) -> None:
     resp = await client.put(LLM_PREFIX, json={"provider": "litellm"})
     assert resp.status_code == 422
     assert resp.json()["success"] is False
+
+
+async def test_get_generation_algorithms_returns_default_and_demo(provider_client) -> None:
+    client, _ = provider_client
+    response = await client.get(ALGORITHM_PREFIX)
+    assert response.status_code == 200
+    state = response.json()["data"]
+    assert state["active"] == "traceable_analysis"
+    assert state["default"] == "traceable_analysis"
+    assert [option["id"] for option in state["available"]] == [
+        "traceable_analysis",
+        "keyword_frequency_example",
+    ]
+    assert state["available"][0]["supports_refinement"] is True
+    assert state["available"][1]["supports_refinement"] is False
+
+
+async def test_put_generation_algorithm_persists_demo_selection(provider_client) -> None:
+    client, _ = provider_client
+    response = await client.put(
+        ALGORITHM_PREFIX,
+        json={"algorithm": "KEYWORD_FREQUENCY_EXAMPLE"},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["active"] == "keyword_frequency_example"
+    follow_up = await client.get(ALGORITHM_PREFIX)
+    assert follow_up.json()["data"]["active"] == "keyword_frequency_example"
+
+
+async def test_put_unknown_generation_algorithm_is_422(provider_client) -> None:
+    client, _ = provider_client
+    response = await client.put(ALGORITHM_PREFIX, json={"algorithm": "arbitrary.module:create"})
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
+async def test_openrouter_requires_its_key_and_persists_selection(provider_client) -> None:
+    client, settings = provider_client
+    response = await client.get(LLM_PREFIX)
+    option = next(opt for opt in response.json()["data"]["available"] if opt["id"] == "OPENROUTER")
+    assert option["has_api_key"] is False
+    missing_key = await client.put(LLM_PREFIX, json={"provider": "OPENROUTER"})
+    assert missing_key.status_code == 422
+
+    settings.LLM_API_KEY_OPENROUTER = "router-key"
+    settings.LLM_API_KEY_FAU = None
+    settings.LLM_API_KEY = None
+    selected = await client.put(LLM_PREFIX, json={"provider": "openrouter"})
+    assert selected.status_code == 200
+    assert selected.json()["data"]["active"] == "OPENROUTER"
+    follow_up = await client.get(LLM_PREFIX)
+    assert follow_up.json()["data"]["active"] == "OPENROUTER"
 
 
 async def test_put_provider_without_key_is_422(db_engine) -> None:

@@ -30,7 +30,7 @@ from app.schemas.codebook import (
     NodeInput,
 )
 from app.schemas.common import ResponseEnvelope
-from app.services.app_settings import get_active_provider
+from app.services.app_settings import get_active_algorithm, get_active_provider
 from app.services.codebook import CodebookService
 from app.services.codebook_generation import (
     CodebookGenerationService,
@@ -78,9 +78,10 @@ def _validate_provider_config(provider_id: str) -> None:
         )
 
 
-def _resolve_configured_generation_algorithm() -> LoadedGenerationAlgorithm:
+async def _resolve_configured_generation_algorithm(session: AsyncSession) -> LoadedGenerationAlgorithm:
+    spec = await get_active_algorithm(session)
     try:
-        return load_generation_algorithm(get_settings().GENERATION_ALGORITHM)
+        return load_generation_algorithm(spec.module_spec)
     except GenerationAlgorithmLoadError as exc:
         raise UnprocessableError(str(exc)) from exc
 
@@ -136,7 +137,7 @@ def _compute_job_progress_percent(job: CodebookGenerationJob, *, phase: str) -> 
         return 100
     if job.status == "queued":
         return 0
-    if phase == "extracting_quote_codes" and job.analysis_units_total > 0:
+    if phase in {"extracting_quote_codes", "keyword_frequency_extracting"} and job.analysis_units_total > 0:
         unit_progress = int((job.analysis_units_done * 35) / job.analysis_units_total)
         return max(5, min(40, 5 + unit_progress))
     if phase == "consolidating_codes" and job.analysis_units_total > 0:
@@ -150,6 +151,7 @@ def _compute_job_progress_percent(job: CodebookGenerationJob, *, phase: str) -> 
         return max(90, min(99, 90 + unit_progress))
     phase_progress = {
         "extracting_quote_codes": 5,
+        "keyword_frequency_extracting": 5,
         "consolidating_codes": 45,
         "synthesizing_themes": 65,
         "evaluating_iterations": 75,
@@ -208,7 +210,7 @@ async def generate_codebook(
     # path. Embeddings use the same provider, so this endpoint never silently
     # runs on different AI providers than the one chosen in the UI.
     active_provider = await get_active_provider(session)
-    loaded_algorithm = _resolve_configured_generation_algorithm()
+    loaded_algorithm = await _resolve_configured_generation_algorithm(session)
     if loaded_algorithm.algorithm.requires_llm:
         _validate_provider_config(active_provider)
     resolved_document_ids = await resolve_transcript_document_ids(
@@ -255,7 +257,7 @@ async def create_generate_codebook_job(
     session: DbSession,
 ) -> JSONResponse:
     active_provider = await get_active_provider(session)
-    loaded_algorithm = _resolve_configured_generation_algorithm()
+    loaded_algorithm = await _resolve_configured_generation_algorithm(session)
     if loaded_algorithm.algorithm.requires_llm:
         _validate_provider_config(active_provider)
     resolved_document_ids = await resolve_transcript_document_ids(

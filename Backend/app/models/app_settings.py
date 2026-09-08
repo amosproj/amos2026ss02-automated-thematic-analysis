@@ -23,3 +23,4 @@ class AppSetting(Base, TimestampMixin):
 
 # Well-known setting keys.
 ACTIVE_LLM_PROVIDER_KEY = "active_llm_provider"
+ACTIVE_GENERATION_ALGORITHM_KEY = "active_generation_algorithm"
