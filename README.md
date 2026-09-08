@@ -84,9 +84,17 @@ Researchers can add local Python algorithms that replace only codebook
 generation while the backend still handles document loading, validation,
 persistence, jobs, and provenance. See
 [`Backend/research_algorithms/README.md`](./Backend/research_algorithms/README.md)
-for the copy commands, Docker restart command, validation tests, and an
+for the copy commands, Docker container recreation command, validation tests, and an
 end-to-end `apply_after_generation=false` trial using the included
 `keyword_frequency.py` example.
+
+### OpenRouter
+
+The Home page can select an OpenRouter profile configured for OpenAI GPT-5.6.
+Add `LLM_API_KEY_OPENROUTER` to `Backend/.env`, recreate the API container, and
+select **OpenRouter (OpenAI GPT-5.6)**. See
+[`Documentation/openrouter-models.md`](./Documentation/openrouter-models.md) for
+instructions to change the model or add several reviewed model profiles.
 
 #### Common commands
 
