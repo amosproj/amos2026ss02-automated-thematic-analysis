@@ -44,25 +44,26 @@ docker compose up --build
 
 ### Local Generation Algorithms
 
-Codebook generation uses `GENERATION_ALGORITHM` from `.env`. The default is
-`app.generation.algorithms.traceable:create`. To try a local algorithm, copy
-`research_algorithms/example.py`, edit its `generate()` method, set for example
-`GENERATION_ALGORITHM=research_algorithms.my_algorithm:create`, then restart the
-backend. See `research_algorithms/README.md` for the contract and validation
-rules.
+Codebook generation uses the algorithm selected on the Home page. The server
+default comes from `GENERATION_ALGORITHM` in `.env` and is
+`app.generation.algorithms.traceable:create`. To add a local algorithm, copy
+`research_algorithms/example.py`, edit its `generate()` method, and either set it
+as the configured default or add it to the server-side algorithm registry. See
+`research_algorithms/README.md` for the contract, selector integration, and
+validation rules.
 
-The included non-LLM trial algorithm can be selected with:
+The included non-LLM trial is available as **Keyword Frequency (Demo)** in the
+Home-page algorithm selector.
 
-```text
-GENERATION_ALGORITHM=research_algorithms.keyword_frequency:create
-```
-
-After changing `GENERATION_ALGORITHM` in the root Docker setup, restart from the
-repository root:
+After changing `GENERATION_ALGORITHM` in the root Docker setup, recreate the API
+container from the repository root so Compose reloads `Backend/.env`:
 
 ```bash
-docker compose restart api
+docker compose up -d --force-recreate api
 ```
+
+You can instead run `./teardown.sh` followed by `./setup.sh`; this stops and
+recreates the stack while preserving the database volume.
 
 Validate local generation algorithms with:
 

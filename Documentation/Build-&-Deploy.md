@@ -173,7 +173,7 @@ After the stack starts, run through these checks in order. Each fails fast and p
 
    Should print `✅ API call succeeded!` plus a short generated sentence. If it fails:
 
-   - `No API key set for SELECTED_API='FAU'` → key missing in `Backend/.env`; edit and `docker compose restart api`.
+   - `No API key set for SELECTED_API='FAU'` → key missing in `Backend/.env`; edit it and run `docker compose up -d --force-recreate api` so Compose reloads the environment. Alternatively, run `./teardown.sh` followed by `./setup.sh` from the repository root; this preserves database data.
    - Connection / timeout → check VPN or campus-only network restrictions.
    - 401 / 403 → key invalid or expired.
 
