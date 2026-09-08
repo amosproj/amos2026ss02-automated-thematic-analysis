@@ -6,14 +6,14 @@ from app.llm import providers
 
 
 def _settings(**overrides) -> Settings:
-    base = dict(DATABASE_URL="sqlite+aiosqlite:///:memory:")
+    base = dict(_env_file=None, DATABASE_URL="sqlite+aiosqlite:///:memory:")
     base.update(overrides)
     return Settings(**base)
 
 
-def test_available_providers_contains_both_modes() -> None:
+def test_available_providers_contains_configured_modes() -> None:
     ids = [spec.id for spec in providers.available_providers()]
-    assert ids == ["FAU", "ACADEMIC"]
+    assert ids == ["FAU", "ACADEMIC", "OPENROUTER"]
 
 
 def test_default_provider_is_fau() -> None:
@@ -23,6 +23,7 @@ def test_default_provider_is_fau() -> None:
 def test_normalize_is_case_insensitive() -> None:
     assert providers.normalize("fau") == "FAU"
     assert providers.normalize("Academic") == "ACADEMIC"
+    assert providers.normalize(" openrouter ") == "OPENROUTER"
 
 
 def test_normalize_unknown_returns_none() -> None:
@@ -39,6 +40,7 @@ def test_is_known_provider() -> None:
 
 def test_resolve_default_uses_selected_api() -> None:
     assert providers.resolve_default(_settings(SELECTED_API="ACADEMIC")) == "ACADEMIC"
+    assert providers.resolve_default(_settings(SELECTED_API="OPENROUTER")) == "OPENROUTER"
 
 
 def test_resolve_default_falls_back_to_fau_for_unknown() -> None:
@@ -46,7 +48,9 @@ def test_resolve_default_falls_back_to_fau_for_unknown() -> None:
 
 
 def test_has_api_key_reflects_settings() -> None:
-    cfg = _settings(LLM_API_KEY_FAU="key", LLM_API_KEY=None)
+    cfg = _settings(LLM_API_KEY_FAU="key", LLM_API_KEY=None, LLM_API_KEY_OPENROUTER=None)
     assert providers.has_api_key(cfg, "FAU") is True
     assert providers.has_api_key(cfg, "ACADEMIC") is False
+    assert providers.has_api_key(cfg, "OPENROUTER") is False
+    assert providers.has_api_key(_settings(LLM_API_KEY_OPENROUTER="router-key"), "OPENROUTER") is True
     assert providers.has_api_key(cfg, "UNKNOWN") is False
