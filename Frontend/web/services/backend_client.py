@@ -544,6 +544,17 @@ class BackendClient:
         """Persist the active LLM provider; returns the updated provider state."""
         return self._put("/settings/llm-provider", json={"provider": provider})
 
+    def get_generation_algorithm(self) -> dict:
+        """Return the active codebook-generation algorithm and available options."""
+        return self._get("/settings/generation-algorithm")
+
+    def set_generation_algorithm(self, algorithm: str) -> dict:
+        """Persist the active codebook-generation algorithm."""
+        return self._put(
+            "/settings/generation-algorithm",
+            json={"algorithm": algorithm},
+        )
+
     # ---- Helpers ------------------------------------------------------------
 
     def _unwrap(self, response: httpx.Response, *, sub_key: str | None = None):

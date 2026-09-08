@@ -91,9 +91,25 @@ class FakeBackend:
                 {"id": "ACADEMIC", "label": "Academic Cloud",
                  "description": "The GWDG Academic Cloud chat-ai endpoint.",
                  "has_api_key": True},
+                {"id": "OPENROUTER", "label": "OpenRouter (OpenAI GPT-5.6)",
+                 "description": "OpenRouter using the configured GPT-5.6 profile.",
+                 "has_api_key": False},
             ],
         }
         self.last_set_provider: str | None = None
+        self.generation_algorithm_state: dict = {
+            "active": "traceable_analysis",
+            "default": "traceable_analysis",
+            "available": [
+                {"id": "traceable_analysis", "label": "Traceable Analysis",
+                 "description": "Quote-grounded AI generation.",
+                 "supports_refinement": True},
+                {"id": "keyword_frequency_example", "label": "Keyword Frequency (Demo)",
+                 "description": "A simple non-LLM demonstration.",
+                 "supports_refinement": False},
+            ],
+        }
+        self.last_set_algorithm: str | None = None
         # Either a method-name string (generic BackendError) or a
         # (method-name, ExceptionClass) tuple (specific typed subclass).
         self.raise_on: str | tuple[str, type] | None = None
@@ -110,6 +126,18 @@ class FakeBackend:
         new_state = dict(self.llm_provider_state)
         new_state["active"] = provider.upper()
         self.llm_provider_state = new_state
+        return new_state
+
+    def get_generation_algorithm(self) -> dict:
+        self._maybe_raise("get_generation_algorithm")
+        return self.generation_algorithm_state
+
+    def set_generation_algorithm(self, algorithm: str) -> dict:
+        self._maybe_raise("set_generation_algorithm")
+        self.last_set_algorithm = algorithm
+        new_state = dict(self.generation_algorithm_state)
+        new_state["active"] = algorithm
+        self.generation_algorithm_state = new_state
         return new_state
 
     # ---- Corpora / documents ------------------------------------------------

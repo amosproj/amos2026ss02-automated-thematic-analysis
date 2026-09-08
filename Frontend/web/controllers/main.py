@@ -20,6 +20,27 @@ _FALLBACK_PROVIDER_STATE: dict = {
         {"id": "ACADEMIC", "label": "Academic Cloud",
          "description": "The GWDG Academic Cloud chat-ai endpoint.",
          "has_api_key": True},
+        {"id": "OPENROUTER", "label": "OpenRouter (OpenAI GPT-5.6)",
+         "description": "OpenRouter using the configured GPT-5.6 profile.",
+         "has_api_key": False},
+    ],
+}
+_FALLBACK_ALGORITHM_STATE: dict = {
+    "active": "traceable_analysis",
+    "default": "traceable_analysis",
+    "available": [
+        {
+            "id": "traceable_analysis",
+            "label": "Traceable Analysis",
+            "description": "Quote-grounded AI generation with iterative review and refinement.",
+            "supports_refinement": True,
+        },
+        {
+            "id": "keyword_frequency_example",
+            "label": "Keyword Frequency (Demo)",
+            "description": "A simple local baseline using frequent transcript words. No LLM required.",
+            "supports_refinement": False,
+        },
     ],
 }
 
@@ -28,8 +49,11 @@ _FALLBACK_PROVIDER_STATE: dict = {
 def index() -> str:
     provider_state = _FALLBACK_PROVIDER_STATE
     provider_available = False
+    algorithm_state = _FALLBACK_ALGORITHM_STATE
+    algorithm_available = False
+    backend = _backend()
     try:
-        provider_state = _backend().get_llm_provider()
+        provider_state = backend.get_llm_provider()
         provider_available = True
     except BackendError as exc:
         # Non-fatal: render the Home page with a disabled provider card.
@@ -37,10 +61,20 @@ def index() -> str:
             f"Couldn't load the LLM provider setting: {exc.user_message}",
             "warning",
         )
+    try:
+        algorithm_state = backend.get_generation_algorithm()
+        algorithm_available = True
+    except BackendError as exc:
+        flash(
+            f"Couldn't load the generation algorithm setting: {exc.user_message}",
+            "warning",
+        )
     return render_template(
         "index.html",
         provider_state=provider_state,
         provider_available=provider_available,
+        algorithm_state=algorithm_state,
+        algorithm_available=algorithm_available,
     )
 
 
@@ -58,6 +92,25 @@ def set_llm_provider():
             state["active"],
         )
         flash(f"LLM provider set to {label}.", "success")
+    except BackendError as exc:
+        flash(exc.user_message, "danger")
+    return redirect(url_for("main.index"))
+
+
+@bp.post("/settings/generation-algorithm")
+def set_generation_algorithm():
+    algorithm = (request.form.get("algorithm") or "").strip()
+    if not algorithm:
+        flash("Please choose a generation algorithm before saving.", "danger")
+        return redirect(url_for("main.index"))
+
+    try:
+        state = _backend().set_generation_algorithm(algorithm)
+        label = next(
+            (opt["label"] for opt in state.get("available", []) if opt["id"] == state["active"]),
+            state["active"],
+        )
+        flash(f"Generation algorithm set to {label}.", "success")
     except BackendError as exc:
         flash(exc.user_message, "danger")
     return redirect(url_for("main.index"))

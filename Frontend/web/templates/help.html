@@ -74,7 +74,23 @@
             </h3>
             <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#faqAccordion">
               <div class="accordion-body small text-secondary">
-                By default, we connect to the NHR@FAU cluster, which runs state-of-the-art open-weights models (such as Qwen or Mixtral) in a secure, privacy-compliant environment. You can change the active provider on the <a href="{{ url_for('main.index') }}">Home page</a>.
+                By default, the application connects to the NHR@FAU cluster. The Home page also lists every server-configured provider, including OpenRouter with OpenAI GPT-5.6 when an OpenRouter API key is configured. The selected provider handles AI generation and analysis tasks.
+              </div>
+            </div>
+          </div>
+
+          <!-- OpenRouter Models -->
+          <div class="accordion-item">
+            <h3 class="accordion-header" id="headingOpenRouterModels">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOpenRouterModels" aria-expanded="false" aria-controls="collapseOpenRouterModels">
+                How do I add further models through OpenRouter?
+              </button>
+            </h3>
+            <div id="collapseOpenRouterModels" class="accordion-collapse collapse" aria-labelledby="headingOpenRouterModels" data-bs-parent="#faqAccordion">
+              <div class="accordion-body small text-secondary">
+                <p>The included OpenRouter profile uses <code>openai/gpt-5.6-sol</code> for chat and <code>openai/text-embedding-3-small</code> for embeddings. To replace the chat model, set <code>LLM_MODEL_OPENROUTER</code> in <code>Backend/.env</code> to an exact provider-qualified model ID from OpenRouter.</p>
+                <p>To offer several OpenRouter models as separate Home-page choices, add named settings and a <code>ProviderSpec</code> for each reviewed profile. Recreate the API container with <code>docker compose up -d --force-recreate api</code> after changing its environment.</p>
+                <p class="mb-0"><a href="https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/blob/main/Documentation/openrouter-models.md" target="_blank" rel="noopener">Read the OpenRouter model guide &nearr;</a></p>
               </div>
             </div>
           </div>
@@ -88,21 +104,7 @@
             </h3>
             <div id="collapseEmbeddingModel" class="accordion-collapse collapse" aria-labelledby="headingEmbeddingModel" data-bs-parent="#faqAccordion">
               <div class="accordion-body small text-secondary">
-                An embedding model converts short pieces of text, such as code labels and descriptions, into numeric vectors so the system can compare their meaning. We use this to find similar or duplicate codes during automated codebook generation and consolidation before asking the LLM for deeper reasoning.
-              </div>
-            </div>
-          </div>
-
-          <!-- Commercial Embedding Providers -->
-          <div class="accordion-item">
-            <h3 class="accordion-header" id="headingCommercialEmbedding">
-              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCommercialEmbedding" aria-expanded="false" aria-controls="collapseCommercialEmbedding">
-                Can I use a commercial embedding provider such as OpenAI?
-              </button>
-            </h3>
-            <div id="collapseCommercialEmbedding" class="accordion-collapse collapse" aria-labelledby="headingCommercialEmbedding" data-bs-parent="#faqAccordion">
-              <div class="accordion-body small text-secondary">
-                Yes, if the server administrator configures an OpenAI-compatible embeddings endpoint in the backend environment. The embedding model follows the same provider selected on the <a href="{{ url_for('main.index') }}">Home page</a>, so transcripts and generated code text are sent to that selected provider for AI processing.
+                An embedding model converts short pieces of text, such as code labels and descriptions, into numeric vectors so the system can compare their meaning. The Traceable Analysis algorithm uses embeddings to find similar or duplicate codes during codebook generation and consolidation before asking the LLM for deeper reasoning. Other generation algorithms decide which models, if any, they use.
               </div>
             </div>
           </div>
@@ -116,56 +118,23 @@
             </h3>
             <div id="collapseTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-bs-parent="#faqAccordion">
               <div class="accordion-body small text-secondary">
-                Your transcripts are stored securely in our database and are only processed by the selected LLM provider. When using the default FAU NHR provider, your data never leaves the university's secure network infrastructure.
+                Your transcripts are stored in the database configured by the server operator. When an operation uses chat generation or embeddings, the relevant text is sent to the LLM provider selected on the Home page. The Keyword Frequency demo generates its codebook locally without an LLM, although applying that codebook to transcripts still uses the selected provider.
               </div>
             </div>
           </div>
 
           <!-- Item 3 -->
-          <div class="accordion-item">
+          <div class="accordion-item" id="custom-generation-algorithm">
             <h3 class="accordion-header" id="headingThree">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
-                How can I extend the platform?
+                How do I add a custom codebook-generation algorithm?
               </button>
             </h3>
             <div id="collapseThree" class="accordion-collapse collapse" aria-labelledby="headingThree" data-bs-parent="#faqAccordion">
               <div class="accordion-body small text-secondary">
-                This tool is entirely open-source. If you wish to experiment with different prompt strategies or integrate new generation methods, the backend services are highly compartmentalized. Check out the project repository linked on the right.
-              </div>
-            </div>
-          </div>
-
-          <!-- Item 4 -->
-          <div class="accordion-item">
-            <h3 class="accordion-header" id="headingFour">
-              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFour" aria-expanded="false" aria-controls="collapseFour">
-                Adding an External LLM Provider
-              </button>
-            </h3>
-            <div id="collapseFour" class="accordion-collapse collapse" aria-labelledby="headingFour" data-bs-parent="#faqAccordion">
-              <div class="accordion-body small text-secondary">
-                <p>You can seamlessly add support for alternative LLM providers (e.g., OpenAI, Anthropic, or any OpenAI-compatible API) by modifying a few configuration files.</p>
-                
-                <ol class="mb-0 ps-3">
-                  <li class="mb-2">
-                    <strong class="text-dark">Define the Provider:</strong> Open <code>Backend/app/llm/providers.py</code> and add a new <code>ProviderSpec</code> entry to the <code>PROVIDERS</code> tuple. Define its <code>id</code>, <code>label</code>, and the environment variable names it will look for (e.g., <code>api_key_attr="LLM_API_KEY_CUSTOM"</code>).
-                  </li>
-                  <li class="mb-2">
-                    <strong class="text-dark">Declare the Settings Fields:</strong> Open <code>Backend/app/config.py</code> and add the three attributes you referenced in your <code>ProviderSpec</code> to the <code>Settings</code> class, e.g.<br>
-                    <code>LLM_API_KEY_CUSTOM: str | None = None</code><br>
-                    <code>LLM_BASE_URL_CUSTOM: str = "https://api.your-provider.com/v1"</code><br>
-                    <code>LLM_MODEL_CUSTOM: str = "your-default-model"</code>
-                  </li>
-                  <li class="mb-2">
-                    <strong class="text-dark">Manage API Keys Safely:</strong> Open your local <code>Backend/.env</code> file (or copy it from <code>.env.example</code>). Add your API key matching the variable name you defined in step 1. Because <code>.env</code> is excluded via <code>.gitignore</code>, your keys remain securely on your machine and are never committed to the repository.
-                  </li>
-                  <li class="mb-2">
-                    <strong class="text-dark">Code Communications:</strong> Because the system dynamically reads the provider registry, simply registering it in <code>providers.py</code> is usually enough! However, if your provider requires specific custom headers or non-standard client initialization, you should modify the <code>build_chat_model()</code> function inside <code>Backend/app/llm/client.py</code>.
-                  </li>
-                  <li>
-                    <strong class="text-dark">Restart &amp; Select:</strong> Once configured, restart the backend server. Your new provider will instantly appear as an option in the "LLM Provider" dropdown on the <a href="{{ url_for('main.index') }}">Home page</a>.
-                  </li>
-                </ol>
+                <p>Copy the supplied <a href="https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/blob/main/Backend/research_algorithms/example.py" target="_blank" rel="noopener"><code>example.py</code> template &nearr;</a>, implement its asynchronous <code>generate()</code> method, and keep the <code>create()</code> factory. The backend continues to handle loading documents, jobs, cancellation, validation, persistence, and provenance.</p>
+                <p>Set <code>GENERATION_ALGORITHM</code> in <code>Backend/.env</code> to make one local algorithm the server default, or add an <code>AlgorithmSpec</code> in <code>Backend/app/generation/registry.py</code> to expose it as an additional named choice. Recreate the API container, then select it under <strong>Codebook Generation Algorithm</strong> on the <a href="{{ url_for('main.index') }}">Home page</a>.</p>
+                <p class="mb-0"><a href="https://github.com/amosproj/amos2026ss02-automated-thematic-analysis/blob/main/Backend/research_algorithms/README.md" target="_blank" rel="noopener">Read the complete custom-algorithm guide &nearr;</a></p>
               </div>
             </div>
           </div>
@@ -179,7 +148,7 @@
             </h3>
             <div id="collapseFive" class="accordion-collapse collapse" aria-labelledby="headingFive" data-bs-parent="#faqAccordion">
               <div class="accordion-body small text-secondary">
-                Upload your demographic data as a CSV file. It must have a column literally named <code>username</code> that exactly matches the filenames of your uploaded transcripts to properly link the data together.
+                Upload demographic data as a CSV file with a column named <code>username</code> and at least one demographic-data column. The system automatically links a row when its <code>username</code> matches a transcript title, ignoring capitalization and surrounding whitespace. You can review, change, or create links manually on the Linking page.
               </div>
             </div>
           </div>
@@ -207,7 +176,7 @@
             </h3>
             <div id="collapseSeven" class="accordion-collapse collapse" aria-labelledby="headingSeven" data-bs-parent="#faqAccordion">
               <div class="accordion-body small text-secondary">
-                A <strong>Manual Codebook</strong> is built by you from scratch, giving you absolute control over the hierarchy and definitions. A <strong>Generated Codebook</strong> is created by the LLM as an exploratory discovery tool to find themes you might not have considered.
+                A <strong>Manual Codebook</strong> is built by you from scratch, giving you direct control over its hierarchy and definitions. A <strong>Generated Codebook</strong> is created from selected transcripts by the generation algorithm chosen on the Home page. Traceable Analysis uses an LLM and embeddings; the Keyword Frequency demo illustrates the extension interface without using an LLM for generation.
               </div>
             </div>
           </div>
@@ -221,7 +190,7 @@
             </h3>
             <div id="collapseEight" class="accordion-collapse collapse" aria-labelledby="headingEight" data-bs-parent="#faqAccordion">
               <div class="accordion-body small text-secondary">
-                LLM text generation takes time. The duration scales with the number of transcripts selected and their length. If it is too slow, consider selecting fewer transcripts or using a faster LLM provider if available.
+                Generation and codebook application time scale with the number and length of the selected transcripts. Algorithms that make several LLM or embedding requests, such as Traceable Analysis, also depend on the selected provider's response time. Select fewer transcripts when appropriate, or choose a faster configured provider or generation algorithm.
               </div>
             </div>
           </div>
@@ -234,7 +203,7 @@
             </h3>
             <div id="collapseNine" class="accordion-collapse collapse" aria-labelledby="headingNine" data-bs-parent="#faqAccordion">
               <div class="accordion-body small text-secondary">
-                The platform displays your <strong>Token Usage</strong> (Input and Output tokens) for each analysis run. To calculate the actual cost in dollars, you must reference the pricing page of your selected LLM Provider (e.g., OpenAI, Anthropic). Multiply your Input Tokens by their listed Input Price, and your Output Tokens by their Output Price. Note: For the default NHR@FAU cluster, usage is generally free of charge for affiliated researchers!
+                The platform displays <strong>Token Usage</strong> for runs that call an LLM. Use the pricing published for the exact model and provider selected on the Home page. If prices are quoted per million tokens, calculate <code>(input tokens / 1,000,000) × input rate + (output tokens / 1,000,000) × output rate</code>. The Keyword Frequency demo uses no LLM tokens while generating a codebook; applying the result can still use LLM tokens.
               </div>
             </div>
           </div>
@@ -243,14 +212,14 @@
           <div class="accordion-item">
             <h3 class="accordion-header" id="headingTen">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTen" aria-expanded="false" aria-controls="collapseTen">
-                Why are some transcripts held out during Codebook Generation (Train/Test Split)?
+                Why does Traceable Analysis hold out some transcripts?
               </button>
             </h3>
             <div id="collapseTen" class="accordion-collapse collapse" aria-labelledby="headingTen" data-bs-parent="#faqAccordion">
               <div class="accordion-body small text-secondary">
-                <p>During the automatic Codebook Generation process, a portion of the uploaded transcripts is used to discover themes (the "Train" set), and the remaining transcripts are held out for evaluation (the "Test" set) during iterative improvements.</p>
-                <p>This is a standard machine learning practice to ensure the codebook generalizes well to unseen data. By default, 80% of transcripts are used to generate the codebook, and 20% are used to validate it.</p>
-                <p class="mb-0"><strong>How to change this:</strong> You can adjust this ratio by changing the <code>TRACEABLE_HELDOUT_RATIO</code> environment variable in your <code>Backend/.env</code> file. For example, setting <code>TRACEABLE_HELDOUT_RATIO=0.2</code> means 20% of transcripts are held out for validation.</p>
+                <p>When at least three transcripts are selected, Traceable Analysis uses part of the corpus to discover themes and holds out the rest to evaluate and refine the codebook against unseen text. Other generation algorithms can use a different process.</p>
+                <p>By default, the requested held-out ratio is 20%. The number of whole documents is rounded, with at least one document held out when this feature applies.</p>
+                <p class="mb-0"><strong>How to change this:</strong> Set <code>TRACEABLE_HELDOUT_RATIO</code> in <code>Backend/.env</code>, then recreate the API container. Set it to <code>0</code> to disable the held-out split.</p>
               </div>
             </div>
           </div>
