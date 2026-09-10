@@ -64,6 +64,65 @@
     </ul>
   </div>
 
+  <div class="bg-white border rounded-2 p-3 mb-4">
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <h2 class="h6 mb-0">Codebook Generation Algorithm</h2>
+      <span class="text-secondary"
+            data-bs-toggle="tooltip"
+            title="Choose how new codebooks are generated. This setting is captured when a generation job is created.">
+        &#9432;
+      </span>
+    </div>
+    <p class="text-secondary small mb-3">
+      Select the method used for codebook generation. The keyword-frequency option is a small, non-LLM demonstration of the extension interface.
+    </p>
+
+    {% set active_algorithm = algorithm_state.active %}
+    <form method="post"
+          action="{{ url_for('main.set_generation_algorithm') }}"
+          class="row g-2 align-items-end"
+          {% if not algorithm_available %}aria-disabled="true"{% endif %}>
+      <div class="col-12 col-sm-6 col-md-4">
+        <label for="generation-algorithm-select" class="form-label small mb-1">Algorithm</label>
+        <select id="generation-algorithm-select"
+                name="algorithm"
+                class="form-select form-select-sm"
+                required
+                {% if not algorithm_available %}disabled{% endif %}>
+          {% for opt in algorithm_state.available %}
+            <option value="{{ opt.id }}"
+                    {% if opt.id == active_algorithm %}selected{% endif %}
+                    title="{{ opt.description }}">
+              {{ opt.label }}{% if opt.id == algorithm_state.default %} (default){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-sm-auto">
+        <button type="submit"
+                class="btn btn-sm btn-primary"
+                {% if not algorithm_available %}disabled{% endif %}>
+          Save algorithm
+        </button>
+      </div>
+    </form>
+
+    {% if not algorithm_available %}
+      <p class="text-warning small mb-0 mt-2">
+        The analysis service is unreachable, so the algorithm can't be changed right now.
+      </p>
+    {% endif %}
+
+    <ul class="list-unstyled small text-secondary mb-0 mt-2">
+      {% for opt in algorithm_state.available %}
+        <li><strong>{{ opt.label }}:</strong> {{ opt.description }}</li>
+      {% endfor %}
+    </ul>
+    <p class="small mb-0 mt-2">
+      <a href="{{ url_for('main.help_page') }}#custom-generation-algorithm">Add a custom generation algorithm</a>
+    </p>
+  </div>
+
   <div class="row g-3">
     <div class="col-12 col-md-3">
       <div class="bg-white border rounded-2 p-3 h-100 hover-lift">

@@ -194,6 +194,7 @@
           queued: "Queued",
           loading: "Preparing",
           extracting_quote_codes: "Finding evidence",
+          keyword_frequency_extracting: "Extracting keyword frequencies",
           consolidating_codes: "Consolidating codes",
           synthesizing_themes: "Building themes",
           evaluating_iterations: "Evaluating fit",
@@ -213,7 +214,7 @@
         if (job.phase === "applying_codebook" && job.analysis_units_total > 0) {
           return `${formatCount(job.analysis_units_done)} of ${formatCount(job.analysis_units_total)} transcripts coded`;
         }
-        if (job.documents_total > 0 && job.phase === "extracting_quote_codes") {
+        if (job.documents_total > 0 && ["extracting_quote_codes", "keyword_frequency_extracting"].includes(job.phase)) {
           return `${formatCount(job.documents_done)} of ${formatCount(job.documents_total)} transcripts reviewed`;
         }
         if (job.phase === "synthesizing_themes") {
@@ -284,7 +285,10 @@
           "applying_codebook"
         ];
         
-        let currentPhaseIndex = orderedPhases.indexOf(job.phase);
+        const displayPhase = job.phase === "keyword_frequency_extracting"
+          ? "extracting_quote_codes"
+          : job.phase;
+        let currentPhaseIndex = orderedPhases.indexOf(displayPhase);
         if (currentPhaseIndex === -1 && job.status === "succeeded") {
           currentPhaseIndex = orderedPhases.length;
         }

@@ -461,3 +461,18 @@ def test_compute_job_progress_percent_evaluating_iterations_falls_back_without_t
     # Before the first per-iteration progress update arrives (analysis_units_total
     # still 0, reset at phase entry), the fixed mid-phase estimate is used.
     assert _compute_job_progress_percent(job, phase="evaluating_iterations") == 75
+
+
+def test_compute_job_progress_percent_supports_keyword_demo_phase() -> None:
+    from app.models import CodebookGenerationJob
+    from app.routers.codebooks import _compute_job_progress_percent
+
+    job = CodebookGenerationJob(
+        status="running",
+        codebook_name="Keyword Demo",
+        corpus_id=uuid4(),
+        transcript_document_ids_json="[]",
+        analysis_units_total=4,
+        analysis_units_done=2,
+    )
+    assert _compute_job_progress_percent(job, phase="keyword_frequency_extracting") == 22

@@ -357,3 +357,29 @@ def test_link_transcript_422_maps_to_validation_error():
     client = _client_with_handler(handler)
     with pytest.raises(BackendValidationError):
         client.link_transcript("corpus-1", "doc-1", "bad-row")
+
+
+def test_generation_algorithm_settings_use_expected_backend_routes():
+    captured: list[tuple[str, str, bytes]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append((request.method, request.url.path, request.read()))
+        active = "keyword_frequency_example" if request.method == "PUT" else "traceable_analysis"
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "data": {"active": active, "default": "traceable_analysis", "available": []},
+                "error": None,
+                "meta": None,
+            },
+        )
+
+    client = _client_with_handler(handler)
+    assert client.get_generation_algorithm()["active"] == "traceable_analysis"
+    assert client.set_generation_algorithm("keyword_frequency_example")["active"] == (
+        "keyword_frequency_example"
+    )
+    assert captured[0][:2] == ("GET", "/api/v1/settings/generation-algorithm")
+    assert captured[1][:2] == ("PUT", "/api/v1/settings/generation-algorithm")
+    assert b'"algorithm":"keyword_frequency_example"' in captured[1][2]

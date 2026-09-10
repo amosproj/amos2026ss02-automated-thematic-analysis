@@ -1,6 +1,11 @@
 # Codebook Generation API
 
-This document describes backend endpoints for generating a **new** codebook from corpus transcripts using the traceable pipeline (`TraceableAnalysisService`), both synchronous and asynchronous. For applying an **existing** codebook to transcripts (deductive coding, no new codes/themes), see [codebook-application.md](codebook-application).
+This document describes backend endpoints for generating a **new** codebook from
+corpus transcripts using the selected generation algorithm, both synchronously
+and asynchronously. The built-in choices are the traceable pipeline and a small
+keyword-frequency demonstration. For applying an **existing** codebook to
+transcripts (deductive coding, no new codes/themes), see
+[codebook-application.md](codebook-application).
 
 ## Base routes
 
@@ -9,6 +14,8 @@ This document describes backend endpoints for generating a **new** codebook from
 - `GET /codebooks/generate-jobs`
 - `GET /codebooks/generate-jobs/{job_id}`
 - `POST /codebooks/generate-jobs/{job_id}/cancel`
+- `GET /settings/generation-algorithm`
+- `PUT /settings/generation-algorithm`
 
 All responses use the shared envelope:
 
@@ -40,7 +47,11 @@ All responses use the shared envelope:
 
 Runs the full traceable pipeline and persists a codebook in a single request/response cycle. Do not use for large corpora — generation can take minutes; prefer the async job endpoint below for anything beyond a quick demo/small corpus.
 
-Uses the app's currently active LLM provider (see [Backend-Routes settings endpoint](Backend-Software-Architecture-and-Data-Model-Documentation)).
+Uses the app's currently selected generation algorithm and active LLM provider
+when that algorithm requires one. The synchronous endpoint resolves the
+selection when the request begins. An asynchronous job stores the selected
+algorithm's server-controlled module specification when the job is created, so
+later selector changes do not alter queued work.
 
 Success — `201 Created`, `data` is a `GeneratedCodebookResponse`:
 
@@ -72,7 +83,7 @@ Returns generation jobs for a corpus, newest first.
 Returns the full `CodebookGenerationJobSchema`, including:
 
 - `status`: `queued | running | succeeded | failed | cancelled`
-- `phase`: pipeline stage, one of `queued`, `extracting_quote_codes`, `consolidating_codes`, `synthesizing_themes`, `evaluating_iterations`, `persisting_codebook`, `applying_codebook`, or a terminal phase
+- `phase`: pipeline stage. The traceable algorithm uses `extracting_quote_codes`, `consolidating_codes`, `synthesizing_themes`, and `evaluating_iterations`; the demo uses `keyword_frequency_extracting`. Core phases include `queued`, `persisting_codebook`, `applying_codebook`, and the terminal phases
 - `progress_percent`: a 0-100 estimate derived from `phase` and unit counters
 - `codebook_id` (set once the codebook is persisted), `application_run_id` (set once applied)
 - progress counters: `documents_total/done`, `analysis_units_total/done`, `passages_total/done` (legacy alias), `transcripts_processed`, `passages_processed`, `quotes_created`, `themes_created`, `codes_created`, `documents_coded`, `documents_failed`

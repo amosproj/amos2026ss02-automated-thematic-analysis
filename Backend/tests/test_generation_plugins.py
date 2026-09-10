@@ -250,6 +250,41 @@ async def test_algorithm_selection_is_captured_when_job_is_created(client, monke
     get_settings.cache_clear()
 
 
+async def test_keyword_demo_selection_is_captured_when_job_is_created(client, monkeypatch) -> None:
+    async def _noop_enqueue(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "app.routers.codebooks.codebook_generation_job_runner.enqueue",
+        _noop_enqueue,
+    )
+    selected = await client.put(
+        "/api/v1/settings/generation-algorithm",
+        json={"algorithm": "keyword_frequency_example"},
+    )
+    assert selected.status_code == 200
+
+    corpus_response = await client.post(
+        "/api/v1/ingestion/corpora",
+        json={"corpus_id": str(uuid4()), "name": "Keyword Demo Corpus"},
+    )
+    corpus_id = corpus_response.json()["data"]["id"]
+    ingest_response = await client.post(
+        f"/api/v1/ingestion/corpora/{corpus_id}/documents/bulk",
+        json={"documents": [{"title": "Doc", "text": "Operational operational delay."}]},
+    )
+    assert ingest_response.status_code == 201
+
+    create_response = await client.post(
+        "/api/v1/codebooks/generate-jobs",
+        json={"codebook_name": "Keyword Demo", "corpus_id": corpus_id},
+    )
+    assert create_response.status_code == 202
+    assert create_response.json()["data"]["generation_algorithm"] == (
+        "research_algorithms.keyword_frequency:create"
+    )
+
+
 async def test_queued_job_uses_stored_algorithm_selection(db_engine, monkeypatch) -> None:
     from app.config import get_settings
 

@@ -25,7 +25,7 @@ from app.llm.client import build_chat_model
 
 def _settings(**overrides) -> Settings:
     """Build a minimal Settings instance without a real .env / DATABASE_URL."""
-    base = dict(DATABASE_URL="sqlite+aiosqlite:///:memory:")
+    base = dict(_env_file=None, DATABASE_URL="sqlite+aiosqlite:///:memory:")
     base.update(overrides)
     return Settings(**base)
 
@@ -113,6 +113,27 @@ class TestAcademicProvider:
 # ---------------------------------------------------------------------------
 # Model / temperature overrides (provider-agnostic)
 # ---------------------------------------------------------------------------
+
+class TestOpenRouterProvider:
+    @pytest.mark.parametrize("provider", [None, "openrouter", " OPENROUTER "])
+    def test_build_openrouter_selects_correct_credentials(self, provider) -> None:
+        cfg = _settings(
+            SELECTED_API="OPENROUTER" if provider is None else "FAU",
+            LLM_API_KEY_FAU=None,
+            LLM_API_KEY=None,
+            LLM_API_KEY_OPENROUTER="router-key",
+        )
+        with patch("app.llm.client.ChatOpenAI") as mock_cls:
+            build_chat_model(settings=cfg, provider=provider)
+            assert mock_cls.call_args.kwargs["api_key"] == "router-key"
+            assert mock_cls.call_args.kwargs["base_url"] == "https://openrouter.ai/api/v1"
+            assert mock_cls.call_args.kwargs["model"] == "openai/gpt-5.6-sol"
+
+    def test_build_openrouter_raises_when_key_missing(self) -> None:
+        cfg = _settings(SELECTED_API="OPENROUTER", LLM_API_KEY_OPENROUTER=None)
+        with pytest.raises(RuntimeError, match="LLM_API_KEY_OPENROUTER"):
+            build_chat_model(settings=cfg)
+
 
 class TestOverrides:
     def test_model_override_is_passed_through(self) -> None:

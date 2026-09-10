@@ -24,13 +24,21 @@ application, API responses, and provenance wrapping.
    call an LLM. Set it to `True` when the algorithm needs the configured chat or
    embedding provider.
 
-3. Select it in `Backend/.env`:
+3. Make it available to the selector. The shortest route is to configure it as
+   the server default in `Backend/.env`:
 
    ```text
    GENERATION_ALGORITHM=research_algorithms.my_algorithm:create
    ```
 
-4. Restart the backend and run the normal codebook-generation workflow.
+   When this path is not one of the built-in entries, it appears in the Home-page
+   selector as **Custom Algorithm**. To expose several custom algorithms with
+   descriptive names, add an `AlgorithmSpec` for each one to
+   `Backend/app/generation/registry.py` instead.
+
+4. Recreate the backend container, select the algorithm on the Home page, and
+   run the normal codebook-generation workflow. The selected algorithm is saved
+   as an application-wide default and is captured when each job is created.
 
 The built-in default is:
 
@@ -43,11 +51,7 @@ GENERATION_ALGORITHM=app.generation.algorithms.traceable:create
 - `example.py`: minimal static template for copying into a new file.
 - `keyword_frequency.py`: deterministic baseline that derives up to five codes
   from frequent non-stopword transcript terms. It does not require an LLM and
-  can be selected with:
-
-  ```text
-  GENERATION_ALGORITHM=research_algorithms.keyword_frequency:create
-  ```
+  is available as **Keyword Frequency (Demo)** in the Home-page selector.
 
 ## Run Locally
 
@@ -64,14 +68,22 @@ module path during local execution.
 
 The Docker image copies this directory. The development Compose files also mount
 `research_algorithms` read-only into the API container, so editing an algorithm
-does not require rebuilding the image. Restart the API container after changing
-`GENERATION_ALGORITHM` or algorithm code.
+does not require rebuilding the image. Recreate the API container after changing
+`GENERATION_ALGORITHM` so Compose reloads `Backend/.env`. Recreating also picks up
+algorithm code changes reliably.
 
 Run Docker commands from the repository root when using the root
 `docker-compose.yml`:
 
 ```bash
-docker compose restart api
+docker compose up -d --force-recreate api
+```
+
+Alternatively, stop and start the stack while preserving database data:
+
+```bash
+./teardown.sh
+./setup.sh
 ```
 
 If you intentionally work from `Backend/` with `Backend/docker-compose.yml`, use
@@ -89,19 +101,16 @@ docker compose run --rm api-test ruff check research_algorithms tests/test_gener
 This path validates non-LLM generation without applying the codebook to
 transcripts afterward.
 
-1. Set the example algorithm in `Backend/.env`:
-
-   ```text
-   GENERATION_ALGORITHM=research_algorithms.keyword_frequency:create
-   ```
-
-2. Restart the API container from the repository root:
+1. Select **Keyword Frequency (Demo)** on the Home page. For an API-only trial,
+   make the equivalent settings request:
 
    ```bash
-   docker compose restart api
+   curl -X PUT http://localhost:8000/api/v1/settings/generation-algorithm \
+     -H "Content-Type: application/json" \
+     -d '{"algorithm":"keyword_frequency_example"}'
    ```
 
-3. Create a small corpus:
+2. Create a small corpus:
 
    ```bash
    curl -X POST http://localhost:8000/api/v1/ingestion/corpora \
@@ -109,7 +118,7 @@ transcripts afterward.
      -d '{"corpus_id":"11111111-1111-1111-1111-111111111111","name":"Local Algorithm Trial"}'
    ```
 
-4. Add transcripts:
+3. Add transcripts:
 
    ```bash
    curl -X POST http://localhost:8000/api/v1/ingestion/corpora/11111111-1111-1111-1111-111111111111/documents/bulk \
@@ -117,7 +126,7 @@ transcripts afterward.
      -d '{"documents":[{"title":"Transcript 1","text":"Manual handoffs create delays and unclear ownership."},{"title":"Transcript 2","text":"Operational handoffs need clearer ownership and trust."}]}'
    ```
 
-5. Generate a codebook without final application:
+4. Generate a codebook without final application:
 
    ```bash
    curl -X POST http://localhost:8000/api/v1/codebooks/generate \

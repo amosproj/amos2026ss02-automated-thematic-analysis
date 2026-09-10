@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     LLM_BASE_URL_FAU: str = "https://hub.nhr.fau.de/api/llmgw/v1"
     LLM_MODEL_FAU: str = "gpt-oss-120b"
     EMBEDDING_MODEL_FAU: str = "intfloat/multilingual-e5-large"
+    # OpenRouter exposes OpenAI-compatible chat and embeddings endpoints.
+    LLM_API_KEY_OPENROUTER: str | None = None
+    LLM_BASE_URL_OPENROUTER: str = "https://openrouter.ai/api/v1"
+    LLM_MODEL_OPENROUTER: str = "openai/gpt-5.6-sol"
+    EMBEDDING_MODEL_OPENROUTER: str = "openai/text-embedding-3-small"
     EMBEDDING_BATCH_SIZE: int = 64
     CODE_SIMILARITY_THRESHOLD: float = 0.86
     CODE_PAIR_TOP_K: int = 6
@@ -72,7 +77,7 @@ class Settings(BaseSettings):
     TRACEABLE_REFINEMENT_JACCARD_THRESHOLD: float = 0.98
     GENERATION_ALGORITHM: str = "app.generation.algorithms.traceable:create"
 
-    # Select which provider is active: "FAU" | "ACADEMIC"
+    # Select which provider is active: "FAU" | "ACADEMIC" | "OPENROUTER"
     SELECTED_API: str = "FAU"
 
 

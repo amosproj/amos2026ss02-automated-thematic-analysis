@@ -30,3 +30,20 @@ class LlmProviderUpdateRequest(BaseSchema):
     """Payload for selecting the active LLM provider."""
 
     provider: str = Field(description="Canonical provider id to activate.")
+
+
+class GenerationAlgorithmOption(BaseSchema):
+    id: str
+    label: str
+    description: str
+    supports_refinement: bool = False
+
+
+class GenerationAlgorithmState(BaseSchema):
+    active: str
+    default: str
+    available: list[GenerationAlgorithmOption]
+
+
+class GenerationAlgorithmUpdateRequest(BaseSchema):
+    algorithm: str

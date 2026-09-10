@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import httpx
+import pytest
 
 from app.config import Settings
 from app.services.remote_embeddings import RemoteEmbeddingClient
@@ -45,7 +46,20 @@ async def test_remote_embeddings_batches_requests_and_preserves_order() -> None:
     assert embeddings == [[0.0], [1.0], [2.0], [3.0], [4.0]]
 
 
-async def test_remote_embeddings_uses_academic_cloud_when_provider_selected() -> None:
+@pytest.mark.parametrize(
+    ("provider", "base_url", "api_key", "model", "overrides"),
+    [
+        (
+            "ACADEMIC", "https://academic.example.test/v1", "academic-key", "academic-embedding-model",
+            dict(LLM_API_KEY="academic-key", LLM_BASE_URL="https://academic.example.test/v1", EMBEDDING_MODEL="academic-embedding-model"),
+        ),
+        (
+            "OPENROUTER", "https://openrouter.ai/api/v1", "router-key", "openai/text-embedding-3-small",
+            dict(LLM_API_KEY_OPENROUTER="router-key", LLM_API_KEY=None),
+        ),
+    ],
+)
+async def test_remote_embeddings_uses_selected_provider(provider, base_url, api_key, model, overrides) -> None:
     seen: dict[str, object] = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -59,23 +73,23 @@ async def test_remote_embeddings_uses_academic_cloud_when_provider_selected() ->
         )
 
     settings = Settings(
+        _env_file=None,
         DATABASE_URL="sqlite+aiosqlite:///:memory:",
-        LLM_API_KEY="academic-key",
-        LLM_BASE_URL="https://academic.example.test/v1",
-        EMBEDDING_MODEL="academic-embedding-model",
+        LLM_API_KEY_FAU=None,
+        **overrides,
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
         client = RemoteEmbeddingClient(
             settings=settings,
             client=http_client,
-            provider="ACADEMIC",
+            provider=provider,
         )
 
         embeddings = await client.embed(["text"])
 
     assert embeddings == [[1.0, 2.0]]
     assert seen == {
-        "url": "https://academic.example.test/v1/embeddings",
-        "authorization": "Bearer academic-key",
-        "model": "academic-embedding-model",
+        "url": f"{base_url}/embeddings",
+        "authorization": f"Bearer {api_key}",
+        "model": model,
     }

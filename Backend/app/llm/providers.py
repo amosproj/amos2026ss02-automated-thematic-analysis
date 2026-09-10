@@ -1,10 +1,11 @@
 """Central registry of the LLM providers the app can route AI tasks to.
 
-The app supports two pre-configured providers whose credentials live in
+The app supports pre-configured providers whose credentials live in
 ``Settings`` (env / .env):
 
 * ``FAU``      → NHR@FAU gateway   (``LLM_*_FAU`` settings)
 * ``ACADEMIC`` → Academic Cloud    (``LLM_*`` settings)
+* ``OPENROUTER`` → OpenRouter gateway (``LLM_*_OPENROUTER`` settings)
 
 This module is the single source of truth for the provider id, its
 human-readable label, and which ``Settings`` attributes hold its credentials.
@@ -60,6 +61,18 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         model_attr="LLM_MODEL",
         embedding_model_attr="EMBEDDING_MODEL",
         supports_embeddings=True,
+    ),
+    ProviderSpec(
+        id="OPENROUTER",
+        label="OpenRouter (OpenAI GPT-5.6)",
+        description=(
+            "The OpenRouter gateway using OpenAI GPT-5.6 and the server's "
+            "configured embedding model. Requires an OpenRouter API key."
+        ),
+        api_key_attr="LLM_API_KEY_OPENROUTER",
+        base_url_attr="LLM_BASE_URL_OPENROUTER",
+        model_attr="LLM_MODEL_OPENROUTER",
+        embedding_model_attr="EMBEDDING_MODEL_OPENROUTER",
     ),
 )
 
